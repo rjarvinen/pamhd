@@ -23,3 +23,7 @@ https://ccmc.gsfc.nasa.gov/ungrouped/LP/LP_database.php where their
 respective configurations can be viewed and results plotted
 through a web interface. See the following website to get started:
 https://ccmc.gsfc.nasa.gov/models/modelinfo.php?model=PAMHD
+
+the mhd_extract.py program can be used to extract a subvolume from
+an existing result in order to make it easier to transfer or to plot
+with mhd2gnuplot.exe, for example.
