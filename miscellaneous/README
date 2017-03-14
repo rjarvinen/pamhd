@@ -1,0 +1,7 @@
+This directory contains miscellaneous programs and functions
+for MHD test program of PAMHD. ccmc/get_plot.py is an experimental
+program for automatically creating and downloading plots of
+simulation results from NASA's Community Coordinated Modeling
+Center website. idl/pamhd_read_mhd.pro is a function for reading
+simulation data into memory using GDL/IDL. cgi directory
+contains a CGI script for starting simulations via a http server.
