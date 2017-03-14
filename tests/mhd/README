@@ -1,14 +1,25 @@
-Running MHD tests of PAMHD
+This directory has a serial 1d reference implementation of a
+MHD program and the main PAMHD MHD test program. For compilation
+instruction and running basic tests see the top level README file.
+Additional tests for can be run by executing the run_tests.sh in
+this directory.
 
-Run test.exe by giving it both a general configuration file
-and corresponding boundary configuration file from config_files
-directory as command line arguments. The output will be written
-to a directory specified in general configuration file. Use
-mhd2gnuplot to plot results using gnuplot. For example:
+A large number of configuration files are available under the
+config_files directory. These can be run by executing the
+test.exe program from this directory and giving it one configuration
+file as a command line argument, e.g.
+mpiexec -n 6 ./test.exe config_files/magnetohydrodynamic/magnetosphere/2d/z1/config.json
 
-./test.exe \
-    --config-file config_files/shock_tube1_x_general.cfg \
-    --boundary-file config_files/shock_tube1_x_boundaries.cfg
+The results can be visualized in several ways. 1d and 2d results
+can be visualized with gnuplot by executing the mhd2gnuplot.exe
+program with simulation output files as arguments. Simulation
+results can also be converted to vtk format with mhd2vtk.exe and
+visualized e.g. with https://wci.llnl.gov/codes/visit/ . mhd2numpy.py
+can be used to read simulation results into memory and plotted e.g.
+with matplotlib.
 
-./mhd2gnuplot.exe results/shock_tube1_x/*.dc
-which requires that gnuplot can be found in default path.
+A large number of PAMHD results is are also available at
+https://ccmc.gsfc.nasa.gov/ungrouped/LP/LP_database.php where their
+respective configurations can be viewed and results plotted
+through a web interface. See the following website to get started:
+https://ccmc.gsfc.nasa.gov/models/modelinfo.php?model=PAMHD
