@@ -585,7 +585,10 @@ template <
 	// zero divergence in boundary cells
 	for (const auto& cell: boundary_cells) {
 		auto* const cell_data = simulation_grid[cell];
-		if (cell_data == nullptr) { abort(); }
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__<< ")" << std::endl;
+			abort();
+		}
 		Divergence(*cell_data) = 0;
 	}
 
