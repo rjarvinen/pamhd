@@ -1,0 +1,7 @@
+This directory contains PAMHD source code which
+consists of C++ header files. Implementation of
+simulation boundary logic is in boundaries
+directory, code dealing with removal of divergence
+of magnetic field is in divergence directory and
+code related to solving MHD equations in parallel
+is in mhd directory.
