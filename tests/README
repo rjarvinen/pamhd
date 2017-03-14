@@ -1,0 +1,6 @@
+This directory contains test programs for prerequisites
+of PAMHD as well as for PAMHD itself. See README file
+in parent directory on how to compile and run all the tests.
+Tests for a particular problem can be run from within that
+directory by changing into it and running GNU make, e.g.
+cd mhd && make test
