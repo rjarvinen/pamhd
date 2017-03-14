@@ -1,7 +1,7 @@
 This directory has a serial 1d reference implementation of a
 MHD program and the main PAMHD MHD test program. For compilation
 instruction and running basic tests see the top level README file.
-Additional tests for can be run by executing the run_tests.sh in
+Additional tests can be run by executing the run_tests.sh in
 this directory.
 
 A large number of configuration files are available under the
@@ -9,6 +9,8 @@ config_files directory. These can be run by executing the
 test.exe program from this directory and giving it one configuration
 file as a command line argument, e.g.
 mpiexec -n 6 ./test.exe config_files/magnetohydrodynamic/magnetosphere/2d/z1/config.json
+New configuration files can be created e.g. with the interactive
+configuration creator at https://nasailja.github.io/pamhd/configuration_creator/mhd/index.html
 
 The results can be visualized in several ways. 1d and 2d results
 can be visualized with gnuplot by executing the mhd2gnuplot.exe
