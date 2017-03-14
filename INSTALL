@@ -1,2 +1,5 @@
-See this page for installation instructions:
+PAMHD is compiled by running GNU make in this
+directory. See README file in this directory
+for further instructions and
 https://github.com/nasailja/pamhd/wiki/Install
+for installation instructions of prerequisites.

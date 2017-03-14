@@ -1,12 +1,19 @@
+This is the magnetohydrodynamic (MHD) part of PAMHD, that
+solves the ideal MHD equations on a cartesian grid in one
+to three dimensions. Parallel computation is implemented
+using message passing interface (MPI).
+
 See http://ccmc.gsfc.nasa.gov/models/modelinfo.php?model=PAMHD
 for running PAMHD simulations via the web and
 visualizing the results.
 
-See https://github.com/nasailja/pamhd/wiki/Install
-for installation instructions. Certain versions
-of some prerequisites are known not to work.
-
-Library/program versions known to work:
+PAMHD requires the following libraries to be installed:
+Boost, cxx-prettyprint, DCCRG, Eigen, Generic simulation
+cell, muparserX, Zoltan and an implementation of MPI. See
+https://github.com/nasailja/pamhd/wiki/Install for
+installation instructions of prerequisites. Note that
+certain versions of GCC and prerequisites are known not
+to work. Library/program versions known to work:
 
 boost: 1.63.0, 1.57.0
 eigen: 3.3.3, 3.3.2, 3.3.1, 3.3
@@ -15,10 +22,28 @@ mpich: 3.1.2, 3.0.4, 2.1.5
 open-mpi: 2.0.2, 2.0.1, 1.8.8, 1.8.1, 1.8, 1.6.5
 zoltan: 3.83
 
-
 Library/program versions known not to work:
 
 boost: 1.53.0 (different filesystem API)
 eigen: 3.2.10 (eigen.tuxfamily.org/bz/show_bug.cgi?id=360)
 gcc: 6.3.0 (gcc.gnu.org/bugzilla/show_bug.cgi?id=78693), 4.7.4
 open-mpi: 1.7.5
+
+To compile PAMHD itself, run GNU make in this directory.
+If prerequisites have been installed in your home
+directory or into system directories, running make should
+produce all test programs of which the tests/mhd/test.exe
+program is the MHD part of PAMHD. If prerequisites have
+been installed into custom locations you should create a
+new makefile in the makefiles directory and give its
+relative path in environment variable ENVIRONMENT_MAKEFILE
+when running make, e.g.
+make ENVIRONMENT_MAKEFILE=makefiles/fedora20
+
+To test PAMHD installation run make test from this directory,
+which will run all test programs under tests directory. If
+something does not work please check whether it is a known
+issue at https://github.com/iljah/pamhd/issues and if not
+create a new issue. An additional set of tests is provided for
+the MHD test program that are executed by changing to
+tests/mhd directory and running the run_tests.sh script.
