@@ -1,17 +1,24 @@
 See http://ccmc.gsfc.nasa.gov/models/modelinfo.php?model=PAMHD
-for running PAMHD simulations via the web and for
+for running PAMHD simulations via the web and
 visualizing the results.
 
 See https://github.com/nasailja/pamhd/wiki/Install
 for installation instructions. Certain versions
-of some prerequisites are known not to work,
-library/program versions known to work:
+of some prerequisites are known not to work.
 
-boost: 1.55, 1.54 (patch maybe required)
-open-mpi: 1.8.1, 1.8, 1.6.5
+Library/program versions known to work:
+
+boost: 1.63.0, 1.57.0
+eigen: 3.3.3, 3.3.2, 3.3.1, 3.3
+gcc: 7.0 git from 2017-03-08, 5.4.0, 4.8.5
 mpich: 3.1.2, 3.0.4, 2.1.5
+open-mpi: 2.0.2, 2.0.1, 1.8.8, 1.8.1, 1.8, 1.6.5
+zoltan: 3.83
 
-Versions known not to work:
 
-boost: <= 1.53 (no coroutine)
+Library/program versions known not to work:
+
+boost: 1.53.0 (different filesystem API)
+eigen: 3.2.10 (eigen.tuxfamily.org/bz/show_bug.cgi?id=360)
+gcc: 6.3.0 (gcc.gnu.org/bugzilla/show_bug.cgi?id=78693), 4.7.4
 open-mpi: 1.7.5
