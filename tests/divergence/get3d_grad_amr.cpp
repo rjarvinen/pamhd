@@ -1,7 +1,7 @@
 /*
 Tests scalar field gradient calculation of PAMHD in 3d.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -266,12 +266,14 @@ int main(int argc, char* argv[])
 
 		const auto norm = get_max_norm(solve_cells, grid);
 
+		uint64_t total_cells = 0, local_cells = solve_cells.size();
+		MPI_Allreduce(&local_cells, &total_cells, 1, MPI_UINT64_T, MPI_SUM, comm);
 		for (size_t dim = 0; dim < 3; dim++) {
 			if (norm[dim] > old_norm[dim]) {
 				if (grid.get_rank() == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< " dim " << dim
-						<< ": Norm with " << solve_cells.size()
+						<< ": Norm with " << total_cells
 						<< " cells " << norm[dim]
 						<< " is larger than with " << old_nr_of_cells
 						<< " cells " << old_norm[dim]
@@ -283,14 +285,14 @@ int main(int argc, char* argv[])
 			if (old_nr_of_cells > 0) {
 				const double order_of_accuracy
 					= -log(norm[dim] / old_norm[dim])
-					/ log(double(solve_cells.size()) / old_nr_of_cells);
+					/ log(double(total_cells) / old_nr_of_cells);
 
 				if (order_of_accuracy < 0.15) {
 					if (grid.get_rank() == 0) {
 						std::cerr << __FILE__ << ":" << __LINE__
 							<< " dim " << dim
 							<< ": Order of accuracy from "
-							<< old_nr_of_cells << " to " << solve_cells.size()
+							<< old_nr_of_cells << " to " << total_cells
 							<< " is too low: " << order_of_accuracy
 							<< std::endl;
 					}
@@ -299,7 +301,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		old_nr_of_cells = solve_cells.size();
+		old_nr_of_cells = total_cells;
 		old_norm = norm;
 	}
 

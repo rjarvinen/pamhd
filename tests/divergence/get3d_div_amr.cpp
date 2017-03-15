@@ -1,7 +1,7 @@
 /*
 Tests vector field divergence calculation of PAMHD in 3d.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -245,10 +245,12 @@ int main(int argc, char* argv[])
 
 		const double norm = get_max_norm(solve_cells, grid);
 
+		uint64_t total_cells = 0, local_cells = solve_cells.size();
+		MPI_Allreduce(&local_cells, &total_cells, 1, MPI_UINT64_T, MPI_SUM, comm);
 		if (norm > old_norm) {
 			if (grid.get_rank() == 0) {
 				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": Norm with " << solve_cells.size()
+					<< ": Norm with " << total_cells
 					<< " cells " << norm
 					<< " is larger than with " << old_nr_of_cells
 					<< " cells " << old_norm
@@ -260,13 +262,13 @@ int main(int argc, char* argv[])
 		if (old_nr_of_cells > 0) {
 			const double order_of_accuracy
 				= -log(norm / old_norm)
-				/ log(double(solve_cells.size()) / old_nr_of_cells);
+				/ log(double(total_cells) / old_nr_of_cells);
 
 			if (order_of_accuracy < 0.4) {
 				if (grid.get_rank() == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy from "
-						<< old_nr_of_cells << " to " << solve_cells.size()
+						<< old_nr_of_cells << " to " << total_cells
 						<< " is too low: " << order_of_accuracy
 						<< std::endl;
 				}
@@ -274,7 +276,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		old_nr_of_cells = solve_cells.size();
+		old_nr_of_cells = total_cells;
 		old_norm = norm;
 	}
 
