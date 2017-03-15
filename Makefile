@@ -23,8 +23,7 @@ include \
   tests/muparserx/project_makefile \
   tests/mhd/project_makefile \
   tests/boundaries/project_makefile \
-  tests/divergence/project_makefile \
-  tests/poisson/project_makefile
+  tests/divergence/project_makefile
 
 
 all: $(EXECUTABLES)
