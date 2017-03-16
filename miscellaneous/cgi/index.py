@@ -242,10 +242,10 @@ while True:
 	break
 
 # background magnetic field
-if 'background-magnetic-field' in form_data:
+if 'background-B-value-x' in form_data:
 	bg_B = dict()
 
-	if not 'background-B-value-x' in form_data or not 'background-B-value-y' in form_data or not 'background-B-value-z' in form_data:
+	if not 'background-B-value-y' in form_data or not 'background-B-value-z' in form_data:
 		print 'background magnetic field value missing from form data:<br>'
 		print_form_data(form_data)
 		exit()
