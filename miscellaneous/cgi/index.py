@@ -161,7 +161,7 @@ if not 'time-step-factor' in form_data:
 	exit()
 config_data['time-step-factor'] = float(form_data.getfirst('time-step-factor'))
 
-config_data['poisson-norm-stop'] = 1e-10
+config_data['poisson-norm-stop'] = 1e-15
 config_data['poisson-norm-increase-max'] = 10.0
 
 # grid options
