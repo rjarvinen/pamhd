@@ -297,13 +297,13 @@ def get_strings(string):
 	# vector exprs
 	if '{' in string:
 		for i in string.split('}'):
-			for j in i.split('{'):
-				if j == '':
-					continue
-				values.append('{' + j + '}')
+			value = i.split('{')[-1].strip()
+			if value == '':
+				continue
+			values.append('{' + value + '}')
 	# scalar exprs
 	else:
-		[values.append(i) for i in string.split(',')]
+		[values.append(i.strip()) for i in string.split(',')]
 	return values
 
 # returns a list of floats
