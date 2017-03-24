@@ -45,6 +45,7 @@ TEST_MHD_COMMON_DEPS = \
   source/mhd/roe_athena.hpp \
   source/mhd/rusanov.hpp \
   source/mhd/N_hll_athena.hpp \
+  source/mhd/N_rusanov.hpp \
   tests/mhd/project_makefile \
   $(ENVIRONMENT_MAKEFILE) \
   Makefile
@@ -162,6 +163,7 @@ tests/mhd/two_test.exe: \
 	  $(MUPARSERX_LIBS) \
 	  $(PHIPROF_CPPFLAGS) \
 	  $(PRETTYPRINT_CPPFLAGS) \
+	  $(RAPIDJSON_CPPFLAGS) \
 	  $(ZOLTAN_CPPFLAGS) \
 	  $(ZOLTAN_LDFLAGS) \
 	  $(ZOLTAN_LIBS)

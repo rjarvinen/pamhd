@@ -126,11 +126,27 @@ struct Velocity {
 	static const std::string get_option_help() { return {"Plasma velocity (m / s)"}; }
 };
 
+// velocity for initial/boundary conditions of two population version of test program
+struct Velocity2 {
+	using data_type = Eigen::Vector3d;
+	static const std::string get_name() { return {"velocity2"}; }
+	static const std::string get_option_name() { return {"velocity2"}; }
+	static const std::string get_option_help() { return {"Plasma velocity, second population (m / s)"}; }
+};
+
 struct Pressure {
 	using data_type = double;
 	static const std::string get_name() { return {"pressure"}; }
 	static const std::string get_option_name() { return {"pressure"}; }
 	static const std::string get_option_help() { return {"Plasma thermal pressure (Pa)"}; }
+};
+
+// pressure for initial/boundary conditions of two population version of test program
+struct Pressure2 {
+	using data_type = double;
+	static const std::string get_name() { return {"pressure2"}; }
+	static const std::string get_option_name() { return {"pressure2"}; }
+	static const std::string get_option_help() { return {"Plasma thermal pressure, second population (Pa)"}; }
 };
 
 struct Number_Density {
@@ -140,21 +156,19 @@ struct Number_Density {
 	static const std::string get_option_help() { return {"Plasma number density (protons / m^3)"}; }
 };
 
+// density for initial/boundary conditions of two population version of test program
+struct Number_Density2 {
+	using data_type = double;
+	static const std::string get_name() { return {"number density2"}; }
+	static const std::string get_option_name() { return {"number-density2"}; }
+	static const std::string get_option_help() { return {"Plasma number density, second population (protons / m^3)"}; }
+};
+
 struct MPI_Rank {
 	using data_type = int;
 	static const std::string get_name() { return {"MPI rank"}; }
 	static const std::string get_option_name() { return {"mpi-rank"}; }
 	static const std::string get_option_help() { return {"Owner (MPI process) of cell"}; }
-};
-
-// TODO: separate into own file
-struct Cell_Type {
-	using data_type = int;
-	static const std::string get_name() { return {"cell type"}; }
-	static const std::string get_option_name() { return {"cell-type"}; }
-	static const std::string get_option_help() {
-		return {"Cell type (normal, do-not-solve, value / copy boundary)"};
-	}
 };
 
 /*!
@@ -177,25 +191,10 @@ struct Solver_Info {
 		mass_density_bdy = 1 << 1,
 		velocity_bdy = 1 << 2,
 		pressure_bdy = 1 << 3,
-		magnetic_field_bdy = 1 << 4;
-};
-
-struct Value_Boundary_Id {
-	using data_type = int;
-	static const std::string get_name() { return {"value boundary id"}; }
-	static const std::string get_option_name() { return {"value-boundary-id"}; }
-	static const std::string get_option_help() {
-		return {"Value boundary cell's boundary id"};
-	}
-};
-
-struct Copy_Source {
-	using data_type = unsigned long long int;
-	static const std::string get_name() { return {"source of copy cell"}; }
-	static const std::string get_option_name() { return {"source-of-copy-cell"}; }
-	static const std::string get_option_help() {
-		return {"Id of cell that is source of data for copy boundary cell."};
-	}
+		magnetic_field_bdy = 1 << 4,
+		mass_density2_bdy = 1 << 5,
+		velocity2_bdy = 1 << 6,
+		pressure2_bdy = 1 << 7;
 };
 
 struct Magnetic_Field_Divergence {
@@ -297,14 +296,6 @@ struct HD2_State { using data_type = HD_Conservative; };
 struct HD1_Flux { using data_type = HD_Conservative; };
 struct HD2_Flux { using data_type = HD_Conservative; };
 
-// separate variables for fluids and fields in boundary code
-struct Cell_Type_Fluid2 { using data_type = int; };
-struct Cell_Type_Field { using data_type = int; };
-struct Copy_Source_Fluid2 { using data_type = unsigned long long int; };
-struct Copy_Source_Field { using data_type = unsigned long long int; };
-struct Value_Boundary_Id_Fluid2 { using data_type = int; };
-struct Value_Boundary_Id_Field { using data_type = int; };
-
 // cell type for multipopulation MHD test program
 using Cell2 = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
@@ -312,17 +303,12 @@ using Cell2 = gensimcell::Cell<
 	pamhd::mhd::HD2_State,
 	pamhd::mhd::Magnetic_Field,
 	pamhd::mhd::Electric_Current_Density,
-	pamhd::mhd::Cell_Type,
-	pamhd::mhd::Copy_Source,
-	pamhd::mhd::Value_Boundary_Id,
-	pamhd::mhd::Cell_Type_Fluid2,
-	pamhd::mhd::Copy_Source_Fluid2,
-	pamhd::mhd::Value_Boundary_Id_Fluid2,
-	pamhd::mhd::Cell_Type_Field,
-	pamhd::mhd::Value_Boundary_Id_Field,
-	pamhd::mhd::Copy_Source_Field,
+	pamhd::mhd::Solver_Info,
 	pamhd::mhd::MPI_Rank,
 	pamhd::mhd::Resistivity,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_X,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_Y,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_Z,
 	pamhd::mhd::Magnetic_Field_Resistive,
 	pamhd::mhd::Magnetic_Field_Temp,
 	pamhd::mhd::Magnetic_Field_Divergence,

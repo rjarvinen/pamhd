@@ -1,7 +1,7 @@
 /*
 Common MHD functions of PAMHD.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -144,7 +144,7 @@ template <
 	}
 
 	const auto mag_tot = Mag(data) + bg_face_magnetic_field;
-	const auto
+	const double
 		inv_permeability = 1.0 / vacuum_permeability,
 		pressure_B0
 			= 0.5 * inv_permeability
@@ -419,6 +419,169 @@ template <
 				)
 			)
 		);
+}
+
+
+/*!
+Returns a flux that is separated into contributions from state_neg and state_pos.
+
+Throws std::domain_error if given a state with non-positive mass density.
+
+Ignores background magnetic field.
+*/
+template <
+	class MHD,
+	class Vector,
+	class Mass_Density,
+	class Momentum_Density,
+	class Total_Energy_Density,
+	class Magnetic_Field
+> std::tuple<MHD, MHD> N_get_flux(
+	MHD& state_neg,
+	MHD& state_pos,
+	const Vector& /*bg_face_magnetic_field*/,
+	const double adiabatic_index,
+	const double vacuum_permeability
+) {
+	const Mass_Density Mas{};
+	const Momentum_Density Mom{};
+	const Total_Energy_Density Nrj{};
+	const Magnetic_Field Mag{};
+
+	const Vector bg_face_magnetic_field{0, 0, 0};
+
+	const auto
+		flow_v_neg(state_neg[Mom] / state_neg[Mas]),
+		flow_v_pos(state_pos[Mom] / state_pos[Mas]);
+
+	const auto
+		pressure_thermal_neg
+			= get_pressure(
+				state_neg[Mas],
+				state_neg[Mom],
+				state_neg[Nrj],
+				state_neg[Mag],
+				adiabatic_index,
+				vacuum_permeability
+			),
+
+		pressure_thermal_pos
+			= get_pressure(
+				state_pos[Mas],
+				state_pos[Mom],
+				state_pos[Nrj],
+				state_pos[Mag],
+				adiabatic_index,
+				vacuum_permeability
+			),
+
+		pressure_magnetic_neg
+			= state_neg[Mag].squaredNorm() / (2 * vacuum_permeability),
+
+		pressure_magnetic_pos
+			= state_pos[Mag].squaredNorm() / (2 * vacuum_permeability),
+
+		fast_magnetosonic_neg
+			= get_fast_magnetosonic_speed(
+				state_neg[Mas],
+				state_neg[Mom],
+				state_neg[Nrj],
+				state_neg[Mag],
+				bg_face_magnetic_field,
+				adiabatic_index,
+				vacuum_permeability
+			),
+
+		fast_magnetosonic_pos
+			= get_fast_magnetosonic_speed(
+				state_pos[Mas],
+				state_pos[Mom],
+				state_pos[Nrj],
+				state_pos[Mag],
+				bg_face_magnetic_field,
+				adiabatic_index,
+				vacuum_permeability
+			),
+
+		max_signal = std::max(fast_magnetosonic_neg, fast_magnetosonic_pos),
+
+		max_signal_neg
+			= (flow_v_neg[0] <= flow_v_pos[0])
+			? flow_v_neg[0] - max_signal
+			: flow_v_pos[0] - max_signal,
+
+		max_signal_pos
+			= (flow_v_neg[0] <= flow_v_pos[0])
+			? flow_v_pos[0] + max_signal
+			: flow_v_neg[0] + max_signal,
+
+		bm = std::min(max_signal_neg, 0.0),
+		bp = std::max(max_signal_pos, 0.0);
+
+	MHD flux_neg, flux_pos;
+
+	flux_neg[Mas]
+		= state_neg[Mom][0]
+		- bm * state_neg[Mas];
+
+	flux_pos[Mas]
+		= state_pos[Mom][0]
+		- bp * state_pos[Mas];
+
+	flux_neg[Mom]
+		= state_neg[Mom]
+		* (flow_v_neg[0] - bm);
+
+	flux_pos[Mom]
+		= state_pos[Mom]
+		* (flow_v_pos[0] - bp);
+
+	flux_neg[Mom][0] += pressure_thermal_neg;
+
+	flux_pos[Mom][0] += pressure_thermal_pos;
+
+	flux_neg[Nrj]
+		= flow_v_neg[0] * (pressure_thermal_neg + state_neg[Nrj])
+		- bm * state_neg[Nrj];
+
+	flux_pos[Nrj]
+		= flow_v_pos[0] * (pressure_thermal_pos + state_pos[Nrj])
+		- bp * state_pos[Nrj];
+
+	const auto
+		&B_neg = state_neg[Mag],
+		&B_pos = state_pos[Mag];
+
+	flux_neg[Mom][0]
+		-= 0.5
+		* (B_neg[0]*B_neg[0] - B_neg[1]*B_neg[1] - B_neg[2]*B_neg[2])
+		/ vacuum_permeability;
+	flux_neg[Mom][1] -= B_neg[0] * B_neg[1] / vacuum_permeability;
+	flux_neg[Mom][2] -= B_neg[0] * B_neg[2] / vacuum_permeability;
+
+	flux_pos[Mom][0]
+		-= 0.5
+		* (B_pos[0]*B_pos[0] - B_pos[1]*B_pos[1] - B_pos[2]*B_pos[2])
+		/ vacuum_permeability;
+	flux_pos[Mom][1] -= B_pos[0] * B_pos[1] / vacuum_permeability;
+	flux_pos[Mom][2] -= B_pos[0] * B_pos[2] / vacuum_permeability;
+
+	flux_neg[Nrj]
+		+= pressure_magnetic_neg * flow_v_neg[0]
+		- B_neg[0] * flow_v_neg.dot(B_neg) / vacuum_permeability;
+
+	flux_pos[Nrj]
+		+= pressure_magnetic_pos * flow_v_pos[0]
+		- B_pos[0] * flow_v_pos.dot(B_pos) / vacuum_permeability;
+
+	flux_neg[Mag] = B_neg * (flow_v_neg[0] - bm) - B_neg[0] * flow_v_neg;
+
+	flux_pos[Mag] = B_pos * (flow_v_pos[0] - bp) - B_pos[0] * flow_v_pos;
+
+	flux_pos[Mag][0] =
+	flux_neg[Mag][0] = 0;
+
+	return std::make_tuple(flux_neg, flux_pos);
 }
 
 

@@ -198,9 +198,12 @@ boost::optional<std::array<double, 4>> read_data(
 		HD2_State(),
 		Magnetic_Field(),
 		Electric_Current_Density(),
-		Cell_Type(),
+		Solver_Info(),
 		MPI_Rank(),
-		Resistivity()
+		Resistivity(),
+		Bg_Magnetic_Field_Pos_X(),
+		Bg_Magnetic_Field_Pos_Y(),
+		Bg_Magnetic_Field_Pos_Z()
 	);
 	for (const auto& item: cells_offsets) {
 		const uint64_t
@@ -734,7 +737,7 @@ int plot_2d(
 	const std::string& current_density_cmd,
 	const std::string& rank_cmd,
 	const std::string& resistivity_cmd,
-	const std::string& type_cmd
+	const std::string& bdy_cmd
 ) {
 	const auto& grid_size = geometry.length.get();
 
@@ -1008,13 +1011,13 @@ int plot_2d(
 		);
 	}
 
-	// type
-	if (type_cmd != "") {
+	// boundary info
+	if (bdy_cmd != "") {
 		write_gnuplot_cmd_current(
-			"type",
-			"\n" + type_cmd + "\n",
+			"bdy",
+			"\n" + bdy_cmd + "\n",
 			[](const Cell2& cell_data){
-				return cell_data[Cell_Type()];
+				return cell_data[Solver_Info()];
 			}
 		);
 	}

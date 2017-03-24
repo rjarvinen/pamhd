@@ -49,28 +49,28 @@ Ignores background magnetic field.
 template <
 	class MHD,
 	class Vector,
-	class Mass_Density_T,
-	class Momentum_Density_T,
-	class Total_Energy_Density_T,
-	class Magnetic_Field_T
+	class Mass_Density,
+	class Momentum_Density,
+	class Total_Energy_Density,
+	class Magnetic_Field
 > std::tuple<MHD, MHD, double> get_flux_N_hll(
-	const MHD& state_neg,
-	const MHD& state_pos,
+	MHD& state_neg,
+	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
 	const double& area,
 	const double& dt,
 	const double& adiabatic_index,
 	const double& vacuum_permeability
 ) {
-	const Vector bg_face_magnetic_field{0, 0, 0};
-
 	using std::isnormal;
 	using std::isfinite;
 
-	const Mass_Density_T Mas{};
-	const Momentum_Density_T Mom{};
-	const Total_Energy_Density_T Nrj{};
-	const Magnetic_Field_T Mag{};
+	const Mass_Density Mas{};
+	const Momentum_Density Mom{};
+	const Total_Energy_Density Nrj{};
+	const Magnetic_Field Mag{};
+
+	const Vector bg_face_magnetic_field{0, 0, 0};
 
 	const auto
 		flow_v_neg(state_neg[Mom] / state_neg[Mas]),
@@ -195,75 +195,26 @@ template <
 
 
 	MHD flux_neg, flux_pos;
-
-	// compute L/R fluxes along the lines bm/bp: F_{L}-S_{L}U_{L}; F_{R}-S_{R}U_{R}
-	flux_neg[Mas]
-		= state_neg[Mom][0]
-		- bm * state_neg[Mas];
-
-	flux_pos[Mas]
-		= state_pos[Mom][0]
-		- bp * state_pos[Mas];
-
-	flux_neg[Mom]
-		= state_neg[Mom]
-		* (flow_v_neg[0] - bm);
-
-	flux_pos[Mom]
-		= state_pos[Mom]
-		* (flow_v_pos[0] - bp);
-
-	flux_neg[Mom][0] += pressure_thermal_neg;
-
-	flux_pos[Mom][0] += pressure_thermal_pos;
-
-	flux_neg[Nrj]
-		= flow_v_neg[0] * (pressure_thermal_neg + state_neg[Nrj])
-		- bm * state_neg[Nrj];
-
-	flux_pos[Nrj]
-		= flow_v_pos[0] * (pressure_thermal_pos + state_pos[Nrj])
-		- bp * state_pos[Nrj];
-
-	const auto
-		&B_neg = state_neg[Mag],
-		&B_pos = state_pos[Mag];
-
-	flux_neg[Mom][0]
-		-= 0.5
-		* (B_neg[0]*B_neg[0] - B_neg[1]*B_neg[1] - B_neg[2]*B_neg[2])
-		/ vacuum_permeability;
-	flux_neg[Mom][1] -= B_neg[0] * B_neg[1] / vacuum_permeability;
-	flux_neg[Mom][2] -= B_neg[0] * B_neg[2] / vacuum_permeability;
-
-	flux_pos[Mom][0]
-		-= 0.5
-		* (B_pos[0]*B_pos[0] - B_pos[1]*B_pos[1] - B_pos[2]*B_pos[2])
-		/ vacuum_permeability;
-	flux_pos[Mom][1] -= B_pos[0] * B_pos[1] / vacuum_permeability;
-	flux_pos[Mom][2] -= B_pos[0] * B_pos[2] / vacuum_permeability;
-
-	flux_neg[Nrj]
-		+= pressure_magnetic_neg * flow_v_neg[0]
-		- B_neg[0] * flow_v_neg.dot(B_neg) / vacuum_permeability;
-
-	flux_pos[Nrj]
-		+= pressure_magnetic_pos * flow_v_pos[0]
-		- B_pos[0] * flow_v_pos.dot(B_pos) / vacuum_permeability;
-
-	flux_neg[Mag] = B_neg * (flow_v_neg[0] - bm) - B_neg[0] * flow_v_neg;
-
-	flux_pos[Mag] = B_pos * (flow_v_pos[0] - bp) - B_pos[0] * flow_v_pos;
-
-	flux_pos[Mag][0] =
-	flux_neg[Mag][0] = 0;
+	std::tie(flux_neg, flux_pos) = N_get_flux<
+		MHD,
+		Vector,
+		Mass_Density,
+		Momentum_Density,
+		Total_Energy_Density,
+		Magnetic_Field
+	>(
+		state_neg,
+		state_pos,
+		bg_face_magnetic_field,
+		adiabatic_index,
+		vacuum_permeability
+	);
 
 	flux_neg *= bp / (bp - bm) * area * dt;
 	flux_pos *= bm / (bm - bp) * area * dt;
 
 	return std::make_tuple(flux_neg, flux_pos, std::max(std::fabs(bp), std::fabs(bm)));
 }
-
 
 }}} // namespaces
 

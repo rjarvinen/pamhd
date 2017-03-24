@@ -40,6 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vector"
 
 #include "dccrg.hpp"
+#include "prettyprint.hpp"
 
 #include "mhd/variables.hpp"
 
@@ -64,12 +65,14 @@ template <
 	class Momentum_Density_Getters,
 	class Total_Energy_Density_Getters,
 	class Magnetic_Field_Getter,
+	class Background_Magnetic_Field_Pos_X_Getter,
+	class Background_Magnetic_Field_Pos_Y_Getter,
+	class Background_Magnetic_Field_Pos_Z_Getter,
 	class Mass_Density_Flux_Getters,
 	class Momentum_Density_Flux_Getters,
 	class Total_Energy_Density_Flux_Getters,
 	class Magnetic_Field_Flux_Getter,
-	class Cell_Type_Getter,
-	class Cell_Type
+	class Solver_Info_Getter
 > std::pair<double, size_t> N_solve(
 	const Solver solver,
 	const size_t solve_start_index,
@@ -81,13 +84,14 @@ template <
 	const Momentum_Density_Getters Mom,
 	const Total_Energy_Density_Getters Nrj,
 	const Magnetic_Field_Getter Mag,
+	const Background_Magnetic_Field_Pos_X_Getter Bg_B_Pos_X,
+	const Background_Magnetic_Field_Pos_Y_Getter Bg_B_Pos_Y,
+	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z,
 	const Mass_Density_Flux_Getters Mas_f,
 	const Momentum_Density_Flux_Getters Mom_f,
 	const Total_Energy_Density_Flux_Getters Nrj_f,
 	const Magnetic_Field_Flux_Getter Mag_f,
-	const Cell_Type_Getter Cell_t,
-	const Cell_Type normal_cell,
-	const Cell_Type dont_solve_cell
+	const Solver_Info_Getter Sol_Info
 ) {
 	using std::get;
 
@@ -151,7 +155,7 @@ template <
 			}
 
 			// don't solve between dont_solve_cell and any other
-			if (Cell_t(*cell_data) == dont_solve_cell) {
+			if ((Sol_Info(*cell_data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
 				i++;
 				continue;
 			}
@@ -194,16 +198,7 @@ template <
 
 			auto* const neighbor_data = get<1>(cell_data_pointers[i]);
 
-			if (Cell_t(*neighbor_data) == dont_solve_cell) {
-				i++;
-				continue;
-			}
-
-			// don't solve between boundary cells
-			if (
-				Cell_t(*cell_data) != normal_cell
-				and Cell_t(*neighbor_data) != normal_cell
-			) {
+			if ((Sol_Info(*neighbor_data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
 				i++;
 				continue;
 			}
@@ -247,12 +242,41 @@ template <
 
 			// take into account direction of neighbor from cell
 			MHD_Conservative state_neg, state_pos;
+			Magnetic_Field::data_type bg_face_b;
 			if (neighbor_dir > 0) {
 				state_neg = get_total_state(*cell_data);
 				state_pos = get_total_state(*neighbor_data);
+
+				switch (neighbor_dir) {
+				case 1:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*cell_data), 1);
+					break;
+				case 2:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*cell_data), 2);
+					break;
+				case 3:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*cell_data), 3);
+					break;
+				default:
+					abort();
+				}
 			} else {
 				state_pos = get_total_state(*cell_data);
 				state_neg = get_total_state(*neighbor_data);
+
+				switch (neighbor_dir) {
+				case -1:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*neighbor_data), 1);
+					break;
+				case -2:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*neighbor_data), 2);
+					break;
+				case -3:
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*neighbor_data), 3);
+					break;
+				default:
+					abort();
+				}
 			}
 
 			MHD_Conservative flux_neg, flux_pos;
@@ -265,6 +289,7 @@ template <
 				) = solver(
 					state_neg,
 					state_pos,
+					bg_face_b,
 					shared_area,
 					dt,
 					adiabatic_index,
@@ -418,8 +443,7 @@ template <
 	class Momentum_Density_Flux_Getters,
 	class Total_Energy_Density_Flux_Getters,
 	class Magnetic_Field_Flux_Getter,
-	class Cell_Type_Getter,
-	class Cell_Type
+	class Solver_Info_Getter
 > void apply_fluxes_N(
 	dccrg::Dccrg<Cell, Geometry>& grid,
 	const Mass_Density_Getters Mas,
@@ -430,52 +454,59 @@ template <
 	const Momentum_Density_Flux_Getters Mom_f,
 	const Total_Energy_Density_Flux_Getters Nrj_f,
 	const Magnetic_Field_Flux_Getter Mag_f,
-	const Cell_Type_Getter Cell_t,
-	const Cell_Type normal_cell
+	const Solver_Info_Getter Sol_Info
 ) {
-	using std::get;
-	const auto& cell_data_pointers = grid.get_cell_data_pointers();
-
-	for (size_t i = 0 ; i < cell_data_pointers.size(); i++) {
-		const auto& cell_id = get<0>(cell_data_pointers[i]);
-
-		if (cell_id == dccrg::error_cell) {
-			continue;
-		}
-
-		const auto& offset = get<2>(cell_data_pointers[i]);
-		if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-			continue;
-		}
-
-		auto* const cell_data = get<1>(cell_data_pointers[i]);
-		if (Cell_t(*cell_data) != normal_cell) {
-			continue;
-		}
-
-		const auto length = grid.geometry.get_length(cell_id);
+	for (auto& cell: grid.cells) {
+		const auto length = grid.geometry.get_length(cell.id);
 		const double inverse_volume = 1.0 / (length[0] * length[1] * length[2]);
 
-		apply_fluxes_N(
-			*cell_data,
-			inverse_volume,
-			Mas, Mom, Nrj, Mag,
-			Mas_f, Mom_f, Nrj_f, Mag_f
-		);
+		if ((Sol_Info(*cell.data) & Solver_Info::mass_density_bdy) == 0) {
+			Mas.first(*cell.data) += Mas_f.first(*cell.data) * inverse_volume;
+		}
+		Mas_f.first(*cell.data) = 0;
 
-		Mas_f.first(*cell_data)     =
-		Mom_f.first(*cell_data)[0]  =
-		Mom_f.first(*cell_data)[1]  =
-		Mom_f.first(*cell_data)[2]  =
-		Nrj_f.first(*cell_data)     =
-		Mas_f.second(*cell_data)    =
-		Mom_f.second(*cell_data)[0] =
-		Mom_f.second(*cell_data)[1] =
-		Mom_f.second(*cell_data)[2] =
-		Nrj_f.second(*cell_data)    =
-		Mag_f(*cell_data)[0]        =
-		Mag_f(*cell_data)[1]        =
-		Mag_f(*cell_data)[2]        = 0;
+		if ((Sol_Info(*cell.data) & Solver_Info::mass_density2_bdy) == 0) {
+			Mas.second(*cell.data) += Mas_f.second(*cell.data) * inverse_volume;
+		}
+		Mas_f.second(*cell.data) = 0;
+
+
+		if ((Sol_Info(*cell.data) & Solver_Info::velocity_bdy) == 0) {
+			Mom.first(*cell.data) += Mom_f.first(*cell.data) * inverse_volume;
+		}
+		Mom_f.first(*cell.data)[0] =
+		Mom_f.first(*cell.data)[1] =
+		Mom_f.first(*cell.data)[2] = 0;
+
+		if ((Sol_Info(*cell.data) & Solver_Info::velocity2_bdy) == 0) {
+			Mom.second(*cell.data) += Mom_f.second(*cell.data) * inverse_volume;
+		}
+		Mom_f.second(*cell.data)[0] =
+		Mom_f.second(*cell.data)[1] =
+		Mom_f.second(*cell.data)[2] = 0;
+
+
+		if ((Sol_Info(*cell.data) & Solver_Info::magnetic_field_bdy) == 0) {
+			Mag(*cell.data) += Mag_f(*cell.data) * inverse_volume;
+		}
+		Mag_f(*cell.data)[0] =
+		Mag_f(*cell.data)[1] =
+		Mag_f(*cell.data)[2] = 0;
+
+		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
+			Nrj.first(*cell.data) += Nrj_f.first(*cell.data) * inverse_volume;
+		}
+		Nrj_f.first(*cell.data) = 0;
+
+		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
+			Nrj.second(*cell.data) += Nrj_f.second(*cell.data) * inverse_volume;
+		}
+		Nrj_f.second(*cell.data) = 0;
+
+
+		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
+			continue;
+		}
 	}
 }
 
