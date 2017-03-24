@@ -486,27 +486,23 @@ template <
 		Mom_f.second(*cell.data)[2] = 0;
 
 
+		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
+			Nrj.first(*cell.data) += Nrj_f.first(*cell.data) * inverse_volume;
+		}
+		Nrj_f.first(*cell.data) = 0;
+
+		if ((Sol_Info(*cell.data) & Solver_Info::pressure2_bdy) == 0) {
+			Nrj.second(*cell.data) += Nrj_f.second(*cell.data) * inverse_volume;
+		}
+		Nrj_f.second(*cell.data) = 0;
+
+
 		if ((Sol_Info(*cell.data) & Solver_Info::magnetic_field_bdy) == 0) {
 			Mag(*cell.data) += Mag_f(*cell.data) * inverse_volume;
 		}
 		Mag_f(*cell.data)[0] =
 		Mag_f(*cell.data)[1] =
 		Mag_f(*cell.data)[2] = 0;
-
-		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
-			Nrj.first(*cell.data) += Nrj_f.first(*cell.data) * inverse_volume;
-		}
-		Nrj_f.first(*cell.data) = 0;
-
-		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
-			Nrj.second(*cell.data) += Nrj_f.second(*cell.data) * inverse_volume;
-		}
-		Nrj_f.second(*cell.data) = 0;
-
-
-		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
-			continue;
-		}
 	}
 }
 
