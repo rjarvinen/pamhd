@@ -1,5 +1,5 @@
 /*
-Handles boundary cell classification logic of MHD part of PAMHD.
+Handles boundary logic of MHD part of PAMHD.
 
 Copyright 2015, 2016 Ilja Honkonen
 All rights reserved.
