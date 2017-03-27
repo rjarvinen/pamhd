@@ -22,8 +22,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "cmath"
 #include "cstdlib"
 #include "iostream"
+#include "utility"
+#include "vector"
 
-#include "dipole.hpp"
+#include "mhd/background_magnetic_field.hpp"
 #include "boost/numeric/odeint.hpp"
 #include "dccrg.hpp"
 #include "dccrg_cartesian_geometry.hpp"
@@ -31,6 +33,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "Eigen/Geometry"
 #include "mpi.h" // must be included before gensimcell
 #include "gensimcell.hpp"
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 
 #include "mhd/variables.hpp"
 #include "particle/save.hpp"
@@ -118,19 +122,27 @@ int main(int argc, char* argv[])
 		cell_ids = grid.get_cells();
 
 	// background magnetic field
-	const std::vector<
-		std::pair<
-			Eigen::Vector3d,
-			Eigen::Vector3d
-		>
-	> dipole_moment_position{{
-		background_B::get_earth_dipole_moment<Eigen::Vector3d>(),
-		{0, 0, 0}
-	}};
-	// intergrate magnetic field in all dimensions
-	const std::array<size_t, 3> integration_dims{
-		{0, 1, 2}
-	};
+	pamhd::mhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+
+	rapidjson::Document document;
+	document.Parse(
+		"{\"background-magnetic-field\": {"
+		"	\"dipoles\": ["
+		"		{\"moment\": [0, 0, -7.94e22], \"position\": [0, 0, 0]}"
+		"	],"
+		"	\"minimum-distance\": 1e5"
+		"}}"
+	);
+	if (document.HasParseError()) {
+		std::cerr << "Couldn't parse json data in file " << argv[1]
+			<< " at character position " << document.GetErrorOffset()
+			<< ": " << rapidjson::GetParseError_En(document.GetParseError())
+			<< std::endl;
+		MPI_Finalize();
+		return EXIT_FAILURE;
+	}
+
+	bg_B.set(document);
 
 	// create particles at equator 5 Re from origin
 	int initial_particles_local = 0, initial_particles = 0;
@@ -155,28 +167,11 @@ int main(int argc, char* argv[])
 		const auto distance = r.norm();
 
 		cell_data[Electric_Field()] = {0, 0, 0};
-		if (distance < cell_length[0]) {
-			cell_data[Magnetic_Field()] = {0, 0, 0};
-		} else {
-			// magnetic field is volume averaged dipole
-			std::tie(
-				cell_data[Magnetic_Field()],
-				std::ignore
-			) = background_B::get_dipole_field(
-				dipole_moment_position,
-				Eigen::Vector3d{
-					cell_min[0],
-					cell_min[1],
-					cell_min[2]
-				},
-				integration_dims,
-				Eigen::Vector3d{
-					cell_length[0],
-					cell_length[1],
-					cell_length[2]
-				}
+		cell_data[Magnetic_Field()]
+			= bg_B.get_background_field(
+				Eigen::Vector3d{cell_center[0], cell_center[1], cell_center[2]},
+				1.257e-06
 			);
-		}
 
 		if (distance > (5 + 1.0/6.0) * Re or distance < (5 - 1.0/6.0) * Re) {
 			continue;
