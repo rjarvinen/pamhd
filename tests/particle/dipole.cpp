@@ -86,12 +86,24 @@ bool check_result(
 
 	if (position.norm() > 7 * earth_radius) {
 		if (initial_angle == 90) {
-			if (step_divisor >= 512) {
-				return false;
+			if (initial_energy == 1e4) {
+				if (step_divisor >= 2) {
+					return false;
+				}
+			} else {
+				if (step_divisor >= 512) {
+					return false;
+				}
 			}
 		} else {
-			if (step_divisor >= 64) {
-				return false;
+			if (initial_energy == 1e4) {
+				if (step_divisor >= 4) {
+					return false;
+				}
+			} else {
+				if (step_divisor >= 128) {
+					return false;
+				}
 			}
 		}
 	}
