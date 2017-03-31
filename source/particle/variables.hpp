@@ -159,6 +159,53 @@ struct Magnetic_Field {
 	static const std::string get_option_help() { return {"Magnetic field used for propagating particles"}; }
 };
 
+// number of macroparticles in simulation cell in initial & boundary conditions
+struct Bdy_Nr_Particles_In_Cell {
+	using data_type = double;
+	static std::string get_name() { return std::string("Nr particles"); }
+	static std::string get_option_name() { return std::string("nr-particles"); }
+	static std::string get_option_help() { return std::string(""); }
+};
+
+// temperature of particles in initial & boundary conditions
+struct Bdy_Temperature {
+	using data_type = double;
+	static std::string get_name() { return std::string("temperature"); }
+	static std::string get_option_name() { return std::string("temperature"); }
+	static std::string get_option_help() { return std::string(""); }
+};
+
+// number density of particles in initial & boundary conditions
+struct Bdy_Number_Density {
+	using data_type = double;
+	static std::string get_name() { return std::string("number density"); }
+	static std::string get_option_name() { return std::string("number-density"); }
+	static std::string get_option_help() { return std::string(""); }
+};
+
+// velocity of particles in initial & boundary conditions
+struct Bdy_Velocity {
+	using data_type = Eigen::Vector3d;
+	static const std::string get_name() { return {"velocity"}; }
+	static const std::string get_option_name() { return {"velocity"}; }
+	static const std::string get_option_help() { return {""}; }
+};
+
+// mass of particle species
+struct Bdy_Species_Mass {
+	using data_type = double;
+	static const std::string get_name() { return {"species mass"}; }
+	static const std::string get_option_name() { return {"species-mass"}; }
+	static const std::string get_option_help() { return {""}; }
+};
+
+// charge to mass ratio of particles
+struct Bdy_Charge_Mass_Ratio {
+	using data_type = double;
+	static const std::string get_name() { return {"charge mass ratio"}; }
+	static const std::string get_option_name() { return {"charge-mass-ratio"}; }
+	static const std::string get_option_help() { return {""}; }
+};
 
 struct Bulk_Mass {
 	using data_type = double;
@@ -233,44 +280,20 @@ struct Current_Minus_Velocity {
 	static const std::string get_option_help() { return {"Current minus Velocity for interpolating electric field to particle position"}; }
 };
 
-struct Cell_Type_Particle {
-	using data_type = int;
-	static const std::string get_name() { return {"particle cell type"}; }
-	static const std::string get_option_name() { return {"particle-cell-type"}; }
-	static const std::string get_option_help() {
-		return {"Cell type for particle solver (0: normal, < 0: do-not-solve, > 0: boundary)"};
-	}
+// same function as mhd solver info variable
+struct Solver_Info {
+	using data_type = unsigned int;
+	static const unsigned int
+		dont_solve = 1 << 0,
+		number_density_bdy = 1 << 1,
+		velocity_bdy = 1 << 2,
+		temperature_bdy = 1 << 3,
+		magnetic_field_bdy = 1 << 4,
+		electric_field_bdy = 1 << 5;
 };
-struct Copy_Source_Particle {
-	using data_type = unsigned long long int;
-	static const std::string get_name() { return {"source of copy cell"}; }
-	static const std::string get_option_name() { return {"source-of-copy-cell"}; }
-	static const std::string get_option_help() {
-		return {"Id of cell that is source of data for copy boundary cell."};
-	}
-};
-struct Value_Boundary_Id_Particle {
-	using data_type = int;
-	static const std::string get_name() { return {"value boundary id"}; }
-	static const std::string get_option_name() { return {"value-boundary-id"}; }
-	static const std::string get_option_help() {
-		return {"Value boundary cell's boundary id"};
-	}
-};
-
-struct Cell_Type_Field {
-	using data_type = int;
-	static const std::string get_name() { return {"field cell type"}; }
-	static const std::string get_option_name() { return {"field-cell-type"}; }
-	static const std::string get_option_help() {
-		return {"Cell type for field solver (0: normal, < 0: do-not-solve, > 0: boundary)"};
-	}
-};
-struct Copy_Source_Field { using data_type = unsigned long long int; };
-struct Value_Boundary_Id_Field { using data_type = int; };
 
 /*!
-Cell type for particle model of PAMHD.
+Cell type for test (massless) particle model of PAMHD.
 
 Fixed size variables are first so that they
 are saved at a known position in the file by dccrg.
@@ -278,16 +301,36 @@ gensimcell puts the variables in an MPI datatype
 in the same order as they are given here, which
 dccrg uses to save the file.
 */
-using Cell = gensimcell::Cell<
+using Cell_test_particle = gensimcell::Cell<
+	gensimcell::Optional_Transfer,
+	pamhd::mhd::Electric_Current_Density, // output compatible with regular model
+	pamhd::particle::Solver_Info,
+	pamhd::mhd::MPI_Rank,
+	pamhd::particle::Electric_Field,
+	pamhd::particle::Magnetic_Field,
+	pamhd::particle::Number_Of_Particles,
+	pamhd::particle::Bdy_Number_Density,
+	pamhd::particle::Bdy_Velocity,
+	pamhd::particle::Bdy_Temperature,
+	pamhd::particle::Bdy_Species_Mass,
+	pamhd::particle::Bdy_Charge_Mass_Ratio,
+	pamhd::particle::Bdy_Nr_Particles_In_Cell,
+	pamhd::particle::Nr_Particles_Internal,
+	pamhd::particle::Nr_Particles_External,
+	pamhd::particle::Particles_Internal,
+	pamhd::particle::Particles_External
+>;
+
+/*!
+Cell type for particle model of PAMHD.
+
+See Cell_test_particle for info.
+*/
+using Cell_particle = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::mhd::MHD_State_Conservative,
 	pamhd::mhd::Electric_Current_Density,
-	Cell_Type_Particle,
-	Copy_Source_Particle,
-	Value_Boundary_Id_Particle,
-	Cell_Type_Field,
-	Copy_Source_Field,
-	Value_Boundary_Id_Field,
+	pamhd::particle::Solver_Info,
 	pamhd::mhd::MPI_Rank,
 	pamhd::mhd::Resistivity,
 	pamhd::mhd::Magnetic_Field_Resistive,
@@ -295,20 +338,26 @@ using Cell = gensimcell::Cell<
 	pamhd::mhd::Magnetic_Field_Divergence,
 	pamhd::mhd::Scalar_Potential_Gradient,
 	pamhd::mhd::MHD_Flux_Conservative,
-	Electric_Field,
-	Magnetic_Field,
-	Number_Of_Particles,
-	Bulk_Mass,
-	Bulk_Momentum,
-	Bulk_Velocity,
-	Current_Minus_Velocity,
-	Bulk_Relative_Velocity2,
-	Nr_Particles_Internal,
-	Nr_Particles_External,
-	Nr_Accumulated_To_Cells,
-	Particles_Internal,
-	Particles_External,
-	Accumulated_To_Cells
+	pamhd::particle::Electric_Field,
+	pamhd::particle::Magnetic_Field,
+	pamhd::particle::Number_Of_Particles,
+	pamhd::particle::Bdy_Number_Density,
+	pamhd::particle::Bdy_Velocity,
+	pamhd::particle::Bdy_Temperature,
+	pamhd::particle::Bdy_Species_Mass,
+	pamhd::particle::Bdy_Charge_Mass_Ratio,
+	pamhd::particle::Bdy_Nr_Particles_In_Cell,
+	pamhd::particle::Bulk_Mass,
+	pamhd::particle::Bulk_Momentum,
+	pamhd::particle::Bulk_Velocity,
+	pamhd::particle::Current_Minus_Velocity,
+	pamhd::particle::Bulk_Relative_Velocity2,
+	pamhd::particle::Nr_Particles_Internal,
+	pamhd::particle::Nr_Particles_External,
+	pamhd::particle::Nr_Accumulated_To_Cells,
+	pamhd::particle::Particles_Internal,
+	pamhd::particle::Particles_External,
+	pamhd::particle::Accumulated_To_Cells
 >;
 
 }} // namespaces

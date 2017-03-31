@@ -75,24 +75,31 @@ private:
 	const std::array<Eigen::Vector3d, 27>
 		&current_minus_velocity, &magnetic_field;
 
+	bool E_is_derived;
 
 public:
 
 	/*!
 	Arguments except charge to mass ratio are passed to interpolate().
+
+	If given_E_is_derived == true then E is interpolated by interpolating
+	J - V and B to particle position from which E = (J-V) x B, otherwise
+	E is interpolated directly by assuming E = J-V.
 	*/
 	Particle_Propagator(
 		const double& given_charge_to_mass_ratio,
 		const Eigen::Vector3d& given_data_start,
 		const Eigen::Vector3d& given_data_end,
 		const std::array<Eigen::Vector3d, 27>& given_current_minus_velocity,
-		const std::array<Eigen::Vector3d, 27>& given_magnetic_field
+		const std::array<Eigen::Vector3d, 27>& given_magnetic_field,
+		const bool given_E_is_derived
 	) :
 		charge_to_mass_ratio(given_charge_to_mass_ratio),
 		data_start(given_data_start),
 		data_end(given_data_end),
 		current_minus_velocity(given_current_minus_velocity),
-		magnetic_field(given_magnetic_field)
+		magnetic_field(given_magnetic_field),
+		E_is_derived(given_E_is_derived)
 	{}
 
 	void operator()(
@@ -101,13 +108,6 @@ public:
 		const double
 	) const {
 		const auto
-			J_m_V_at_pos
-				= interpolate(
-					state[0],
-					this->data_start,
-					this->data_end,
-					this->current_minus_velocity
-				),
 			B_at_pos
 				= interpolate(
 					state[0],
@@ -115,7 +115,24 @@ public:
 					this->data_end,
 					this->magnetic_field
 				),
-			E_at_pos = J_m_V_at_pos.cross(B_at_pos);
+			E_at_pos = [&](){
+				if (this->E_is_derived) {
+					const auto J_m_V_at_pos = interpolate(
+						state[0],
+						this->data_start,
+						this->data_end,
+						this->current_minus_velocity
+					);
+					return J_m_V_at_pos.cross(B_at_pos);
+				} else {
+					return interpolate(
+						state[0],
+						this->data_start,
+						this->data_end,
+						this->current_minus_velocity
+					);
+				}
+			}();
 
 		change[0] = state[1];
 		change[1]
@@ -135,22 +152,34 @@ list of their previous cell and added to Particle_Destinations_T
 information.
 */
 template<
-	class Current_Minus_Velocity_T,
-	class Magnetic_Field_T,
-	class Nr_Particles_External_T,
-	class Particles_Internal_T,
-	class Particles_External_T,
-	class Particle_Position_T,
-	class Particle_Velocity_T,
-	class Charge_To_Mass_Ratio_T,
-	class Particle_Mass_T,
-	class Particle_Destination_T,
 	class Stepper,
-	class Cell
+	class Cell,
+	class Current_Minus_Velocity_Getter,
+	class Magnetic_Field_Getter,
+	class Nr_Particles_External_Getter,
+	class Particles_Internal_Getter,
+	class Particles_External_Getter,
+	class Particle_Position_Getter,
+	class Particle_Velocity_Getter,
+	class Particle_Charge_Mass_Ratio_Getter,
+	class Particle_Mass_Getter,
+	class Particle_Destination_Cell_Getter
 > double solve(
 	const double dt,
 	const std::vector<uint64_t>& cell_ids,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	const bool E_is_derived_quantity,
+	// if E_is_derived_quantity == true: JmV = J - V, else JmV = E
+	const Current_Minus_Velocity_Getter JmV,
+	const Magnetic_Field_Getter Mag,
+	const Nr_Particles_External_Getter Nr_Ext,
+	const Particles_Internal_Getter Part_Int,
+	const Particles_External_Getter Part_Ext,
+	const Particle_Position_Getter Part_Pos,
+	const Particle_Velocity_Getter Part_Vel,
+	const Particle_Charge_Mass_Ratio_Getter Part_C2M,
+	const Particle_Mass_Getter Part_Mas,
+	const Particle_Destination_Cell_Getter Part_Des
 ) {
 	namespace odeint = boost::numeric::odeint;
 	using std::isnan;
@@ -164,17 +193,6 @@ template<
 		or is_same<Stepper, odeint::runge_kutta_fehlberg78<state_t>>::value,
 		"Only odeint steppers without internal state are supported."
 	);
-
-	constexpr Current_Minus_Velocity_T JmV{};
-	constexpr Magnetic_Field_T Mag{};
-	constexpr Nr_Particles_External_T Nr_Ext{};
-	constexpr Particles_Internal_T Part_Int{};
-	constexpr Particles_External_T Part_Ext{};
-	constexpr Particle_Position_T Pos{};
-	constexpr Particle_Velocity_T Vel{};
-	constexpr Charge_To_Mass_Ratio_T C2M{};
-	constexpr Particle_Mass_T Mas{};
-	constexpr Particle_Destination_T Des{};
 
 
 	Stepper stepper;
@@ -204,8 +222,8 @@ template<
 		}
 
 		// put current cell's data into middle
-		current_minus_velocities[14] = (*cell_data)[JmV];
-		magnetic_fields[14] = (*cell_data)[Mag];
+		current_minus_velocities[14] = JmV(*cell_data);
+		magnetic_fields[14] = Mag(*cell_data);
 
 		for (size_t i = 0; i < neighbor_ids->size(); i++) {
 			const auto neighbor_id = (*neighbor_ids)[i];
@@ -223,18 +241,18 @@ template<
 				continue;
 			}
 
-			const auto* const neighbor_data = grid[neighbor_id];
+			auto* const neighbor_data = grid[neighbor_id];
 			if (neighbor_data == nullptr) {
 				std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
 				abort();
 			}
 
 			if (i <= 13) {
-				current_minus_velocities[i] = (*neighbor_data)[JmV];
-				magnetic_fields[i] = (*neighbor_data)[Mag];
+				current_minus_velocities[i] = JmV(*neighbor_data);
+				magnetic_fields[i] = Mag(*neighbor_data);
 			} else {
-				current_minus_velocities[i + 1] = (*neighbor_data)[JmV];
-				magnetic_fields[i + 1] = (*neighbor_data)[Mag];
+				current_minus_velocities[i + 1] = JmV(*neighbor_data);
+				magnetic_fields[i + 1] = Mag(*neighbor_data);
 			}
 		}
 
@@ -256,10 +274,18 @@ template<
 				cell_center[2] + cell_length[2]
 			};
 
-		for (size_t i = 0; i < (*cell_data)[Part_Int].size(); i++) {
-			const auto& particle = (*cell_data)[Part_Int][i];
+		for (size_t i = 0; i < Part_Int(*cell_data).size(); i++) {
+			auto particle = Part_Int(*cell_data)[i]; // reference faster?
 
-			// calculate max length of time step for next step
+			// calculate max length of time step for next step from cell-centered values
+			const auto E_centered = [&](){
+				if (E_is_derived_quantity) {
+					return JmV(*cell_data).cross(Mag(*cell_data));
+				} else {
+					return JmV(*cell_data);
+				}
+			}();
+
 			max_time_step = std::min(
 				max_time_step,
 				get_minmax_step(
@@ -268,25 +294,25 @@ template<
 					// only allow particles to propagate through half a
 					// cell in order to not break field interpolation
 					cell_length[0] / 2.0,
-					particle[C2M],
-					particle[Vel],
-					// use cell-centered instead of interpolated fields
-					(*cell_data)[JmV].cross((*cell_data)[Mag]),
-					(*cell_data)[Mag]
+					Part_C2M(particle),
+					Part_Vel(particle),
+					E_centered,
+					Mag(*cell_data)
 				).second
 			);
 
 			const Particle_Propagator propagator(
-				particle[C2M],
+				Part_C2M(particle),
 				interpolation_start,
 				interpolation_end,
 				current_minus_velocities,
-				magnetic_fields
+				magnetic_fields,
+				E_is_derived_quantity
 			);
 
-			state_t state{{particle[Pos], particle[Vel]}};
+			state_t state{{Part_Pos(particle), Part_Vel(particle)}};
 			stepper.do_step(propagator, state, 0.0, dt);
-			(*cell_data)[Part_Int][i][Vel] = state[1];
+			Part_Vel(Part_Int(*cell_data)[i]) = state[1];
 
 
 			// take into account periodic grid
@@ -297,6 +323,12 @@ template<
 					state[0][2]
 				}});
 
+			Part_Pos(Part_Int(*cell_data)[i]) = {
+				real_pos[0],
+				real_pos[1],
+				real_pos[2]
+			};
+
 			// remove from simulation if particle not inside of grid
 			if (
 				isnan(real_pos[0])
@@ -304,7 +336,7 @@ template<
 				or isnan(real_pos[2])
 			) {
 
-				(*cell_data)[Part_Int].erase((*cell_data)[Part_Int].begin() + i);
+				Part_Int(*cell_data).erase(Part_Int(*cell_data).begin() + i);
 				i--;
 
 			// move to ext list if particle outside of current cell
@@ -341,32 +373,30 @@ template<
 				}
 
 				if (destination != dccrg::error_cell) {
-					const auto index = (*cell_data)[Part_Ext].size();
 
-					(*cell_data)[Part_Ext].resize(index + 1);
+					const auto index = Part_Ext(*cell_data).size();
+
+					Part_Ext(*cell_data).resize(index + 1);
 					assign(
-						(*cell_data)[Part_Ext][index],
-						(*cell_data)[Part_Int][i]
+						Part_Ext(*cell_data)[index],
+						Part_Int(*cell_data)[i]
 					);
-					(*cell_data)[Part_Ext][index][Des] = destination;
-					(*cell_data)[Part_Ext][index][Pos] = {
-						real_pos[0],
-						real_pos[1],
-						real_pos[2]
-					};
+					Part_Des(Part_Ext(*cell_data)[index]) = destination;
 
-					(*cell_data)[Part_Int].erase((*cell_data)[Part_Int].begin() + i);
+					Part_Int(*cell_data).erase(Part_Int(*cell_data).begin() + i);
 					i--;
+
 				} else {
+
 					std::cerr << __FILE__ << "(" << __LINE__ << "): "
 						<< " No destination found for particle at " << real_pos
-						<< " propagated from " << particle[Pos]
+						<< " propagated from " << Part_Pos(particle)
 						<< " with dt " << dt
 						<< " in cell " << cell_id
 						<< " of length " << cell_length
 						<< " at " << cell_center
-						<< " with E " << (*cell_data)[JmV].cross((*cell_data)[Mag])
-						<< " and B " << (*cell_data)[Mag]
+						<< " with E " << JmV(*cell_data).cross(Mag(*cell_data))
+						<< " and B " << Mag(*cell_data)
 						<< " from neighbors ";
 					for (const auto& neighbor_id: *neighbor_ids) {
 						std::cerr << neighbor_id << " ";
@@ -374,18 +404,10 @@ template<
 					std::cerr << std::endl;
 					abort();
 				}
-
-			// update particle position in this cell's internal list
-			} else {
-				(*cell_data)[Part_Int][i][Pos] = {
-					real_pos[0],
-					real_pos[1],
-					real_pos[2]
-				};
 			}
 		}
 
-		(*cell_data)[Nr_Ext] = (*cell_data)[Part_Ext].size();
+		Nr_Ext(*cell_data) = Part_Ext(*cell_data).size();
 	}
 
 	return max_time_step;

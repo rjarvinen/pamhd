@@ -1,7 +1,7 @@
 /*
 Tests parallel particle solver of PAMHD in 3 dimensions.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -47,14 +47,60 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "particle/variables.hpp"
 
 using namespace std;
-using namespace pamhd::particle;
 
+using Cell = pamhd::particle::Cell_test_particle;
+using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
+
+
+// returns reference to magnetic field for propagating particles
+const auto Mag
+	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
+		return cell_data[pamhd::particle::Magnetic_Field()];
+	};
+// electric field for propagating particles
+const auto Ele
+	= [](Cell& cell_data)->typename pamhd::particle::Electric_Field::data_type&{
+		return cell_data[pamhd::particle::Electric_Field()];
+	};
+const auto Part_Int
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_Internal::data_type&{
+		return cell_data[pamhd::particle::Particles_Internal()];
+	};
+// particles moving to another cell
+const auto Part_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_External::data_type&{
+		return cell_data[pamhd::particle::Particles_External()];
+	};
+// number of particles in above list, for allocating memory for arriving particles
+const auto Nr_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Nr_Particles_External::data_type&{
+		return cell_data[pamhd::particle::Nr_Particles_External()];
+	};
+
+// given a particle these return references to particle's parameters
+const auto Part_Pos
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Position::data_type&{
+		return particle[pamhd::particle::Position()];
+	};
+const auto Part_Vel
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Velocity::data_type&{
+		return particle[pamhd::particle::Velocity()];
+	};
+const auto Part_C2M
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Charge_Mass_Ratio::data_type&{
+		return particle[pamhd::particle::Charge_Mass_Ratio()];
+	};
+const auto Part_Mas
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type&{
+		return particle[pamhd::particle::Mass()];
+	};
+const auto Part_Des
+	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
+		return particle[pamhd::particle::Destination_Cell()];
+	};
 
 int main(int argc, char* argv[])
 {
-	using Cell = pamhd::particle::Cell;
-	using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
-
 	/*
 	Initialize MPI
 	*/
@@ -135,23 +181,23 @@ int main(int argc, char* argv[])
 
 		const auto cell_center = grid.geometry.get_center(cell_id);
 
-		Particle_Internal particle;
-		particle[Position()] = {
+		pamhd::particle::Particle_Internal particle;
+		Part_Pos(particle) = {
 			cell_center[0],
 			cell_center[1],
 			cell_center[2]
 		};
-		particle[Velocity()] = {-1.0, 1.0, 1.0};
+		Part_Vel(particle) = {-1.0, 1.0, 1.0};
 
-		particle[Mass()] =
-		particle[Charge_Mass_Ratio()] = 0;
+		Part_Mas(particle) =
+		Part_C2M(particle) = 0;
 
-		cell_data[Particles_Internal()].push_back(particle);
+		Part_Int(cell_data).push_back(particle);
 
-		cell_data[Electric_Field()] =
-		cell_data[Magnetic_Field()] = {0, 0, 0};
+		Ele(cell_data) =
+		Mag(cell_data) = {0, 0, 0};
 
-		cell_data[Nr_Particles_External()] = cell_data[Particles_External()].size();
+		Nr_Ext(cell_data) = Part_Ext(cell_data).size();
 	}
 	// allocate copies of remote neighbor cells
 	grid.update_copies_of_remote_neighbors();
@@ -162,18 +208,23 @@ int main(int argc, char* argv[])
 		Grid& grid
 	) {
 		pamhd::particle::solve<
-			pamhd::particle::Electric_Field,
-			pamhd::particle::Magnetic_Field,
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_Internal,
-			pamhd::particle::Particles_External,
-			pamhd::particle::Position,
-			pamhd::particle::Velocity,
-			pamhd::particle::Charge_Mass_Ratio,
-			pamhd::particle::Mass,
-			pamhd::particle::Destination_Cell,
-			boost::numeric::odeint::runge_kutta_fehlberg78<state_t>
-		>(1.0, cell_ids, grid);
+			boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
+		>(
+			1.0,
+			cell_ids,
+			grid,
+			false,
+			Ele,
+			Mag,
+			Nr_Ext,
+			Part_Int,
+			Part_Ext,
+			Part_Pos,
+			Part_Vel,
+			Part_C2M,
+			Part_Mas,
+			Part_Des
+		);
 	};
 
 	auto resize_receiving = [](

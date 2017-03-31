@@ -57,6 +57,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace std;
 using namespace pamhd::particle;
 
+using Cell = pamhd::particle::Cell_test_particle;
+
 /*
 Reads simulation data from given file.
 

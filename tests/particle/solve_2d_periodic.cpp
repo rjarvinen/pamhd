@@ -1,7 +1,7 @@
 /*
 Tests parallel particle solver of PAMHD in 2 dimensions with periodic grid.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -47,14 +47,60 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "particle/variables.hpp"
 
 using namespace std;
-using namespace pamhd::particle;
 
+using Cell = pamhd::particle::Cell_test_particle;
+using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
+
+
+// returns reference to magnetic field for propagating particles
+const auto Mag
+	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
+		return cell_data[pamhd::particle::Magnetic_Field()];
+	};
+// electric field for propagating particles
+const auto Ele
+	= [](Cell& cell_data)->typename pamhd::particle::Electric_Field::data_type&{
+		return cell_data[pamhd::particle::Electric_Field()];
+	};
+const auto Part_Int
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_Internal::data_type&{
+		return cell_data[pamhd::particle::Particles_Internal()];
+	};
+// particles moving to another cell
+const auto Part_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_External::data_type&{
+		return cell_data[pamhd::particle::Particles_External()];
+	};
+// number of particles in above list, for allocating memory for arriving particles
+const auto Nr_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Nr_Particles_External::data_type&{
+		return cell_data[pamhd::particle::Nr_Particles_External()];
+	};
+
+// given a particle these return references to particle's parameters
+const auto Part_Pos
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Position::data_type&{
+		return particle[pamhd::particle::Position()];
+	};
+const auto Part_Vel
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Velocity::data_type&{
+		return particle[pamhd::particle::Velocity()];
+	};
+const auto Part_C2M
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Charge_Mass_Ratio::data_type&{
+		return particle[pamhd::particle::Charge_Mass_Ratio()];
+	};
+const auto Part_Mas
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type&{
+		return particle[pamhd::particle::Mass()];
+	};
+const auto Part_Des
+	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
+		return particle[pamhd::particle::Destination_Cell()];
+	};
 
 int main(int argc, char* argv[])
 {
-	using Cell = pamhd::particle::Cell;
-	using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
-
 	/*
 	Initialize MPI
 	*/
@@ -177,47 +223,47 @@ int main(int argc, char* argv[])
 			cell_center_y = grid_y.geometry.get_center(cell_id),
 			cell_center_z = grid_z.geometry.get_center(cell_id);
 
-		Particle_Internal particle_x, particle_y, particle_z;
-		particle_x[Position()] = {
+		pamhd::particle::Particle_Internal particle_x, particle_y, particle_z;
+		Part_Pos(particle_x) = {
 			cell_center_x[0],
 			cell_center_x[1],
 			cell_center_x[2]
 		};
-		particle_y[Position()] = {
+		Part_Pos(particle_y) = {
 			cell_center_y[0],
 			cell_center_y[1],
 			cell_center_y[2]
 		};
-		particle_z[Position()] = {
+		Part_Pos(particle_z) = {
 			cell_center_z[0],
 			cell_center_z[1],
 			cell_center_z[2]
 		};
-		particle_x[Velocity()] = {  0.5, -1.0, -1.0};
-		particle_y[Velocity()] = {-1.0,   0.5, -1.0};
-		particle_z[Velocity()] = {-1.0, -1.0,   0.5};
+		Part_Vel(particle_x) = {  0.5, -1.0, -1.0};
+		Part_Vel(particle_y) = {-1.0,   0.5, -1.0};
+		Part_Vel(particle_z) = {-1.0, -1.0,   0.5};
 
-		particle_x[Mass()] =
-		particle_y[Mass()] =
-		particle_z[Mass()] =
-		particle_x[Charge_Mass_Ratio()] =
-		particle_y[Charge_Mass_Ratio()] =
-		particle_z[Charge_Mass_Ratio()] = 0;
+		Part_Mas(particle_x) =
+		Part_Mas(particle_y) =
+		Part_Mas(particle_z) =
+		Part_C2M(particle_x) =
+		Part_C2M(particle_y) =
+		Part_C2M(particle_z) = 0;
 
-		cell_data_x[Particles_Internal()].push_back(particle_x);
-		cell_data_y[Particles_Internal()].push_back(particle_y);
-		cell_data_z[Particles_Internal()].push_back(particle_z);
+		Part_Int(cell_data_x).push_back(particle_x);
+		Part_Int(cell_data_y).push_back(particle_y);
+		Part_Int(cell_data_z).push_back(particle_z);
 
-		cell_data_x[Electric_Field()] =
-		cell_data_x[Magnetic_Field()] =
-		cell_data_y[Electric_Field()] =
-		cell_data_y[Magnetic_Field()] =
-		cell_data_z[Electric_Field()] =
-		cell_data_z[Magnetic_Field()] = {0, 0, 0};
+		Ele(cell_data_x) =
+		Mag(cell_data_x) =
+		Ele(cell_data_y) =
+		Mag(cell_data_y) =
+		Ele(cell_data_z) =
+		Mag(cell_data_z) = {0, 0, 0};
 
-		cell_data_x[Nr_Particles_External()] = cell_data_x[Particles_External()].size();
-		cell_data_y[Nr_Particles_External()] = cell_data_y[Particles_External()].size();
-		cell_data_z[Nr_Particles_External()] = cell_data_z[Particles_External()].size();
+		Nr_Ext(cell_data_x) = Part_Ext(cell_data_x).size();
+		Nr_Ext(cell_data_y) = Part_Ext(cell_data_y).size();
+		Nr_Ext(cell_data_z) = Part_Ext(cell_data_z).size();
 	}
 	// allocate copies of remote neighbor cells
 	grid_x.update_copies_of_remote_neighbors();
@@ -230,18 +276,23 @@ int main(int argc, char* argv[])
 		Grid& grid
 	) {
 		pamhd::particle::solve<
-			pamhd::particle::Electric_Field,
-			pamhd::particle::Magnetic_Field,
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_Internal,
-			pamhd::particle::Particles_External,
-			pamhd::particle::Position,
-			pamhd::particle::Velocity,
-			pamhd::particle::Charge_Mass_Ratio,
-			pamhd::particle::Mass,
-			pamhd::particle::Destination_Cell,
-			boost::numeric::odeint::runge_kutta_fehlberg78<state_t>
-		>(1.0, cell_ids, grid);
+			boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
+		>(
+			1.0,
+			cell_ids,
+			grid,
+			false,
+			Ele,
+			Mag,
+			Nr_Ext,
+			Part_Int,
+			Part_Ext,
+			Part_Pos,
+			Part_Vel,
+			Part_C2M,
+			Part_Mas,
+			Part_Des
+		);
 	};
 
 	auto resize_receiving = [](

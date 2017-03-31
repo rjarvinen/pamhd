@@ -1,0 +1,67 @@
+{
+	"comment": "injects particles into a stationary strong perpendicular shock ramp from positive x direction",
+	"output-directory": "results/massless/shock_crossing/1d/+x/euler/",
+	"time-start": 0,
+	"time-length": 0.1,
+	"solver-particle": "euler",
+	"load-balancer": "RANDOM",
+	"save-particle-n": 0.01,
+	"adiabatic-index": 1.6666666666666667,
+	"vacuum-permeability": 1,
+	"proton-mass": 1,
+	"particle-temp-nrj-ratio": 1,
+	"remove-div-B-n": 0.1,
+	"time-step-factor": 0.01,
+	"poisson-norm-stop": 1e-10,
+	"poisson-norm-increase-max": 10,
+	"grid-options": {
+		"periodic": "{false, true, true}",
+		"cells": "{10 + 1, 1, 1}",
+		"volume": "{1 + 1/(cells[0] - 1), 1, 1}",
+		"start": "{0, 0, 0}"
+	},
+	"geometries": [
+		{"box": {"start": [1, -99, -99], "end": [99, 99, 99]}}
+	],
+	"number-density": {
+		"default": 0,
+		"initial-conditions": [
+			{"geometry-id": 0, "value": 1}
+		]
+	},
+	"comment": "adiabatic index == 5/3 => sound speed sqrt(5/3)",
+	"velocity": {
+		"default": [0, 0, 0],
+		"initial-conditions": [
+			{"geometry-id": 0, "value": [-10, 0, 0]}
+		]
+	},
+	"temperature": {
+		"default": 0,
+		"initial-conditions": [
+			{"geometry-id": 0, "value": 1}
+		]
+	},
+	"nr-particles": {
+		"default": 0,
+		"initial-conditions": [
+			{"geometry-id": 0, "value": 100}
+		]
+	},
+	"species-mass": {
+		"default": 0,
+		"initial-conditions": [
+			{"geometry-id": 0, "value": 1}
+		]
+	},
+	"charge-mass-ratio": {
+		"default": 0,
+		"initial-conditions": [
+			{"geometry-id": 0, "value": 100}
+		]
+	},
+	"comment": "E = -VxB = -{Vy*Bz - Vz*By, Vz*Bx - Vx*Bz, Vx*By - Vy*Bx} = {0, 0, -Vx*By}",
+	"comment": "upstream Vx = -10, By = 1, downstream Vx = -2.5, By = 4",
+	"magnetic-field": {"default": "{0, x > 0.5 ? 1 : 4, 0}"},
+	"electric-field": {"default": [0, 0, 10]}
+}

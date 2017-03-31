@@ -42,14 +42,60 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "particle/variables.hpp"
 
 using namespace std;
-using namespace pamhd::particle;
 
+using Cell = pamhd::particle::Cell_test_particle;
+using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
+
+
+// returns reference to magnetic field for propagating particles
+const auto Mag
+	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
+		return cell_data[pamhd::particle::Magnetic_Field()];
+	};
+// electric field for propagating particles
+const auto Ele
+	= [](Cell& cell_data)->typename pamhd::particle::Electric_Field::data_type&{
+		return cell_data[pamhd::particle::Electric_Field()];
+	};
+const auto Part_Int
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_Internal::data_type&{
+		return cell_data[pamhd::particle::Particles_Internal()];
+	};
+// particles moving to another cell
+const auto Part_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Particles_External::data_type&{
+		return cell_data[pamhd::particle::Particles_External()];
+	};
+// number of particles in above list, for allocating memory for arriving particles
+const auto Nr_Ext
+	= [](Cell& cell_data)->typename pamhd::particle::Nr_Particles_External::data_type&{
+		return cell_data[pamhd::particle::Nr_Particles_External()];
+	};
+
+// given a particle these return references to particle's parameters
+const auto Part_Pos
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Position::data_type&{
+		return particle[pamhd::particle::Position()];
+	};
+const auto Part_Vel
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Velocity::data_type&{
+		return particle[pamhd::particle::Velocity()];
+	};
+const auto Part_C2M
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Charge_Mass_Ratio::data_type&{
+		return particle[pamhd::particle::Charge_Mass_Ratio()];
+	};
+const auto Part_Mas
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type&{
+		return particle[pamhd::particle::Mass()];
+	};
+const auto Part_Des
+	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
+		return particle[pamhd::particle::Destination_Cell()];
+	};
 
 int main(int argc, char* argv[])
 {
-	using Cell_T = pamhd::particle::Cell;
-	using Grid = dccrg::Dccrg<Cell_T, dccrg::Cartesian_Geometry>;
-
 	constexpr double Re = 6.371e6; // radius of earth
 
 	/*
@@ -116,10 +162,10 @@ int main(int argc, char* argv[])
 	grid.balance_load();
 
 	const auto
-		inner_cell_ids = grid.get_local_cells_not_on_process_boundary(),
-		outer_cell_ids = grid.get_local_cells_on_process_boundary(),
-		remote_cell_ids = grid.get_remote_cells_on_process_boundary(),
-		cell_ids = grid.get_cells();
+		inner_cells = grid.get_local_cells_not_on_process_boundary(),
+		outer_cells = grid.get_local_cells_on_process_boundary(),
+		remote_cells = grid.get_remote_cells_on_process_boundary(),
+		cells = grid.get_cells();
 
 	// background magnetic field
 	pamhd::mhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
@@ -146,7 +192,7 @@ int main(int argc, char* argv[])
 
 	// create particles at equator 5 Re from origin
 	int initial_particles_local = 0, initial_particles = 0;
-	for (const auto& cell_id: cell_ids) {
+	for (const auto& cell_id: cells) {
 		auto* const cell_ptr = grid[cell_id];
 		if (cell_ptr == nullptr) {
 			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
@@ -154,11 +200,7 @@ int main(int argc, char* argv[])
 		}
 		auto& cell_data = *cell_ptr;
 
-		const auto
-			cell_center = grid.geometry.get_center(cell_id),
-			cell_min = grid.geometry.get_min(cell_id),
-			cell_length = grid.geometry.get_length(cell_id);
-
+		const auto cell_center = grid.geometry.get_center(cell_id);
 		const Eigen::Vector3d r{
 			cell_center[0],
 			cell_center[1],
@@ -166,8 +208,8 @@ int main(int argc, char* argv[])
 		};
 		const auto distance = r.norm();
 
-		cell_data[Electric_Field()] = {0, 0, 0};
-		cell_data[Magnetic_Field()]
+		Ele(cell_data) = {0, 0, 0};
+		Mag(cell_data)
 			= bg_B.get_background_field(
 				Eigen::Vector3d{cell_center[0], cell_center[1], cell_center[2]},
 				1.257e-06
@@ -181,20 +223,20 @@ int main(int argc, char* argv[])
 			continue;
 		}
 
-		Particle_Internal particle;
-		particle[Position()] = r;
-		particle[Velocity()] = 2e6 * r / r.norm(); // m / s
-		particle[Mass()] = 0;
-		particle[Charge_Mass_Ratio()] = 95788335.8;
-		cell_data[Particles_Internal()].push_back(particle);
+		pamhd::particle::Particle_Internal particle;
+		Part_Pos(particle) = r;
+		Part_Vel(particle) = 2e6 * r / r.norm(); // m / s
+		Part_Mas(particle) = 0;
+		Part_C2M(particle) = 95788335.8;
+		Part_Int(cell_data).push_back(particle);
 
-		particle[Position()] += Eigen::Vector3d{0.05 * Re, 0.05 * Re, 0.05 * Re};
-		particle[Charge_Mass_Ratio()] += 1e6;
-		cell_data[Particles_Internal()].push_back(particle);
+		Part_Pos(particle) += Eigen::Vector3d{0.05 * Re, 0.05 * Re, 0.05 * Re};
+		Part_C2M(particle) += 1e6;
+		Part_Int(cell_data).push_back(particle);
 
-		cell_data[Nr_Particles_External()] = cell_data[Particles_External()].size();
+		Nr_Ext(cell_data) = Part_Ext(cell_data).size();
 
-		initial_particles_local += cell_data[Particles_Internal()].size();
+		initial_particles_local += Part_Int(cell_data).size();
 	}
 	// allocate copies of remote neighbor cells
 	grid.update_copies_of_remote_neighbors();
@@ -253,21 +295,26 @@ int main(int argc, char* argv[])
 		max_dt = std::min(
 			max_dt,
 			pamhd::particle::solve<
-				pamhd::particle::Electric_Field,
-				pamhd::particle::Magnetic_Field,
-				pamhd::particle::Nr_Particles_External,
-				pamhd::particle::Particles_Internal,
-				pamhd::particle::Particles_External,
-				pamhd::particle::Position,
-				pamhd::particle::Velocity,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Mass,
-				pamhd::particle::Destination_Cell,
-				boost::numeric::odeint::runge_kutta_fehlberg78<state_t>
-			>(time_step, outer_cell_ids, grid)
+				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
+			>(
+				time_step,
+				outer_cells,
+				grid,
+				false,
+				Ele,
+				Mag,
+				Nr_Ext,
+				Part_Int,
+				Part_Ext,
+				Part_Pos,
+				Part_Vel,
+				Part_C2M,
+				Part_Mas,
+				Part_Des
+			)
 		);
 
-		Cell_T::set_transfer_all(
+		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Electric_Field(),
 			pamhd::particle::Magnetic_Field(),
@@ -278,18 +325,23 @@ int main(int argc, char* argv[])
 		max_dt = std::min(
 			max_dt,
 			pamhd::particle::solve<
-				pamhd::particle::Electric_Field,
-				pamhd::particle::Magnetic_Field,
-				pamhd::particle::Nr_Particles_External,
-				pamhd::particle::Particles_Internal,
-				pamhd::particle::Particles_External,
-				pamhd::particle::Position,
-				pamhd::particle::Velocity,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Mass,
-				pamhd::particle::Destination_Cell,
-				boost::numeric::odeint::runge_kutta_fehlberg78<state_t>
-			>(time_step, inner_cell_ids, grid)
+				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
+			>(
+				time_step,
+				inner_cells,
+				grid,
+				false,
+				Ele,
+				Mag,
+				Nr_Ext,
+				Part_Int,
+				Part_Ext,
+				Part_Pos,
+				Part_Vel,
+				Part_C2M,
+				Part_Mas,
+				Part_Des
+			)
 		);
 
 		simulation_time += time_step;
@@ -298,17 +350,17 @@ int main(int argc, char* argv[])
 		pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(remote_cell_ids, grid);
+		>(remote_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 
-		Cell_T::set_transfer_all(
+		Cell::set_transfer_all(
 			false,
 			pamhd::particle::Electric_Field(),
 			pamhd::particle::Magnetic_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
-		Cell_T::set_transfer_all(
+		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Particles_External()
 		);
@@ -320,7 +372,7 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(inner_cell_ids, grid);
+		>(inner_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
@@ -329,15 +381,15 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(outer_cell_ids, grid);
+		>(outer_cells, grid);
 
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(inner_cell_ids, grid);
+		>(inner_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell_T::set_transfer_all(
+		Cell::set_transfer_all(
 			false,
 			pamhd::particle::Particles_External()
 		);
@@ -345,7 +397,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(outer_cell_ids, grid);
+		>(outer_cells, grid);
 
 
 		if (
@@ -361,12 +413,12 @@ int main(int argc, char* argv[])
 			}
 
 			if (
-				not save<
-					Electric_Field,
-					Magnetic_Field,
+				not pamhd::particle::save<
+					pamhd::particle::Electric_Field,
+					pamhd::particle::Magnetic_Field,
 					pamhd::mhd::Electric_Current_Density,
-					Nr_Particles_Internal,
-					Particles_Internal
+					pamhd::particle::Nr_Particles_Internal,
+					pamhd::particle::Particles_Internal
 				>(
 					"tests/particle/",
 					grid,
@@ -387,7 +439,7 @@ int main(int argc, char* argv[])
 		// check for errors
 		int total_particles_local = 0, total_particles = 0;
 
-		for (const auto& cell_id: cell_ids) {
+		for (const auto& cell_id: cells) {
 			auto* const cell_ptr = grid[cell_id];
 			if (cell_ptr == nullptr) {
 				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
