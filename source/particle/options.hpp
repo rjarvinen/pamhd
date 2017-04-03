@@ -208,6 +208,9 @@ struct Options
 		if (
 			solver != "euler"
 			and solver != "midpoint"
+			and solver != "rk4"
+			and solver != "rkck54"
+			and solver != "rkf78"
 		) {
 			throw std::invalid_argument(
 				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "

@@ -273,7 +273,7 @@ int main(int argc, char* argv[])
 	} else {
 		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
 			<< "Unsupported solver: " << options_particle.solver
-			<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkd5 (runge_kutta_dopri5), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
+			<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
 			<< std::endl;
 		abort();
 	}
@@ -566,6 +566,8 @@ int main(int argc, char* argv[])
 				time_step,\
 				given_cells,\
 				grid,\
+				background_B,\
+				options_particle.vacuum_permeability,\
 				false,\
 				Ele,\
 				Mag,\

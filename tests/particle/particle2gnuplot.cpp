@@ -75,7 +75,7 @@ boost::optional<std::array<double, 4>> read_data(
 	dccrg::Mapping& cell_id_mapping,
 	dccrg::Grid_Topology& topology,
 	dccrg::Cartesian_Geometry& geometry,
-	unordered_map<uint64_t, Cell>& simulation_data,
+	unordered_map<uint64_t, Cell_test_particle>& simulation_data,
 	const std::string& file_name,
 	const int mpi_rank
 ) {
@@ -192,10 +192,11 @@ boost::optional<std::array<double, 4>> read_data(
 			memory_datatype = MPI_DATATYPE_NULL,
 			file_datatype = MPI_DATATYPE_NULL;
 
-		Cell::set_transfer_all(
+		Cell_test_particle::set_transfer_all(
 			true,
 			Electric_Field(),
 			Magnetic_Field(),
+			pamhd::mhd::Electric_Current_Density(),
 			Nr_Particles_Internal()
 		);
 		tie(
@@ -241,19 +242,20 @@ boost::optional<std::array<double, 4>> read_data(
 
 		cell_data[Particles_Internal()].resize(cell_data[Nr_Particles_Internal()]);
 
-		Cell::set_transfer_all(
+		Cell_test_particle::set_transfer_all(
 			false,
 			Electric_Field(),
 			Magnetic_Field(),
+			pamhd::mhd::Electric_Current_Density(),
 			Nr_Particles_Internal()
 		);
-		Cell::set_transfer_all(true, Particles_Internal());
+		Cell_test_particle::set_transfer_all(true, Particles_Internal());
 		tie(
 			memory_address,
 			memory_count,
 			memory_datatype
 		) = simulation_data.at(cell_id).get_mpi_datatype();
-		Cell::set_transfer_all(false, Particles_Internal());
+		Cell_test_particle::set_transfer_all(false, Particles_Internal());
 
 		MPI_Type_size(memory_datatype, &sizeof_memory_datatype);
 		MPI_Type_contiguous(sizeof_memory_datatype, MPI_BYTE, &file_datatype);
@@ -313,7 +315,7 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 	const Eigen::Vector3d& v_end,
 	const size_t& horizontal_resolution,
 	const size_t& vertical_resolution,
-	const unordered_map<uint64_t, Cell>& simulation_data,
+	const unordered_map<uint64_t, Cell_test_particle>& simulation_data,
 	const dccrg::Mapping& cell_id_mapping,
 	const dccrg::Grid_Topology& topology,
 	const dccrg::Cartesian_Geometry& geometry
@@ -901,7 +903,7 @@ int main(int argc, char* argv[])
 		dccrg::Mapping cell_id_mapping;
 		dccrg::Grid_Topology topology;
 		dccrg::Cartesian_Geometry geometry(cell_id_mapping.length, cell_id_mapping, topology);
-		unordered_map<uint64_t, Cell> simulation_data;
+		unordered_map<uint64_t, Cell_test_particle> simulation_data;
 
 		boost::optional<std::array<double, 4>> metadata
 			= read_data(

@@ -36,6 +36,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
+#include "mhd/background_magnetic_field.hpp"
 #include "mhd/variables.hpp"
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
@@ -300,6 +301,8 @@ int main(int argc, char* argv[])
 				time_step,
 				outer_cells,
 				grid,
+				bg_B,
+				1,
 				false,
 				Ele,
 				Mag,
@@ -330,6 +333,8 @@ int main(int argc, char* argv[])
 				time_step,
 				inner_cells,
 				grid,
+				bg_B,
+				1,
 				false,
 				Ele,
 				Mag,

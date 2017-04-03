@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mpi.h" // must be included before gensimcell
 #include "gensimcell.hpp"
 
+#include "mhd/background_magnetic_field.hpp"
 #include "particle/solve_dccrg.hpp"
 #include "particle/variables.hpp"
 
@@ -202,8 +203,10 @@ int main(int argc, char* argv[])
 	// allocate copies of remote neighbor cells
 	grid.update_copies_of_remote_neighbors();
 
+	pamhd::mhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+
 	// short hand notation for calling solvers
-	auto solve = [](
+	auto solve = [&bg_B](
 		const std::vector<uint64_t>& cell_ids,
 		Grid& grid
 	) {
@@ -213,6 +216,8 @@ int main(int argc, char* argv[])
 			1.0,
 			cell_ids,
 			grid,
+			bg_B,
+			1,
 			false,
 			Ele,
 			Mag,

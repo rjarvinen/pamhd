@@ -77,6 +77,8 @@ private:
 
 	bool E_is_derived;
 
+	const Eigen::Vector3d& bg_B;
+
 public:
 
 	/*!
@@ -92,14 +94,16 @@ public:
 		const Eigen::Vector3d& given_data_end,
 		const std::array<Eigen::Vector3d, 27>& given_current_minus_velocity,
 		const std::array<Eigen::Vector3d, 27>& given_magnetic_field,
-		const bool given_E_is_derived
+		const bool given_E_is_derived,
+		const Eigen::Vector3d& given_bg_B = {0, 0, 0}
 	) :
 		charge_to_mass_ratio(given_charge_to_mass_ratio),
 		data_start(given_data_start),
 		data_end(given_data_end),
 		current_minus_velocity(given_current_minus_velocity),
 		magnetic_field(given_magnetic_field),
-		E_is_derived(given_E_is_derived)
+		E_is_derived(given_E_is_derived),
+		bg_B(given_bg_B)
 	{}
 
 	void operator()(
@@ -137,7 +141,12 @@ public:
 		change[0] = state[1];
 		change[1]
 			= this->charge_to_mass_ratio
-			* (E_at_pos + state[1].cross(B_at_pos));
+			* (E_at_pos + state[1].cross(B_at_pos + this->bg_B));
+		/*std::cout
+			<< "v: " << state[1][0] << ", " << state[1][1] << ", " << state[1][2]
+			<< ", E: " << E_at_pos[0] << ", " << E_at_pos[1] << ", " << E_at_pos[2]
+			<< ", B: " << B_at_pos[0] << ", " << B_at_pos[1] << ", " << B_at_pos[2]
+			<< std::endl;*/
 	};
 };
 
@@ -154,6 +163,7 @@ information.
 template<
 	class Stepper,
 	class Cell,
+	class Background_Magnetic_Field,
 	class Current_Minus_Velocity_Getter,
 	class Magnetic_Field_Getter,
 	class Nr_Particles_External_Getter,
@@ -168,6 +178,8 @@ template<
 	const double dt,
 	const std::vector<uint64_t>& cell_ids,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	const Background_Magnetic_Field& bg_B,
+	const double vacuum_permeability,
 	const bool E_is_derived_quantity,
 	// if E_is_derived_quantity == true: JmV = J - V, else JmV = E
 	const Current_Minus_Velocity_Getter JmV,
@@ -307,7 +319,8 @@ template<
 				interpolation_end,
 				current_minus_velocities,
 				magnetic_fields,
-				E_is_derived_quantity
+				E_is_derived_quantity,
+				bg_B.get_background_field(Part_Pos(particle), vacuum_permeability)
 			);
 
 			state_t state{{Part_Pos(particle), Part_Vel(particle)}};
