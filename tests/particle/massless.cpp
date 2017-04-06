@@ -28,6 +28,9 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+Copy boundaries have no effect in this program and shouldn't be used in config file.
 */
 
 #include "array"
@@ -57,7 +60,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mhd/background_magnetic_field.hpp"
 #include "mhd/options.hpp"
 #include "mhd/variables.hpp"
-//#include "particle/boundaries.hpp"
+#include "particle/boundaries.hpp"
 #include "particle/initialize.hpp"
 #include "particle/options.hpp"
 #include "particle/save.hpp"
@@ -100,6 +103,12 @@ const auto Part_Ext
 const auto Nr_Ext
 	= [](Cell& cell_data)->typename pamhd::particle::Nr_Particles_External::data_type&{
 		return cell_data[pamhd::particle::Nr_Particles_External()];
+	};
+
+// solver info variable for boundary logic
+const auto Sol_Info
+	= [](Cell& cell_data)->typename pamhd::particle::Solver_Info::data_type&{
+		return cell_data[pamhd::particle::Solver_Info()];
 	};
 
 // references to background magnetic fields
@@ -302,19 +311,19 @@ int main(int argc, char* argv[])
 	> initial_conditions;
 	initial_conditions.set(document);
 
-	/*pamhd::boundaries::Multivariable_Boundaries<
+	pamhd::boundaries::Multivariable_Boundaries<
 		uint64_t,
 		geometry_id_t,
 		pamhd::particle::Bdy_Number_Density,
 		pamhd::particle::Bdy_Temperature,
 		pamhd::particle::Bdy_Velocity,
 		pamhd::particle::Bdy_Nr_Particles_In_Cell,
-		pamhd::particle::Charge_Mass_Ratio,
-		pamhd::particle::Species_Mass,
+		pamhd::particle::Bdy_Charge_Mass_Ratio,
+		pamhd::particle::Bdy_Species_Mass,
 		pamhd::particle::Electric_Field,
 		pamhd::particle::Magnetic_Field
 	> boundaries;
-	boundaries.set(document);*/
+	boundaries.set(document);
 
 	pamhd::mhd::Background_Magnetic_Field<
 		pamhd::mhd::Magnetic_Field::data_type
@@ -417,72 +426,79 @@ int main(int argc, char* argv[])
 	// set initial condition
 	std::mt19937_64 random_source;
 
-	pamhd::particle::initialize<
-		pamhd::particle::Particle_Internal,
-		pamhd::particle::Mass,
-		pamhd::particle::Charge_Mass_Ratio,
-		pamhd::particle::Position,
-		pamhd::particle::Velocity,
-		pamhd::particle::Particle_ID,
-		pamhd::particle::Species_Mass
-	>(
-		geometries,
-		initial_conditions,
-		simulation_time,
-		cells,
-		background_B,
-		grid,
-		random_source,
-		options_particle.boltzmann,
-		options_particle.vacuum_permeability,
-		next_particle_id,
-		grid.get_comm_size(),
-		true,
-		true,
-		Ele,
-		Mag,
-		Part_Int,
-		Bg_B_Pos_X,
-		Bg_B_Pos_Y,
-		Bg_B_Pos_Z,
-		Bdy_N,
-		Bdy_V,
-		Bdy_T,
-		Bdy_Nr_Par,
-		Bdy_SpM,
-		Bdy_C2M
-	);
+	auto nr_particles_created
+		= pamhd::particle::initialize<
+			pamhd::particle::Particle_Internal,
+			pamhd::particle::Mass,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Position,
+			pamhd::particle::Velocity,
+			pamhd::particle::Particle_ID,
+			pamhd::particle::Species_Mass
+		>(
+			geometries,
+			initial_conditions,
+			simulation_time,
+			cells,
+			background_B,
+			grid,
+			random_source,
+			options_particle.boltzmann,
+			options_particle.vacuum_permeability,
+			next_particle_id,
+			grid.get_comm_size(),
+			true,
+			true,
+			Ele,
+			Mag,
+			Part_Int,
+			Bg_B_Pos_X,
+			Bg_B_Pos_Y,
+			Bg_B_Pos_Z,
+			Bdy_N,
+			Bdy_V,
+			Bdy_T,
+			Bdy_Nr_Par,
+			Bdy_SpM,
+				Bdy_C2M
+		);
+	next_particle_id += nr_particles_created * grid.get_comm_size();
 
+	nr_particles_created
+		+= pamhd::particle::apply_massless_boundaries<
+			pamhd::particle::Particle_Internal,
+			pamhd::particle::Mass,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Position,
+			pamhd::particle::Velocity,
+			pamhd::particle::Particle_ID,
+			pamhd::particle::Species_Mass
+		>(
+			geometries,
+			boundaries,
+			simulation_time,
+			0,
+			cells,
+			grid,
+			random_source,
+			options_particle.boltzmann,
+			options_particle.vacuum_permeability,
+			next_particle_id,
+			grid.get_comm_size(),
+			true,
+			Sol_Info,
+			Ele,
+			Mag,
+			Part_Int,
+			Bdy_N,
+			Bdy_V,
+			Bdy_T,
+			Bdy_Nr_Par,
+			Bdy_SpM,
+			Bdy_C2M
+		);
+	next_particle_id += nr_particles_created * grid.get_comm_size();
 
-	// update background field between processes
-	/*Cell::set_transfer_all(
-		true,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
-	);
-	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(
-		false,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
-	);*/
-
-
-	/*pamhd::particle::apply_boundaries(
-		grid,
-		boundaries,
-		geometries,
-		simulation_time,
-		Mas,
-		Mom,
-		Nrj,
-		Mag,
-		options_particle.proton_mass,
-		options_particle.adiabatic_index,
-		options_particle.vacuum_permeability
-	);*/
 	if (options_particle.verbose and rank == 0) {
 		cout << "Done initializing particles" << endl;
 	}
@@ -491,20 +507,20 @@ int main(int argc, char* argv[])
 	Classify cells into normal, boundary and dont_solve
 	*/
 
-	/*pamhd::mhd::set_solver_info<pamhd::mhd::Solver_Info>(
+	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
 		grid, boundaries, geometries, Sol_Info
 	);
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
 	for (const auto& cell: grid.cells) {
-		if ((Sol_Info(*cell.data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
 			skip_cells.push_back(cell.id);
 		} else if (Sol_Info(*cell.data) > 0) {
 			bdy_cells.push_back(cell.id);
 		} else {
 			solve_cells.push_back(cell.id);
 		}
-	}*/
+	}
 
 
 	size_t simulated_steps = 0;
@@ -702,139 +718,45 @@ int main(int argc, char* argv[])
 		>(outer_cells, grid);
 
 
+		nr_particles_created
+			+= pamhd::particle::apply_massless_boundaries<
+				pamhd::particle::Particle_Internal,
+				pamhd::particle::Mass,
+				pamhd::particle::Charge_Mass_Ratio,
+				pamhd::particle::Position,
+				pamhd::particle::Velocity,
+				pamhd::particle::Particle_ID,
+				pamhd::particle::Species_Mass
+			>(
+				geometries,
+				boundaries,
+				simulation_time,
+				simulated_steps,
+				cells,
+				grid,
+				random_source,
+				options_particle.boltzmann,
+				options_particle.vacuum_permeability,
+				next_particle_id,
+				grid.get_comm_size(),
+				true,
+				Sol_Info,
+				Ele,
+				Mag,
+				Part_Int,
+				Bdy_N,
+				Bdy_V,
+				Bdy_T,
+				Bdy_Nr_Par,
+				Bdy_SpM,
+				Bdy_C2M
+			);
+		next_particle_id += nr_particles_created * grid.get_comm_size();
+
+
 		/*
-		Classify cells into value boundaries.
+		Save simulation to disk
 		*/
-
-		/*particles_value_bdy.clear_cells();
-		fields_value_bdy.clear_cells();
-
-		for (const auto cell_id: cell_ids) {
-			const auto
-				cell_start = grid.geometry.get_min(cell_id),
-				cell_end = grid.geometry.get_max(cell_id);
-
-			boost::optional<size_t> result = particles_value_bdy.add_cell(
-				simulation_time,
-				cell_id,
-				cell_start,
-				cell_end
-			);
-			if (not result) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					"Couldn't add cell " << cell_id << " to particle value boundaries."
-					<< std::endl;
-				abort();
-			}
-
-			result = fields_value_bdy.add_cell(
-				simulation_time,
-				cell_id,
-				cell_start,
-				cell_end
-			);
-			if (not result) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					"Couldn't add cell " << cell_id << " to fields value boundaries."
-					<< std::endl;
-				abort();
-			}
-		}*/
-
-		/*for (size_t bdy_id = 0; bdy_id < particles_value_bdy.get_number_of_boundaries(); bdy_id++) {
-
-			for (const auto& cell_id: particles_value_bdy.get_cells(bdy_id)) {
-				const auto
-					cell_start = grid.geometry.get_min(cell_id),
-					cell_end = grid.geometry.get_max(cell_id),
-					cell_length = grid.geometry.get_length(cell_id),
-					cell_center = grid.geometry.get_center(cell_id);
-
-				const auto
-					mass_density
-						= particles_value_bdy.get_data(
-							Mass_Density(), bdy_id, cell_center, simulation_time
-						),
-					temperature
-						= particles_value_bdy.get_data(
-							Temperature(), bdy_id, cell_center, simulation_time
-						),
-					charge_mass_ratio
-						= particles_value_bdy.get_data(
-							Charge_Mass_Ratio(), bdy_id, cell_center, simulation_time
-						),
-					species_mass
-						= particles_value_bdy.get_data(
-							Species_Mass(), bdy_id, cell_center, simulation_time
-						);
-				const auto bulk_velocity
-					= particles_value_bdy.get_data(
-						pamhd::particle::Bulk_Velocity(), bdy_id, cell_center, simulation_time
-					);
-				const auto nr_particles
-					= particles_value_bdy.get_data(
-						Nr_Particles_In_Cell(), bdy_id, cell_center, simulation_time
-					);
-
-				auto* const cell_data = grid[cell_id];
-				if (cell_data == NULL) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						"No data for cell: " << cell_id
-						<< std::endl;
-					abort();
-				}
-
-				(*cell_data)[Particles_Internal()]
-					= create_particles<
-						Particle_Internal,
-						Mass,
-						Charge_Mass_Ratio,
-						Position,
-						Velocity,
-						Particle_ID,
-						Species_Mass
-					>(
-						bulk_velocity,
-						Eigen::Vector3d{cell_start[0], cell_start[1], cell_start[2]},
-						Eigen::Vector3d{cell_end[0], cell_end[1], cell_end[2]},
-						Eigen::Vector3d{temperature, temperature, temperature},
-						nr_particles,
-						charge_mass_ratio,
-						mass_density * cell_length[0] * cell_length[1] * cell_length[2],
-						species_mass,
-						particle_temp_nrj_ratio,
-						random_source,
-						next_particle_id,
-						grid.get_comm_size()
-					);
-				next_particle_id += nr_particles * grid.get_comm_size();
-			}
-		}*/
-
-		/*for (size_t bdy_id = 0; bdy_id < fields_value_bdy.get_number_of_boundaries(); bdy_id++) {
-
-			for (const auto& cell_id: fields_value_bdy.get_cells(bdy_id)) {
-				const auto cell_center = grid.geometry.get_center(cell_id);
-
-				auto* const cell_data = grid[cell_id];
-				if (cell_data == NULL) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-						<< cell_id
-						<< std::endl;
-					abort();
-				}
-
-				(*cell_data)[Electric_Field()]
-					= fields_value_bdy.get_data(
-						Electric_Field(), bdy_id, cell_center, simulation_time
-					);
-				(*cell_data)[Magnetic_Field()]
-					= fields_value_bdy.get_data(
-						Magnetic_Field(), bdy_id, cell_center, simulation_time
-					);
-			}
-		}*/
-
 
 		if (
 			(options_particle.save_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))

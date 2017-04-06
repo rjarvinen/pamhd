@@ -75,6 +75,8 @@ CLEAN += tests/particle_clean
 TEST_PARTICLE_COMMON_DEPS = \
   source/particle/variables.hpp \
   source/particle/common.hpp \
+  source/particle/boundaries.hpp \
+  source/particle/initialize.hpp \
   tests/particle/project_makefile \
   $(ENVIRONMENT_MAKEFILE) \
   Makefile

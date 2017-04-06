@@ -280,16 +280,19 @@ struct Current_Minus_Velocity {
 	static const std::string get_option_help() { return {"Current minus Velocity for interpolating electric field to particle position"}; }
 };
 
-// same function as mhd solver info variable
+// same purpose as mhd solver info variable
 struct Solver_Info {
 	using data_type = unsigned int;
 	static const unsigned int
-		dont_solve = 1 << 0,
-		number_density_bdy = 1 << 1,
-		velocity_bdy = 1 << 2,
-		temperature_bdy = 1 << 3,
-		magnetic_field_bdy = 1 << 4,
-		electric_field_bdy = 1 << 5;
+		dont_solve                     = 1 << 0,
+		number_density_bdy             = 1 << 1,
+		velocity_bdy                   = 1 << 2,
+		temperature_bdy                = 1 << 3,
+		particle_number_bdy            = 1 << 4,
+		particle_charge_mass_ratio_bdy = 1 << 5,
+		particle_species_mass_bdy      = 1 << 6,
+		magnetic_field_bdy             = 1 << 7,
+		electric_field_bdy             = 1 << 8;
 };
 
 /*!

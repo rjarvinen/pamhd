@@ -45,6 +45,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dccrg.hpp"
 
 #include "mhd/common.hpp"
+#include "particle/common.hpp"
 #include "particle/variables.hpp"
 
 
@@ -53,7 +54,7 @@ namespace particle {
 
 
 /*!
-Prepares boundary information needed for MHD solver about each simulation cell.
+Prepares boundary information about each simulation cell needed for particle solution.
 */
 template<
 	class Solver_Info,
@@ -68,12 +69,81 @@ template<
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
 ) {
-	Cell::set_transfer_all(true, pamhd::particle::Solver_Info());
+	Cell_Data::set_transfer_all(true, pamhd::particle::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
 		Sol_Info(*cell.data) = 0;
 	}
+
+	// number of particles
+	constexpr pamhd::particle::Bdy_Nr_Particles_In_Cell NPIC{};
+	for (const auto& cell: boundaries.get_value_boundary_cells(NPIC)) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_number_bdy;
+	}
+	for (const auto& item: boundaries.get_copy_boundary_cells(NPIC)) {
+		auto* const cell_data = grid[item[0]];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_number_bdy;
+	}
+	const std::set<uint64_t> dont_solve_nr_pic(
+		boundaries.get_dont_solve_cells(NPIC).cbegin(),
+		boundaries.get_dont_solve_cells(NPIC).cend()
+	);
+
+	// mass of particle species
+	constexpr pamhd::particle::Bdy_Species_Mass SpM{};
+	for (const auto& cell: boundaries.get_value_boundary_cells(SpM)) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_species_mass_bdy;
+	}
+	for (const auto& item: boundaries.get_copy_boundary_cells(SpM)) {
+		auto* const cell_data = grid[item[0]];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_species_mass_bdy;
+	}
+	const std::set<uint64_t> dont_solve_spm(
+		boundaries.get_dont_solve_cells(SpM).cbegin(),
+		boundaries.get_dont_solve_cells(SpM).cend()
+	);
+
+	// charge to mass ratio
+	constexpr pamhd::particle::Bdy_Charge_Mass_Ratio C2M{};
+	for (const auto& cell: boundaries.get_value_boundary_cells(C2M)) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_charge_mass_ratio_bdy;
+	}
+	for (const auto& item: boundaries.get_copy_boundary_cells(C2M)) {
+		auto* const cell_data = grid[item[0]];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::particle_charge_mass_ratio_bdy;
+	}
+	const std::set<uint64_t> dont_solve_c2m(
+		boundaries.get_dont_solve_cells(C2M).cbegin(),
+		boundaries.get_dont_solve_cells(C2M).cend()
+	);
 
 	// number density
 	constexpr pamhd::particle::Bdy_Number_Density N{};
@@ -121,7 +191,7 @@ template<
 		boundaries.get_dont_solve_cells(V).cend()
 	);
 
-	// pressure
+	// temperature
 	constexpr pamhd::particle::Bdy_Temperature T{};
 	for (const auto& cell: boundaries.get_value_boundary_cells(T)) {
 		auto* const cell_data = grid[cell];
@@ -194,6 +264,42 @@ template<
 		not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
+			dont_solve_spm.cbegin()
+		)
+	) {
+		throw std::invalid_argument(
+			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+			+ "Number density and species mass dont_solves aren't equal."
+		);
+	}
+	if (
+		not std::equal(
+			dont_solve_mass.cbegin(),
+			dont_solve_mass.cend(),
+			dont_solve_c2m.cbegin()
+		)
+	) {
+		throw std::invalid_argument(
+			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+			+ "Number density and charge-mass ratio dont_solves aren't equal."
+		);
+	}
+	if (
+		not std::equal(
+			dont_solve_mass.cbegin(),
+			dont_solve_mass.cend(),
+			dont_solve_nr_pic.cbegin()
+		)
+	) {
+		throw std::invalid_argument(
+			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+			+ "Number density and number of particles dont_solves aren't equal."
+		);
+	}
+	if (
+		not std::equal(
+			dont_solve_mass.cbegin(),
+			dont_solve_mass.cend(),
 			dont_solve_velocity.cbegin()
 		)
 	) {
@@ -216,30 +322,18 @@ template<
 	}
 	if (
 		not std::equal(
-			dont_solve_mass.cbegin(),
-			dont_solve_mass.cend(),
-			dont_solve_mag.cbegin()
-		)
-	) {
-		throw std::invalid_argument(
-			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-			+ "Mass density and magnetic field dont_solves aren't equal."
-		);
-	}
-	if (
-		not std::equal(
-			dont_solve_mass.cbegin(),
-			dont_solve_mass.cend(),
+			dont_solve_mag.cbegin(),
+			dont_solve_mag.cend(),
 			dont_solve_ele.cbegin()
 		)
 	) {
 		throw std::invalid_argument(
 			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-			+ "Mass density and electric field dont_solves aren't equal."
+			+ "Magnetic and electric field dont_solves aren't equal."
 		);
 	}
 
-	// don't solve cells in which no variable is solved
+	// don't solve cells in which no variable is solved, fields are never solved
 	for (auto& cell: dont_solve_mass) {
 		auto* const cell_data = grid[cell];
 		if (cell_data == nullptr) {
@@ -250,7 +344,7 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::particle::Solver_Info());
+	Cell_Data::set_transfer_all(false, pamhd::particle::Solver_Info());
 }
 
 
@@ -268,7 +362,7 @@ based on fluid quantities in the same cell.
 Copy boundaries are applied after all value
 boundaries.
 */
-template<
+/*template<
 	class Cell_Data,
 	class Grid_Geometry,
 	class Boundaries,
@@ -555,152 +649,60 @@ template<
 			vacuum_permeability
 		);
 	}
-}
+}*/
 
 
-/*template<
-	class Cell_Data,
-	class Grid_Geometry,
+/*
+Copy boundaries have no effect in test particle simulation.
+*/
+template<
+	class Particle,
+	class Particle_Mass_T,
+	class Particle_Charge_Mass_Ratio_T,
+	class Particle_Position_T,
+	class Particle_Velocity_T,
+	class Particle_ID_T,
+	class Particle_Species_Mass_T,
+	class Sim_Geometries,
 	class Boundaries,
-	class Boundary_Geometries,
-	class Mass_Getter,
-	class Momentum_Getter,
-	class Energy_Getter,
-	class Magnetic_Field_Getter
-> void apply_massless_boundaries(
-	dccrg::Dccrg<Cell_Data, Grid_Geometry>& grid,
+	class Grid,
+	class Solver_Info_Getter,
+	class Electric_Field_Getter,
+	class Magnetic_Field_Getter,
+	class Particles_Getter,
+	class Boundary_Number_Density_Getter,
+	class Boundary_Velocity_Getter,
+	class Boundary_Temperature_Getter,
+	class Boundary_Nr_Particles_Getter,
+	class Boundary_Charge_To_Mass_Ratio_Getter,
+	class Boundary_Species_Mass_Getter
+> size_t apply_massless_boundaries(
+	const Sim_Geometries& bdy_geoms,
 	Boundaries& boundaries,
-	const Boundary_Geometries& bdy_geoms,
 	const double simulation_time,
-	const Mass_Getter& Mas,
-	const Momentum_Getter& Mom,
-	const Energy_Getter& Nrj,
-	const Magnetic_Field_Getter& Mag,
-	const double proton_mass,
-	const double adiabatic_index,
-	const double vacuum_permeability
+	const size_t simulation_step,
+	const std::vector<uint64_t>& cells,
+	Grid& grid,
+	std::mt19937_64& random_source,
+	const double particle_temp_nrj_ratio,
+	const double vacuum_permeability,
+	const unsigned long long int first_particle_id,
+	const unsigned long long int particle_id_increase,
+	const bool verbose,
+	const Solver_Info_Getter Sol_Info,
+	const Electric_Field_Getter Ele,
+	const Magnetic_Field_Getter Mag,
+	const Particles_Getter Par,
+	const Boundary_Number_Density_Getter Bdy_N,
+	const Boundary_Velocity_Getter Bdy_V,
+	const Boundary_Temperature_Getter Bdy_T,
+	const Boundary_Nr_Particles_Getter Bdy_NPIC,
+	const Boundary_Charge_To_Mass_Ratio_Getter Bdy_C2M,
+	const Boundary_Species_Mass_Getter Bdy_SpM
 ) {
-	// number density
-	constexpr pamhd::particle::Number_Density N{};
-	for (
-		size_t i = 0;
-		i < boundaries.get_number_of_value_boundaries(N);
-		i++
-	) {
-		auto& value_bdy = boundaries.get_value_boundary(N, i);
-		const auto& geometry_id = value_bdy.get_geometry_id();
-		const auto& cells = bdy_geoms.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			const auto mass_density
-				= proton_mass
-				* value_bdy.get_data(
-					simulation_time,
-					c[0], c[1], c[2],
-					r, lat, lon
-				);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Mas(*cell_data) = mass_density;
-		}
-	}
-	for (const auto& item: boundaries.get_copy_boundary_cells(N)) {
-		if (item.size() < 2) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		pamhd::particle::Number_Density::data_type source_value = 0.0;
-		for (size_t i = 1; i < item.size(); i++) {
-			auto* source_data = grid[item[i]];
-			if (source_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			source_value += Mas(*source_data);
-		}
-		source_value /= item.size() - 1;
-
-		auto *target_data = grid[item[0]];
-		if (target_data == nullptr) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		Mas(*target_data) = source_value;
-	}
-
-	// velocity
-	constexpr pamhd::particle::Velocity V{};
-	for (
-		size_t i = 0;
-		i < boundaries.get_number_of_value_boundaries(V);
-		i++
-	) {
-		auto& value_bdy = boundaries.get_value_boundary(V, i);
-		const auto& geometry_id = value_bdy.get_geometry_id();
-		const auto& cells = bdy_geoms.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			const auto velocity = value_bdy.get_data(
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Mom(*cell_data) = Mas(*cell_data) * velocity;
-		}
-	}
-	for (const auto& item: boundaries.get_copy_boundary_cells(V)) {
-		if (item.size() < 2) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		pamhd::particle::Velocity::data_type source_value{0, 0, 0};
-		for (size_t i = 1; i < item.size(); i++) {
-			auto* source_data = grid[item[i]];
-			if (source_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			source_value += pamhd::particle::get_velocity(
-				Mom(*source_data),
-				Mas(*source_data)
-			);
-		}
-		source_value /= item.size() - 1;
-
-		auto *target_data = grid[item[0]];
-		if (target_data == nullptr) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		Mom(*target_data) = Mas(*target_data) * source_value;
+	if (verbose && grid.get_rank() == 0) {
+		std::cout << "Applying particle boundaries... ";
+		std::cout.flush();
 	}
 
 	// magnetic field
@@ -720,56 +722,28 @@ template<
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			const auto magnetic_field = value_bdy.get_data(
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+
+			Mag(*cell_data) = value_bdy.get_data(
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Mag(*cell_data) = magnetic_field;
 		}
 	}
-	for (const auto& item: boundaries.get_copy_boundary_cells(B)) {
-		if (item.size() < 2) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
 
-		pamhd::particle::Magnetic_Field::data_type source_value{0, 0, 0};
-		for (size_t i = 1; i < item.size(); i++) {
-			auto* source_data = grid[item[i]];
-			if (source_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			source_value += Mag(*source_data);
-		}
-		source_value /= item.size() - 1;
-
-		auto *target_data = grid[item[0]];
-		if (target_data == nullptr) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		Mag(*target_data) = source_value;
-	}
-
-	// pressure
-	constexpr pamhd::particle::Pressure P{};
+	// electric field
+	constexpr pamhd::particle::Electric_Field E{};
 	for (
 		size_t i = 0;
-		i < boundaries.get_number_of_value_boundaries(P);
+		i < boundaries.get_number_of_value_boundaries(E);
 		i++
 	) {
-		auto& value_bdy = boundaries.get_value_boundary(P, i);
+		auto& value_bdy = boundaries.get_value_boundary(E, i);
 		const auto& geometry_id = value_bdy.get_geometry_id();
 		const auto& cells = bdy_geoms.get_cells(geometry_id);
 		for (const auto& cell: cells) {
@@ -779,75 +753,299 @@ template<
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			const auto pressure = value_bdy.get_data(
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+
+			Ele(*cell_data) = value_bdy.get_data(
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
+		}
+	}
 
+	// number density, set boundary data variable and replace particles later
+	// TODO: adjust particle parameters in-place to keep particle ids
+	constexpr pamhd::particle::Bdy_Number_Density N{};
+	std::set<uint64_t> bdy_cells;
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(N);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(N, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
 			auto* const cell_data = grid[cell];
 			if (cell_data == nullptr) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
 				abort();
 			}
 
-			Nrj(*cell_data) = pamhd::particle::get_total_energy_density(
-				Mas(*cell_data),
-				pamhd::particle::get_velocity(
-					Mom(*cell_data),
-					Mas(*cell_data)
-				),
-				pressure,
-				Mag(*cell_data),
-				adiabatic_index,
-				vacuum_permeability
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_N(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
 			);
 		}
 	}
-	for (const auto& item: boundaries.get_copy_boundary_cells(P)) {
-		if (item.size() < 2) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
 
-		pamhd::particle::Pressure::data_type source_value = 0.0;
-		for (size_t i = 1; i < item.size(); i++) {
-			auto* source_data = grid[item[i]];
-			if (source_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+	// velocity
+	constexpr pamhd::particle::Bdy_Velocity V{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(V);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(V, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
 				abort();
 			}
 
-			source_value += pamhd::particle::get_pressure(
-				Mas(*source_data),
-				Mom(*source_data),
-				Nrj(*source_data),
-				Mag(*source_data),
-				adiabatic_index,
-				vacuum_permeability
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_V(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
 			);
 		}
-		source_value /= item.size() - 1;
+	}
 
-		auto *target_data = grid[item[0]];
-		if (target_data == nullptr) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+	// temperature
+	constexpr pamhd::particle::Bdy_Temperature T{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(T);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(T, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_T(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+		}
+	}
+
+	// number of particles
+	constexpr pamhd::particle::Bdy_Nr_Particles_In_Cell Nr{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(Nr);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(Nr, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_NPIC(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+		}
+	}
+
+	// particle species mass
+	constexpr pamhd::particle::Bdy_Species_Mass SpM{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(SpM);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(SpM, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_SpM(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+		}
+	}
+
+	// particle charge mass ratio
+	constexpr pamhd::particle::Bdy_Species_Mass C2M{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(C2M);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(C2M, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
+			bdy_cells.insert(cell);
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			Bdy_C2M(*cell_data) = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+		}
+	}
+
+	size_t
+		current_id_start = first_particle_id,
+		nr_particles_created = 0;
+	for (const auto& cell: bdy_cells) {
+		random_source.seed(cell + simulation_step);
+
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
+				<< cell
+				<< std::endl;
 			abort();
 		}
 
-		Nrj(*target_data) = pamhd::particle::get_total_energy_density(
-			Mas(*target_data),
-			pamhd::particle::get_velocity(
-				Mom(*target_data),
-				Mas(*target_data)
-			),
-			source_value,
-			Mag(*target_data),
-			adiabatic_index,
-			vacuum_permeability
-		);
+		const auto
+			cell_start = grid.geometry.get_min(cell),
+			cell_end = grid.geometry.get_max(cell),
+			cell_length = grid.geometry.get_length(cell);
+
+		auto new_particles
+			= create_particles<
+				Particle,
+				Particle_Mass_T,
+				Particle_Charge_Mass_Ratio_T,
+				Particle_Position_T,
+				Particle_Velocity_T,
+				Particle_ID_T,
+				Particle_Species_Mass_T
+			>(
+				Bdy_V(*cell_data),
+				Eigen::Vector3d{cell_start[0], cell_start[1], cell_start[2]},
+				Eigen::Vector3d{cell_end[0], cell_end[1], cell_end[2]},
+				Eigen::Vector3d{Bdy_T(*cell_data), Bdy_T(*cell_data), Bdy_T(*cell_data)},
+				Bdy_NPIC(*cell_data),
+				Bdy_C2M(*cell_data),
+				Bdy_SpM(*cell_data) * Bdy_N(*cell_data) * cell_length[0] * cell_length[1] * cell_length[2],
+				Bdy_SpM(*cell_data),
+				particle_temp_nrj_ratio,
+				random_source,
+				current_id_start,
+				particle_id_increase
+			);
+		nr_particles_created += new_particles.size();
+
+		Par(*cell_data) = std::move(new_particles);
+
+		current_id_start += new_particles.size() * particle_id_increase;
 	}
-}*/
+
+	if (verbose && grid.get_rank() == 0) {
+		std::cout << "done" << std::endl;
+	}
+
+	return nr_particles_created;
+}
 
 
 }} // namespaces

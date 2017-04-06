@@ -279,30 +279,35 @@ template<
 	}
 
 	// number density, set boundary data variable and create particles later
+	constexpr pamhd::particle::Bdy_Number_Density N{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Bdy_Number_Density());
+		i < initial_conditions.get_number_of_regions(N);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Bdy_Number_Density(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(N, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_N(*cell_data)
 				= initial_conditions.get_data(
-						pamhd::particle::Bdy_Number_Density(),
+						N,
 						geometry_id,
 						simulation_time,
 						c[0], c[1], c[2],
@@ -312,30 +317,35 @@ template<
 	}
 
 	// velocity
+	constexpr pamhd::particle::Bdy_Velocity V{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Bdy_Velocity());
+		i < initial_conditions.get_number_of_regions(V);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Bdy_Velocity(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(V, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_V(*cell_data)
 				= initial_conditions.get_data(
-					pamhd::particle::Bdy_Velocity(),
+					V,
 					geometry_id,
 					simulation_time,
 					c[0], c[1], c[2],
@@ -345,30 +355,35 @@ template<
 	}
 
 	// temperature
+	constexpr pamhd::particle::Bdy_Temperature T{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Bdy_Temperature());
+		i < initial_conditions.get_number_of_regions(T);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Bdy_Temperature(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(T, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_T(*cell_data)
 				= initial_conditions.get_data(
-					pamhd::particle::Bdy_Temperature(),
+					T,
 					geometry_id,
 					simulation_time,
 					c[0], c[1], c[2],
@@ -378,30 +393,35 @@ template<
 	}
 
 	// number of particles
+	constexpr pamhd::particle::Bdy_Nr_Particles_In_Cell Nr{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Bdy_Nr_Particles_In_Cell());
+		i < initial_conditions.get_number_of_regions(Nr);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Bdy_Nr_Particles_In_Cell(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(Nr, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_Nr_Par(*cell_data)
 				= initial_conditions.get_data(
-					pamhd::particle::Bdy_Nr_Particles_In_Cell(),
+					Nr,
 					geometry_id,
 					simulation_time,
 					c[0], c[1], c[2],
@@ -411,30 +431,35 @@ template<
 	}
 
 	// charge to mass ratio
+	constexpr pamhd::particle::Charge_Mass_Ratio C2M{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Charge_Mass_Ratio());
+		i < initial_conditions.get_number_of_regions(C2M);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Charge_Mass_Ratio(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(C2M, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_C2M(*cell_data)
 				= initial_conditions.get_data(
-					pamhd::particle::Charge_Mass_Ratio(),
+					C2M,
 					geometry_id,
 					simulation_time,
 					c[0], c[1], c[2],
@@ -444,30 +469,35 @@ template<
 	}
 
 	// species mass
+	constexpr pamhd::particle::Species_Mass SpM{};
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Species_Mass());
+		i < initial_conditions.get_number_of_regions(SpM);
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Species_Mass(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(SpM, i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+				continue;
+			}
+
 			const auto c = grid.geometry.get_center(cell);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 			const auto
 				lat = asin(c[2] / r),
 				lon = atan2(c[1], c[0]);
 
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
 			Bdy_SpM(*cell_data)
 				= initial_conditions.get_data(
-					pamhd::particle::Species_Mass(),
+					SpM,
 					geometry_id,
 					simulation_time,
 					c[0], c[1], c[2],
@@ -476,21 +506,23 @@ template<
 		}
 	}
 
-	for (const auto cell_id: cells) {
-		random_source.seed(cell_id);
-
-		auto* const cell_data = grid[cell_id];
+	for (const auto& cell: cells) {
+		auto* const cell_data = grid[cell];
 		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
+			std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
 			abort();
 		}
 
+		if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+			continue;
+		}
+
+		random_source.seed(cell);
+
 		const auto
-			cell_start = grid.geometry.get_min(cell_id),
-			cell_end = grid.geometry.get_max(cell_id),
-			cell_length = grid.geometry.get_length(cell_id);
+			cell_start = grid.geometry.get_min(cell),
+			cell_end = grid.geometry.get_max(cell),
+			cell_length = grid.geometry.get_length(cell);
 
 		auto new_particles
 			= create_particles<
@@ -515,7 +547,7 @@ template<
 				current_id_start,
 				particle_id_increase
 			);
-		nr_particles_created += Bdy_Nr_Par(*cell_data);
+		nr_particles_created += new_particles.size();
 
 		if (replace) {
 			Par(*cell_data) = std::move(new_particles);
@@ -527,7 +559,7 @@ template<
 			);
 		}
 
-		current_id_start += Bdy_Nr_Par(*cell_data) * particle_id_increase;
+		current_id_start += new_particles.size() * particle_id_increase;
 	}
 
 	if (verbose && grid.get_rank() == 0) {
