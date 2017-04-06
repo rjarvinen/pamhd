@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 	const std::set<uint64_t>
 		ref_geom0_cells{1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61},
 		ref_geom1_cells{43},
-		ref_geom2_cells{50, 51, 52, 54, 55, 56, 58, 59, 60, 62, 63, 64};
+		ref_geom2_cells{49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
 
 	const auto geom_ids = geometries.get_geometry_ids();
 	if (geom_ids.size() != 3) {
@@ -233,7 +233,7 @@ int main(int argc, char* argv[])
 
 	if (geom2_cells_size != ref_geom2_cells.size()) {
 		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Too few cells in geometry 2: " << geom2_cells_size
+			<< ": Wrong number of cells in geometry 2: " << geom2_cells_size
 			<< ", should be " << ref_geom2_cells.size()
 			<< std::endl;
 		return EXIT_FAILURE;

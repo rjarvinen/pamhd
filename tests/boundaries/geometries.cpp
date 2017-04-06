@@ -92,33 +92,33 @@ int main()
 
 
 	auto result = geometries.overlaps({0.1, 0.1, 0.1}, {0.2, 0.2, 0.2}, 1);
-	if (not result.first) {
+	if (result.size() == 0) {
 		std::cerr << "cell 1 didn't overlap with any geometry." << std::endl;
 		return EXIT_FAILURE;
 	}
-	if (result.second != 0) {
+	if (result[0] != 0) {
 		std::cerr << "cell 1 didn't overlap with geometry 0 but with: "
-			<< result.second
+			<< result[0]
 			<< std::endl;
 		return EXIT_FAILURE;
 	}
 
 
 	result = geometries.overlaps({-0.2, -0.2, -0.2}, {-0.1, -0.1, -0.1}, 2);
-	if (result.first) {
+	if (result.size() != 0) {
 		std::cerr << "cell 2 overlapped with a geometry." << std::endl;
 		return EXIT_FAILURE;
 	}
 
 
 	result = geometries.overlaps({-1.001, -1.999, -3.005}, {-1, -1.9, -3}, 3);
-	if (not result.first) {
+	if (result.size() == 0) {
 		std::cerr << "cell 3 didn't overlap with any geometry." << std::endl;
 		return EXIT_FAILURE;
 	}
-	if (result.second != 1) {
+	if (result[0] != 1) {
 		std::cerr << "cell 3 didn't overlap with geometry 1 but with: "
-			<< result.second
+			<< result[0]
 			<< std::endl;
 		return EXIT_FAILURE;
 	}
@@ -134,13 +134,13 @@ int main()
 
 
 	result = geometries.overlaps({-99, -99, -99}, {99, 99, 99}, 5);
-	if (not result.first) {
+	if (result.size() == 0) {
 		std::cerr << "cell 5 didn't overlap with any geometry." << std::endl;
 		return EXIT_FAILURE;
 	}
-	if (result.second != 0) {
+	if (result[0] != 0) {
 		std::cerr << "cell 5 didn't overlap with geometry 0 but with: "
-			<< result.second
+			<< result[0]
 			<< std::endl;
 		return EXIT_FAILURE;
 	}

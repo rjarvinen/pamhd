@@ -140,13 +140,9 @@ public:
 	/*!
 	Calls overlaps function of each existing geometry.
 
-	If given volume overlaps a geometry returns true
-	as well as id of first geometry that overlaps,
-	otherwise returns false.
-
-	Geometries are processed in ascending order of their ids.
+	Returns ids of all geometries that overlap given volume.
 	*/
-	std::pair<bool, Geometry_Id> overlaps(
+	std::vector<Geometry_Id> overlaps(
 		const Vector& start,
 		const Vector& end,
 		const Cell_Id& cell_id
@@ -160,8 +156,9 @@ public:
 			geometry_ids.push_back(sphere.first);
 		}
 
+		std::vector<Geometry_Id> overlapping;
 		if (geometry_ids.size() == 0) {
-			return std::make_pair(false, std::numeric_limits<Geometry_Id>::max());
+			return overlapping;
 		}
 
 		std::sort(geometry_ids.begin(), geometry_ids.end());
@@ -170,11 +167,11 @@ public:
 
 			if (this->boxes.count(geometry_id) > 0) {
 				if (this->boxes.at(geometry_id).overlaps(start, end, cell_id)) {
-					return std::make_pair(true, geometry_id);
+					overlapping.push_back(geometry_id);
 				}
 			} else if (this->spheres.count(geometry_id) > 0) {
 				if (this->spheres.at(geometry_id).overlaps(start, end, cell_id)) {
-					return std::make_pair(true, geometry_id);
+					overlapping.push_back(geometry_id);
 				}
 			} else {
 				throw std::out_of_range(
@@ -184,7 +181,7 @@ public:
 			}
 		}
 
-		return std::make_pair(false, std::numeric_limits<Geometry_Id>::max());
+		return overlapping;
 	}
 
 

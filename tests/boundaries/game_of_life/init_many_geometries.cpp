@@ -264,58 +264,58 @@ int main()
 			or (cell_i == 2 and row_i == 3)
 			or (cell_i == 1 and row_i == 3)
 		) {
-			if (not result.first) {
+			if (result.size() == 0) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with any geometry."
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
-			if (cell_i == 2 and row_i == 1 and result.second != 0) {
+			if (cell_i == 2 and row_i == 1 and result[0] != 0) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with geometry 0 but with "
-					<< result.second
+					<< result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
-			if (cell_i == 3 and row_i == 2 and result.second != 1) {
+			if (cell_i == 3 and row_i == 2 and result[0] != 1) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with geometry 1 but with "
-					<< result.second
+					<< result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
-			if (cell_i == 3 and row_i == 3 and result.second != 2) {
+			if (cell_i == 3 and row_i == 3 and result[0] != 2) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with geometry 2 but with "
-					<< result.second
+					<< result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
-			if (cell_i == 2 and row_i == 3 and result.second != 3) {
+			if (cell_i == 2 and row_i == 3 and result[0] != 3) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with geometry 3 but with "
-					<< result.second
+					<< result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
-			if (cell_i == 1 and row_i == 3 and result.second != 4) {
+			if (cell_i == 1 and row_i == 3 and result[0] != 4) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
 					<< " didn't overlap with geometry 4 but with "
-					<< result.second
+					<< result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
 		} else {
-			if (result.first) {
+			if (result.size() != 0) {
 				std::cerr << __FILE__ "(" << __LINE__ << "): "
 					<< "Cell " << id << " at " << get_cell_center(grid, id)
-					<< " overlapped with geometry " << result.second
+					<< " overlapped with geometry " << result[0]
 					<< std::endl;
 				return EXIT_FAILURE;
 			}
