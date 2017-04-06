@@ -112,7 +112,7 @@ public:
 
 		// cell types for internal use
 		constexpr typename std::remove_reference<
-			decltype(Cell_Type(*grid.cells[0].data))
+			decltype(Cell_Type(*grid[0]))
 		>::type
 			normal_cell{1},
 			dont_solve_cell{2},
