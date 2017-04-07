@@ -460,7 +460,8 @@ int main(int argc, char* argv[])
 			Bdy_T,
 			Bdy_Nr_Par,
 			Bdy_SpM,
-				Bdy_C2M
+			Bdy_C2M,
+			Sol_Info
 		);
 	next_particle_id += nr_particles_created * grid.get_comm_size();
 
