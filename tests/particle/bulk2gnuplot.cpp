@@ -70,7 +70,7 @@ boost::optional<std::array<double, 4>> read_data(
 	dccrg::Mapping& cell_id_mapping,
 	dccrg::Grid_Topology& topology,
 	dccrg::Cartesian_Geometry& geometry,
-	unordered_map<uint64_t, Cell>& simulation_data,
+	unordered_map<uint64_t, Cell_test_particle>& simulation_data,
 	const std::string& file_name,
 	const int mpi_rank
 ) {
@@ -170,7 +170,7 @@ boost::optional<std::array<double, 4>> read_data(
 			memory_datatype = MPI_DATATYPE_NULL,
 			file_datatype = MPI_DATATYPE_NULL;
 
-		Cell::set_transfer_all(
+		Cell_test_particle::set_transfer_all(
 			true,
 			Electric_Field(),
 			Magnetic_Field(),
@@ -222,7 +222,7 @@ Plots 1d data from given list in that order.
 */
 int plot_1d(
 	const dccrg::Cartesian_Geometry& geometry,
-	const unordered_map<uint64_t, Cell>& simulation_data,
+	const unordered_map<uint64_t, Cell_test_particle>& simulation_data,
 	const std::vector<uint64_t>& cells,
 	const std::string& output_file_name_prefix
 ) {
@@ -402,7 +402,7 @@ int main(int argc, char* argv[])
 		dccrg::Mapping cell_id_mapping;
 		dccrg::Grid_Topology topology;
 		dccrg::Cartesian_Geometry geometry(cell_id_mapping.length, cell_id_mapping, topology);
-		unordered_map<uint64_t, Cell> simulation_data;
+		unordered_map<uint64_t, Cell_test_particle> simulation_data;
 
 		boost::optional<std::array<double, 4>> metadata = read_data(
 			cell_id_mapping,

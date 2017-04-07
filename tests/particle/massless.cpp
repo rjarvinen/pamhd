@@ -177,7 +177,7 @@ const auto Part_Des
 
 int main(int argc, char* argv[])
 {
-	constexpr double Re = 6.371e6; // radius of earth
+	using std::min;
 
 	/*
 	Initialize MPI
@@ -427,7 +427,7 @@ int main(int argc, char* argv[])
 	std::mt19937_64 random_source;
 
 	auto nr_particles_created
-		= pamhd::particle::initialize<
+		= pamhd::particle::initialize_massless<
 			pamhd::particle::Particle_Internal,
 			pamhd::particle::Mass,
 			pamhd::particle::Charge_Mass_Ratio,
@@ -531,7 +531,7 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = std::min(std::min(options_particle.time_step_factor * max_dt, until_end), max_dt),
+			local_time_step = min(min(options_particle.time_step_factor * max_dt, until_end), max_dt),
 			time_step = -1;
 
 		if (
@@ -600,31 +600,31 @@ int main(int argc, char* argv[])
 
 		switch (particle_stepper) {
 		case 0:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, outer_cells)
 			);
 			break;
 		case 1:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, outer_cells)
 			);
 			break;
 		case 2:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, outer_cells)
 			);
 			break;
 		case 3:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, outer_cells)
 			);
 			break;
 		case 4:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, outer_cells)
 			);
@@ -639,31 +639,31 @@ int main(int argc, char* argv[])
 
 		switch (particle_stepper) {
 		case 0:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, inner_cells)
 			);
 			break;
 		case 1:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, inner_cells)
 			);
 			break;
 		case 2:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, inner_cells)
 			);
 			break;
 		case 3:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, inner_cells)
 			);
 			break;
 		case 4:
-			max_dt = std::min(
+			max_dt = min(
 				max_dt,
 				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, inner_cells)
 			);

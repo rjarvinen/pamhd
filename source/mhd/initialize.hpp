@@ -48,6 +48,115 @@ namespace pamhd {
 namespace mhd {
 
 
+// as initialize() below but for magnetic field only
+template <
+	class Bdy_Magnetic_Field,
+	class Geometries,
+	class Init_Cond,
+	class Background_Magnetic_Field,
+	class Cell,
+	class Geometry,
+	class Magnetic_Field_Getter,
+	class Background_Magnetic_Field_Pos_X_Getter,
+	class Background_Magnetic_Field_Pos_Y_Getter,
+	class Background_Magnetic_Field_Pos_Z_Getter,
+	class Magnetic_Field_Flux_Getter
+> void initialize_magnetic_field(
+	const Geometries& geometries,
+	Init_Cond& initial_conditions,
+	const Background_Magnetic_Field& bg_B,
+	dccrg::Dccrg<Cell, Geometry>& grid,
+	const std::vector<uint64_t>& cells,
+	const double time,
+	const double vacuum_permeability,
+	const Magnetic_Field_Getter Mag,
+	const Background_Magnetic_Field_Pos_X_Getter Bg_B_Pos_X,
+	const Background_Magnetic_Field_Pos_Y_Getter Bg_B_Pos_Y,
+	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z,
+	const Magnetic_Field_Flux_Getter Mag_f
+) {
+	// set default magnetic field
+	for (const auto cell_id: cells) {
+		auto* const cell_data = grid[cell_id];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
+				<< cell_id
+				<< std::endl;
+			abort();
+		}
+
+		Mag_f(*cell_data)[0]      =
+		Mag_f(*cell_data)[1]      =
+		Mag_f(*cell_data)[2]      = 0;
+
+		const auto c = grid.geometry.get_center(cell_id);
+		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+		const auto
+			lat = asin(c[2] / r),
+			lon = atan2(c[1], c[0]);
+
+		const auto magnetic_field
+			= initial_conditions.get_default_data(
+				Bdy_Magnetic_Field(),
+				time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+
+		Mag(*cell_data) = magnetic_field;
+
+		const auto cell_end = grid.geometry.get_max(cell_id);
+		Bg_B_Pos_X(*cell_data) = bg_B.get_background_field(
+			{cell_end[0], c[1], c[2]},
+			vacuum_permeability
+		);
+		Bg_B_Pos_Y(*cell_data) = bg_B.get_background_field(
+			{c[0], cell_end[1], c[2]},
+			vacuum_permeability
+		);
+		Bg_B_Pos_Z(*cell_data) = bg_B.get_background_field(
+			{c[0], c[1], cell_end[2]},
+			vacuum_permeability
+		);
+	}
+
+	// set non-default magnetic field
+	for (
+		size_t i = 0;
+		i < initial_conditions.get_number_of_regions(Bdy_Magnetic_Field());
+		i++
+	) {
+		const auto& init_cond = initial_conditions.get_initial_condition(Bdy_Magnetic_Field(), i);
+		const auto& geometry_id = init_cond.get_geometry_id();
+		const auto& cells = geometries.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			const auto magnetic_field = initial_conditions.get_data(
+				Bdy_Magnetic_Field(),
+				geometry_id,
+				time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+
+			auto* const cell_data = grid[cell];
+			if (cell_data == NULL) {
+				std::cerr <<  __FILE__ << "(" << __LINE__
+					<< ") No data for cell: " << cell
+					<< std::endl;
+				abort();
+			}
+
+			Mag(*cell_data) = magnetic_field;
+		}
+	}
+}
+
 /*!
 Sets the initial state of MHD simulation and zeroes fluxes.
 
@@ -60,6 +169,7 @@ when given a simulation cell's data.
 \param [vacuum_permeability] https://en.wikipedia.org/wiki/Vacuum_permeability
 */
 template <
+	class Bdy_Magnetic_Field,
 	class Geometries,
 	class Init_Cond,
 	class Background_Magnetic_Field,
@@ -103,6 +213,22 @@ template <
 		std::cout << "Setting default MHD state... ";
 		std::cout.flush();
 	}
+
+	initialize_magnetic_field<Bdy_Magnetic_Field>(
+		geometries,
+		initial_conditions,
+		bg_B,
+		grid,
+		cells,
+		time,
+		vacuum_permeability,
+		Mag,
+		Bg_B_Pos_X,
+		Bg_B_Pos_Y,
+		Bg_B_Pos_Z,
+		Mag_f
+	);
+
 	// set default state
 	for (const auto cell_id: cells) {
 		auto* const cell_data = grid[cell_id];
@@ -113,15 +239,12 @@ template <
 			abort();
 		}
 
-		// zero fluxes and background fields
+		// zero fluxes
 		Mas_f(*cell_data)         =
 		Nrj_f(*cell_data)         =
 		Mom_f(*cell_data)[0]      =
 		Mom_f(*cell_data)[1]      =
-		Mom_f(*cell_data)[2]      =
-		Mag_f(*cell_data)[0]      =
-		Mag_f(*cell_data)[1]      =
-		Mag_f(*cell_data)[2]      = 0;
+		Mom_f(*cell_data)[2]      = 0;
 
 		const auto c = grid.geometry.get_center(cell_id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -151,50 +274,23 @@ template <
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		const auto magnetic_field
-			= initial_conditions.get_default_data(
-				Magnetic_Field(),
-				time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
 
 		Mas(*cell_data) = mass_density;
 		Mom(*cell_data) = mass_density * velocity;
-		Mag(*cell_data) = magnetic_field;
 		Nrj(*cell_data) = get_total_energy_density(
 			mass_density,
 			velocity,
 			pressure,
-			magnetic_field,
+			Mag(*cell_data),
 			adiabatic_index,
-			vacuum_permeability
-		);
-
-		const auto cell_end = grid.geometry.get_max(cell_id);
-		Bg_B_Pos_X(*cell_data) = bg_B.get_background_field(
-			{cell_end[0], c[1], c[2]},
-			vacuum_permeability
-		);
-		Bg_B_Pos_Y(*cell_data) = bg_B.get_background_field(
-			{c[0], cell_end[1], c[2]},
-			vacuum_permeability
-		);
-		Bg_B_Pos_Z(*cell_data) = bg_B.get_background_field(
-			{c[0], c[1], cell_end[2]},
 			vacuum_permeability
 		);
 	}
 
-	// set non-default initial conditions
 	if (verbose and grid.get_rank() == 0) {
 		std::cout << "done\nSetting non-default initial MHD state... ";
 		std::cout.flush();
 	}
-
-	/*
-	Set non-default initial conditions
-	*/
 
 	// mass density
 	for (
@@ -265,42 +361,6 @@ template <
 			}
 
 			Mom(*cell_data) = Mas(*cell_data) * velocity;
-		}
-	}
-
-	// magnetic field
-	for (
-		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(Magnetic_Field());
-		i++
-	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(Magnetic_Field(), i);
-		const auto& geometry_id = init_cond.get_geometry_id();
-		const auto& cells = geometries.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			const auto magnetic_field = initial_conditions.get_data(
-				Magnetic_Field(),
-				geometry_id,
-				time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr <<  __FILE__ << "(" << __LINE__
-					<< ") No data for cell: " << cell
-					<< std::endl;
-				abort();
-			}
-
-			Mag(*cell_data) = magnetic_field;
 		}
 	}
 

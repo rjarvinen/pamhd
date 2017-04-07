@@ -219,6 +219,80 @@ template<
 }
 
 
+// as apply_boundaries() below but for magnetic field only.
+template<
+	class Cell_Data,
+	class Grid_Geometry,
+	class Boundaries,
+	class Boundary_Geometries,
+	class Magnetic_Field_Getter
+> void apply_magnetic_field_boundaries(
+	dccrg::Dccrg<Cell_Data, Grid_Geometry>& grid,
+	Boundaries& boundaries,
+	const Boundary_Geometries& bdy_geoms,
+	const double simulation_time,
+	const Magnetic_Field_Getter& Mag
+) {
+	// magnetic field
+	constexpr pamhd::mhd::Magnetic_Field B{};
+	for (
+		size_t i = 0;
+		i < boundaries.get_number_of_value_boundaries(B);
+		i++
+	) {
+		auto& value_bdy = boundaries.get_value_boundary(B, i);
+		const auto& geometry_id = value_bdy.get_geometry_id();
+		const auto& cells = bdy_geoms.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			const auto magnetic_field = value_bdy.get_data(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			Mag(*cell_data) = magnetic_field;
+		}
+	}
+	for (const auto& item: boundaries.get_copy_boundary_cells(B)) {
+		if (item.size() < 2) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+
+		pamhd::mhd::Magnetic_Field::data_type source_value{0, 0, 0};
+		for (size_t i = 1; i < item.size(); i++) {
+			auto* source_data = grid[item[i]];
+			if (source_data == nullptr) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+
+			source_value += Mag(*source_data);
+		}
+		source_value /= item.size() - 1;
+
+		auto *target_data = grid[item[0]];
+		if (target_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+
+		Mag(*target_data) = source_value;
+	}
+}
+
 /*!
 Applies boundaries of all simulation variables.
 
@@ -255,6 +329,8 @@ template<
 	const double adiabatic_index,
 	const double vacuum_permeability
 ) {
+	apply_magnetic_field_boundaries(grid, boundaries, bdy_geoms, simulation_time, Mag);
+
 	// number density
 	constexpr pamhd::mhd::Number_Density N{};
 	for (
@@ -378,65 +454,6 @@ template<
 		Mom(*target_data) = Mas(*target_data) * source_value;
 	}
 
-	// magnetic field
-	constexpr pamhd::mhd::Magnetic_Field B{};
-	for (
-		size_t i = 0;
-		i < boundaries.get_number_of_value_boundaries(B);
-		i++
-	) {
-		auto& value_bdy = boundaries.get_value_boundary(B, i);
-		const auto& geometry_id = value_bdy.get_geometry_id();
-		const auto& cells = bdy_geoms.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			const auto magnetic_field = value_bdy.get_data(
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Mag(*cell_data) = magnetic_field;
-		}
-	}
-	for (const auto& item: boundaries.get_copy_boundary_cells(B)) {
-		if (item.size() < 2) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		pamhd::mhd::Magnetic_Field::data_type source_value{0, 0, 0};
-		for (size_t i = 1; i < item.size(); i++) {
-			auto* source_data = grid[item[i]];
-			if (source_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			source_value += Mag(*source_data);
-		}
-		source_value /= item.size() - 1;
-
-		auto *target_data = grid[item[0]];
-		if (target_data == nullptr) {
-			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		Mag(*target_data) = source_value;
-	}
-
 	// pressure
 	constexpr pamhd::mhd::Pressure P{};
 	for (
@@ -523,7 +540,6 @@ template<
 		);
 	}
 }
-
 
 }} // namespaces
 

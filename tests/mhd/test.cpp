@@ -481,7 +481,7 @@ int main(int argc, char* argv[])
 	if (verbose and rank == 0) {
 		cout << "Initializing MHD... " << endl;
 	}
-	pamhd::mhd::initialize(
+	pamhd::mhd::initialize<pamhd::mhd::Magnetic_Field>(
 		geometries,
 		initial_conditions,
 		background_B,

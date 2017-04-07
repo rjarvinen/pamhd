@@ -284,6 +284,7 @@ struct Current_Minus_Velocity {
 struct Solver_Info {
 	using data_type = unsigned int;
 	static const unsigned int
+		normal                         = 0,
 		dont_solve                     = 1 << 0,
 		number_density_bdy             = 1 << 1,
 		velocity_bdy                   = 1 << 2,
@@ -329,13 +330,16 @@ Cell type for particle model of PAMHD.
 
 See Cell_test_particle for info.
 */
-using Cell_particle = gensimcell::Cell<
+using Cell_hyb_particle = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::mhd::MHD_State_Conservative,
 	pamhd::mhd::Electric_Current_Density,
 	pamhd::particle::Solver_Info,
 	pamhd::mhd::MPI_Rank,
 	pamhd::mhd::Resistivity,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_X,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_Y,
+	pamhd::mhd::Bg_Magnetic_Field_Pos_Z,
 	pamhd::mhd::Magnetic_Field_Resistive,
 	pamhd::mhd::Magnetic_Field_Temp,
 	pamhd::mhd::Magnetic_Field_Divergence,
