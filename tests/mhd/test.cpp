@@ -481,10 +481,21 @@ int main(int argc, char* argv[])
 	if (verbose and rank == 0) {
 		cout << "Initializing MHD... " << endl;
 	}
-	pamhd::mhd::initialize<pamhd::mhd::Magnetic_Field>(
+
+	pamhd::mhd::initialize_magnetic_field<pamhd::mhd::Magnetic_Field>(
 		geometries,
 		initial_conditions,
 		background_B,
+		grid,
+		cells,
+		simulation_time,
+		options_mhd.vacuum_permeability,
+		Mag, Mag_f,
+		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
+	);
+	pamhd::mhd::initialize_fluid(
+		geometries,
+		initial_conditions,
 		grid,
 		cells,
 		simulation_time,
@@ -493,8 +504,7 @@ int main(int argc, char* argv[])
 		options_mhd.proton_mass,
 		verbose,
 		Mas, Mom, Nrj, Mag,
-		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
-		Mas_f, Mom_f, Nrj_f, Mag_f
+		Mas_f, Mom_f, Nrj_f
 	);
 
 	// update background field between processes
@@ -517,15 +527,19 @@ int main(int argc, char* argv[])
 		Res(*cell.data) = 0;
 	}
 
-	pamhd::mhd::apply_boundaries(
+	pamhd::mhd::apply_magnetic_field_boundaries(
 		grid,
 		boundaries,
 		geometries,
 		simulation_time,
-		Mas,
-		Mom,
-		Nrj,
-		Mag,
+		Mag
+	);
+	pamhd::mhd::apply_fluid_boundaries(
+		grid,
+		boundaries,
+		geometries,
+		simulation_time,
+		Mas, Mom, Nrj, Mag,
 		options_mhd.proton_mass,
 		options_mhd.adiabatic_index,
 		options_mhd.vacuum_permeability
@@ -867,15 +881,19 @@ int main(int argc, char* argv[])
 		}
 
 
-		pamhd::mhd::apply_boundaries(
+		pamhd::mhd::apply_magnetic_field_boundaries(
 			grid,
 			boundaries,
 			geometries,
 			simulation_time,
-			Mas,
-			Mom,
-			Nrj,
-			Mag,
+			Mag
+		);
+		pamhd::mhd::apply_fluid_boundaries(
+			grid,
+			boundaries,
+			geometries,
+			simulation_time,
+			Mas, Mom, Nrj, Mag,
 			options_mhd.proton_mass,
 			options_mhd.adiabatic_index,
 			options_mhd.vacuum_permeability

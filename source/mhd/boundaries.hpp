@@ -316,7 +316,7 @@ template<
 	class Momentum_Getter,
 	class Energy_Getter,
 	class Magnetic_Field_Getter
-> void apply_boundaries(
+> void apply_fluid_boundaries(
 	dccrg::Dccrg<Cell_Data, Grid_Geometry>& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& bdy_geoms,
@@ -329,8 +329,6 @@ template<
 	const double adiabatic_index,
 	const double vacuum_permeability
 ) {
-	apply_magnetic_field_boundaries(grid, boundaries, bdy_geoms, simulation_time, Mag);
-
 	// number density
 	constexpr pamhd::mhd::Number_Density N{};
 	for (

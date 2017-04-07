@@ -47,6 +47,82 @@ namespace pamhd {
 namespace particle {
 
 
+// used by test particle program
+template<
+	class Boundary_Electric_Field,
+	class Sim_Geometries,
+	class Init_Cond,
+	class Grid,
+	class Electric_Field_Getter
+> void initialize_electric_field(
+	const Sim_Geometries& geometries,
+	Init_Cond& initial_conditions,
+	const double simulation_time,
+	const std::vector<uint64_t>& cells,
+	Grid& grid,
+	const Electric_Field_Getter Ele
+) {
+	constexpr Boundary_Electric_Field E{};
+
+	// set electric field
+	for (const auto& cell_id: cells) {
+		const auto c = grid.geometry.get_center(cell_id);
+		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+		const auto
+			lat = asin(c[2] / r),
+			lon = atan2(c[1], c[0]);
+
+		auto* const cell_data = grid[cell_id];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
+				<< cell_id
+				<< std::endl;
+			abort();
+		}
+
+		Ele(*cell_data)
+			= initial_conditions.get_default_data(
+				E,
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+	}
+
+	// non-default electric field
+	for (
+		size_t i = 0;
+		i < initial_conditions.get_number_of_regions(E);
+		i++
+	) {
+		const auto& init_cond = initial_conditions.get_initial_condition(E, i);
+		const auto& geometry_id = init_cond.get_geometry_id();
+		const auto& cells = geometries.get_cells(geometry_id);
+		for (const auto& cell: cells) {
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+			const auto
+				lat = asin(c[2] / r),
+				lon = atan2(c[1], c[0]);
+
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
+				abort();
+			}
+
+			Ele(*cell_data) = initial_conditions.get_data(
+				E,
+				geometry_id,
+				simulation_time,
+				c[0], c[1], c[2],
+				r, lat, lon
+			);
+		}
+	}
+}
+
+
 /*!
 Creates particles in given cells as defined by given initial conditions.
 
@@ -72,14 +148,8 @@ template<
 	class Particle_Species_Mass_T,
 	class Sim_Geometries,
 	class Init_Cond,
-	class Background_Magnetic_Field,
 	class Grid,
-	class Electric_Field_Getter,
-	class Magnetic_Field_Getter,
 	class Particles_Getter,
-	class Background_Magnetic_Field_Pos_X_Face_Getter,
-	class Background_Magnetic_Field_Pos_Y_Face_Getter,
-	class Background_Magnetic_Field_Pos_Z_Face_Getter,
 	class Boundary_Number_Density_Getter,
 	class Boundary_Velocity_Getter,
 	class Boundary_Temperature_Getter,
@@ -87,26 +157,19 @@ template<
 	class Boundary_Charge_To_Mass_Ratio_Getter,
 	class Boundary_Species_Mass_Getter,
 	class Solver_Info_Getter
-> size_t initialize_massless(
+> size_t initialize_particles(
 	const Sim_Geometries& geometries,
 	Init_Cond& initial_conditions,
 	const double simulation_time,
 	const std::vector<uint64_t>& cells,
-	const Background_Magnetic_Field& bg_B,
 	Grid& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
-	const double vacuum_permeability,
 	const unsigned long long int first_particle_id,
 	const unsigned long long int particle_id_increase,
 	const bool replace,
 	const bool verbose,
-	const Electric_Field_Getter Ele,
-	const Magnetic_Field_Getter Mag,
 	const Particles_Getter Par,
-	const Background_Magnetic_Field_Pos_X_Face_Getter Bg_B_Pos_X,
-	const Background_Magnetic_Field_Pos_Y_Face_Getter Bg_B_Pos_Y,
-	const Background_Magnetic_Field_Pos_Z_Face_Getter Bg_B_Pos_Z,
 	const Boundary_Number_Density_Getter Bdy_N,
 	const Boundary_Velocity_Getter Bdy_V,
 	const Boundary_Temperature_Getter Bdy_T,
@@ -181,104 +244,11 @@ template<
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-
-		Ele(*cell_data)
-			= initial_conditions.get_default_data(
-				pamhd::particle::Electric_Field(),
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-		Mag(*cell_data)
-			= initial_conditions.get_default_data(
-				pamhd::particle::Magnetic_Field(),
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-
-		const auto cell_end = grid.geometry.get_max(cell_id);
-		Bg_B_Pos_X(*cell_data) = bg_B.get_background_field(
-			{cell_end[0], c[1], c[2]},
-			vacuum_permeability
-		);
-		Bg_B_Pos_Y(*cell_data) = bg_B.get_background_field(
-			{c[0], cell_end[1], c[2]},
-			vacuum_permeability
-		);
-		Bg_B_Pos_Z(*cell_data) = bg_B.get_background_field(
-			{c[0], c[1], cell_end[2]},
-			vacuum_permeability
-		);
 	}
 
 	/*
 	Set non-default initial conditions
 	*/
-
-	// electric field
-	for (
-		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Electric_Field());
-		i++
-	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Electric_Field(), i);
-		const auto& geometry_id = init_cond.get_geometry_id();
-		const auto& cells = geometries.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Ele(*cell_data) = initial_conditions.get_data(
-				pamhd::particle::Electric_Field(),
-				geometry_id,
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-		}
-	}
-
-	// magnetic field
-	for (
-		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::particle::Magnetic_Field());
-		i++
-	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::particle::Magnetic_Field(), i);
-		const auto& geometry_id = init_cond.get_geometry_id();
-		const auto& cells = geometries.get_cells(geometry_id);
-		for (const auto& cell: cells) {
-			const auto c = grid.geometry.get_center(cell);
-			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-			const auto
-				lat = asin(c[2] / r),
-				lon = atan2(c[1], c[0]);
-
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
-			Mag(*cell_data) = initial_conditions.get_data(
-				pamhd::particle::Magnetic_Field(),
-				geometry_id,
-				simulation_time,
-				c[0], c[1], c[2],
-				r, lat, lon
-			);
-		}
-	}
 
 	// number density, set boundary data variable and create particles later
 	constexpr pamhd::particle::Bdy_Number_Density N{};
@@ -613,7 +583,6 @@ template<
 	Grid& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
-	const double vacuum_permeability,
 	const unsigned long long int first_particle_id,
 	const unsigned long long int particle_id_increase,
 	const bool replace,

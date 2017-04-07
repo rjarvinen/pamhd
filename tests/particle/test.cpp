@@ -743,9 +743,8 @@ int main(int argc, char* argv[])
 		cells,
 		simulation_time,
 		options_particle.vacuum_permeability,
-		Mag,
-		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
-		Mag_f
+		Mag, Mag_f,
+		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
 	);
 
 	// update background field between processes
@@ -770,23 +769,17 @@ int main(int argc, char* argv[])
 
 	/* TODO pamhd::mhd::apply_magnetic_field_boundaries(
 		grid,
-		boundaries_magnetic_field,
+		boundaries,
 		geometries,
 		simulation_time,
-		Mas,
-		Mom,
-		Nrj,
-		Mag,
-		options_mhd.proton_mass,
-		options_mhd.adiabatic_index,
-		options_mhd.vacuum_permeability
+		Mag
 	);*/
 
 	std::mt19937_64 random_source;
 
 	unsigned long long int nr_particles_created = 0;
 	for (auto& init_cond_part: initial_conditions_particles) {
-		nr_particles_created = pamhd::particle::initialize<
+		nr_particles_created = pamhd::particle::initialize_particles<
 			pamhd::particle::Particle_Internal,
 			pamhd::particle::Mass,
 			pamhd::particle::Charge_Mass_Ratio,
@@ -802,7 +795,6 @@ int main(int argc, char* argv[])
 			grid,
 			random_source,
 			options_particle.boltzmann,
-			options_particle.vacuum_permeability,
 			next_particle_id,
 			grid.get_comm_size(),
 			true,

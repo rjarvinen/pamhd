@@ -58,6 +58,7 @@ Copy boundaries have no effect in this program and shouldn't be used in config f
 #include "boundaries/multivariable_initial_conditions.hpp"
 #include "grid_options.hpp"
 #include "mhd/background_magnetic_field.hpp"
+#include "mhd/initialize.hpp"
 #include "mhd/options.hpp"
 #include "mhd/variables.hpp"
 #include "particle/boundaries.hpp"
@@ -111,21 +112,6 @@ const auto Sol_Info
 		return cell_data[pamhd::particle::Solver_Info()];
 	};
 
-// references to background magnetic fields
-pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type no_bg_field_in_cells_of_this_program{};
-const auto Bg_B_Pos_X
-	= [](Cell& /*cell_data*/)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return no_bg_field_in_cells_of_this_program;
-	};
-const auto Bg_B_Pos_Y
-	= [](Cell& /*cell_data*/)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
-		return no_bg_field_in_cells_of_this_program;
-	};
-const auto Bg_B_Pos_Z
-	= [](Cell& /*cell_data*/)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
-		return no_bg_field_in_cells_of_this_program;
-	};
-
 // references to initial condition & boundary data of cell
 const auto Bdy_N
 	= [](Cell& cell_data)->typename pamhd::particle::Bdy_Number_Density::data_type&{
@@ -172,6 +158,25 @@ const auto Part_Mas
 const auto Part_Des
 	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
 		return particle[pamhd::particle::Destination_Cell()];
+	};
+
+// required by magnetic field functions, not used by this model
+pamhd::particle::Magnetic_Field::data_type no_magnetic_field_flux_in_this_model{};
+const auto Mag_f
+	= [](Cell&)->typename pamhd::particle::Magnetic_Field::data_type&{
+		return no_magnetic_field_flux_in_this_model;
+	};
+const auto Bg_B_Pos_X
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return no_magnetic_field_flux_in_this_model;
+	};
+const auto Bg_B_Pos_Y
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return no_magnetic_field_flux_in_this_model;
+	};
+const auto Bg_B_Pos_Z
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return no_magnetic_field_flux_in_this_model;
 	};
 
 
@@ -426,8 +431,29 @@ int main(int argc, char* argv[])
 	// set initial condition
 	std::mt19937_64 random_source;
 
+	pamhd::mhd::initialize_magnetic_field<pamhd::particle::Magnetic_Field>(
+		geometries,
+		initial_conditions,
+		background_B,
+		grid,
+		cells,
+		simulation_time,
+		options_particle.vacuum_permeability,
+		Mag, Mag_f,
+		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
+	);
+
+	pamhd::particle::initialize_electric_field<pamhd::particle::Electric_Field>(
+		geometries,
+		initial_conditions,
+		simulation_time,
+		cells,
+		grid,
+		Ele
+	);
+
 	auto nr_particles_created
-		= pamhd::particle::initialize_massless<
+		= pamhd::particle::initialize_particles<
 			pamhd::particle::Particle_Internal,
 			pamhd::particle::Mass,
 			pamhd::particle::Charge_Mass_Ratio,
@@ -440,21 +466,14 @@ int main(int argc, char* argv[])
 			initial_conditions,
 			simulation_time,
 			cells,
-			background_B,
 			grid,
 			random_source,
 			options_particle.boltzmann,
-			options_particle.vacuum_permeability,
 			next_particle_id,
 			grid.get_comm_size(),
 			true,
 			true,
-			Ele,
-			Mag,
 			Part_Int,
-			Bg_B_Pos_X,
-			Bg_B_Pos_Y,
-			Bg_B_Pos_Z,
 			Bdy_N,
 			Bdy_V,
 			Bdy_T,

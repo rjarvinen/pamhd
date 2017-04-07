@@ -50,17 +50,17 @@ namespace mhd {
 
 // as initialize() below but for magnetic field only
 template <
-	class Bdy_Magnetic_Field,
+	class Boundary_Magnetic_Field,
 	class Geometries,
 	class Init_Cond,
 	class Background_Magnetic_Field,
 	class Cell,
 	class Geometry,
 	class Magnetic_Field_Getter,
+	class Magnetic_Field_Flux_Getter,
 	class Background_Magnetic_Field_Pos_X_Getter,
 	class Background_Magnetic_Field_Pos_Y_Getter,
-	class Background_Magnetic_Field_Pos_Z_Getter,
-	class Magnetic_Field_Flux_Getter
+	class Background_Magnetic_Field_Pos_Z_Getter
 > void initialize_magnetic_field(
 	const Geometries& geometries,
 	Init_Cond& initial_conditions,
@@ -70,10 +70,10 @@ template <
 	const double time,
 	const double vacuum_permeability,
 	const Magnetic_Field_Getter Mag,
+	const Magnetic_Field_Flux_Getter Mag_f,
 	const Background_Magnetic_Field_Pos_X_Getter Bg_B_Pos_X,
 	const Background_Magnetic_Field_Pos_Y_Getter Bg_B_Pos_Y,
-	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z,
-	const Magnetic_Field_Flux_Getter Mag_f
+	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z
 ) {
 	// set default magnetic field
 	for (const auto cell_id: cells) {
@@ -97,7 +97,7 @@ template <
 
 		const auto magnetic_field
 			= initial_conditions.get_default_data(
-				Bdy_Magnetic_Field(),
+				Boundary_Magnetic_Field(),
 				time,
 				c[0], c[1], c[2],
 				r, lat, lon
@@ -123,10 +123,10 @@ template <
 	// set non-default magnetic field
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(Bdy_Magnetic_Field());
+		i < initial_conditions.get_number_of_regions(Boundary_Magnetic_Field());
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(Bdy_Magnetic_Field(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(Boundary_Magnetic_Field(), i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
@@ -137,7 +137,7 @@ template <
 				lon = atan2(c[1], c[0]);
 
 			const auto magnetic_field = initial_conditions.get_data(
-				Bdy_Magnetic_Field(),
+				Boundary_Magnetic_Field(),
 				geometry_id,
 				time,
 				c[0], c[1], c[2],
@@ -169,27 +169,20 @@ when given a simulation cell's data.
 \param [vacuum_permeability] https://en.wikipedia.org/wiki/Vacuum_permeability
 */
 template <
-	class Bdy_Magnetic_Field,
 	class Geometries,
 	class Init_Cond,
-	class Background_Magnetic_Field,
 	class Cell,
 	class Geometry,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
 	class Magnetic_Field_Getter,
-	class Background_Magnetic_Field_Pos_X_Getter,
-	class Background_Magnetic_Field_Pos_Y_Getter,
-	class Background_Magnetic_Field_Pos_Z_Getter,
 	class Mass_Density_Flux_Getter,
 	class Momentum_Density_Flux_Getter,
-	class Total_Energy_Density_Flux_Getter,
-	class Magnetic_Field_Flux_Getter
-> void initialize(
+	class Total_Energy_Density_Flux_Getter
+> void initialize_fluid(
 	const Geometries& geometries,
 	Init_Cond& initial_conditions,
-	const Background_Magnetic_Field& bg_B,
 	dccrg::Dccrg<Cell, Geometry>& grid,
 	const std::vector<uint64_t>& cells,
 	const double time,
@@ -201,33 +194,14 @@ template <
 	const Momentum_Density_Getter Mom,
 	const Total_Energy_Density_Getter Nrj,
 	const Magnetic_Field_Getter Mag,
-	const Background_Magnetic_Field_Pos_X_Getter Bg_B_Pos_X,
-	const Background_Magnetic_Field_Pos_Y_Getter Bg_B_Pos_Y,
-	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z,
 	const Mass_Density_Flux_Getter Mas_f,
 	const Momentum_Density_Flux_Getter Mom_f,
-	const Total_Energy_Density_Flux_Getter Nrj_f,
-	const Magnetic_Field_Flux_Getter Mag_f
+	const Total_Energy_Density_Flux_Getter Nrj_f
 ) {
 	if (verbose and grid.get_rank() == 0) {
 		std::cout << "Setting default MHD state... ";
 		std::cout.flush();
 	}
-
-	initialize_magnetic_field<Bdy_Magnetic_Field>(
-		geometries,
-		initial_conditions,
-		bg_B,
-		grid,
-		cells,
-		time,
-		vacuum_permeability,
-		Mag,
-		Bg_B_Pos_X,
-		Bg_B_Pos_Y,
-		Bg_B_Pos_Z,
-		Mag_f
-	);
 
 	// set default state
 	for (const auto cell_id: cells) {
