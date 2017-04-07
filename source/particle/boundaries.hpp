@@ -67,7 +67,7 @@ template<
 	dccrg::Dccrg<Cell_Data, Geometry>& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& geometries,
-	const Solver_Info_Getter& Sol_Info
+	const Solver_Info_Getter Sol_Info
 ) {
 	Cell_Data::set_transfer_all(true, pamhd::particle::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);

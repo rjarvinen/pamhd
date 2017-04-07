@@ -85,7 +85,8 @@ template<
 	class Boundary_Temperature_Getter,
 	class Boundary_Nr_Particles_Getter,
 	class Boundary_Charge_To_Mass_Ratio_Getter,
-	class Boundary_Species_Mass_Getter
+	class Boundary_Species_Mass_Getter,
+	class Solver_Info_Getter
 > size_t initialize(
 	const Sim_Geometries& geometries,
 	Init_Cond& initial_conditions,
@@ -111,7 +112,8 @@ template<
 	const Boundary_Temperature_Getter Bdy_T,
 	const Boundary_Nr_Particles_Getter Bdy_Nr_Par,
 	const Boundary_Charge_To_Mass_Ratio_Getter Bdy_C2M,
-	const Boundary_Species_Mass_Getter Bdy_SpM
+	const Boundary_Species_Mass_Getter Bdy_SpM,
+	const Solver_Info_Getter Sol_Info
 ) {
 	if (verbose && grid.get_rank() == 0) {
 		std::cout << "Setting initial particle state... ";
