@@ -454,6 +454,7 @@ if __name__ == '__main__':
 	times_infiles = sorted([(get_simulation_time(f), f) for f in args.dc_file])
 
 	mhd_data = dict()
+	sim_params, ref_lvl_0_cells, grid_start, lvl_0_cell_length = None, None, None, None
 	for item in times_infiles:
 		sim_params, ref_lvl_0_cells, grid_start, lvl_0_cell_length \
 			= load_mhd(item[1], mhd_data, args.fields_min_x, args.fields_max_x, args.fields_min_y, args.fields_max_y, args.fields_min_z, args.fields_max_z)
