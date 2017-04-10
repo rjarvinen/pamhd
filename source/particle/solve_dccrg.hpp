@@ -286,18 +286,23 @@ template<
 				cell_center[2] + cell_length[2]
 			};
 
+		// calculate max length of time step for next step from cell-centered values
+		const auto E_centered = [&](){
+			if (E_is_derived_quantity) {
+				return JmV(*cell_data).cross(Mag(*cell_data));
+			} else {
+				return JmV(*cell_data);
+			}
+		}();
+		const decltype(E_centered) B_centered = Mag(*cell_data) + bg_B.get_background_field(
+			{cell_center[0], cell_center[1], cell_center[2]},
+			vacuum_permeability
+		);
+
 		for (size_t i = 0; i < Part_Int(*cell_data).size(); i++) {
 			auto particle = Part_Int(*cell_data)[i]; // reference faster?
 
-			// calculate max length of time step for next step from cell-centered values
-			const auto E_centered = [&](){
-				if (E_is_derived_quantity) {
-					return JmV(*cell_data).cross(Mag(*cell_data));
-				} else {
-					return JmV(*cell_data);
-				}
-			}();
-
+			// TODO check accurately only for most restrictive particle(s) in each cell?
 			max_time_step = std::min(
 				max_time_step,
 				get_minmax_step(
@@ -309,7 +314,7 @@ template<
 					Part_C2M(particle),
 					Part_Vel(particle),
 					E_centered,
-					Mag(*cell_data)
+					B_centered
 				).second
 			);
 
