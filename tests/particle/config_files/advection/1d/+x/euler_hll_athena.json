@@ -19,7 +19,7 @@
 	"poisson-norm-increase-max": 10,
 	"grid-options": {
 		"periodic": "{true, true, true}",
-		"cells": "{10 + 1, 1, 1}",
+		"cells": "{10, 1, 1}",
 		"volume": "{1, 1, 1}",
 		"start": "{0, 0, 0}"
 	},
