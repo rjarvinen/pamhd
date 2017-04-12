@@ -200,9 +200,9 @@ const auto Part_RV2
 	};
 
 // reference to accumulated number of particles in given cell
-const auto Accu_Total_Nr_Part
-	= [](Cell& cell_data)->typename pamhd::particle::Nr_Accumulated_To_Cells::data_type&{
-		return cell_data[pamhd::particle::Nr_Accumulated_To_Cells()];
+const auto Nr_Particles
+	= [](Cell& cell_data)->typename pamhd::particle::Number_Of_Particles::data_type&{
+		return cell_data[pamhd::particle::Number_Of_Particles()];
 	};
 
 const auto Bulk_Mass_Getter
@@ -879,7 +879,7 @@ int main(int argc, char* argv[])
 			Part_SpM_Cell,
 			Part_Mom,
 			Part_RV2,
-			Accu_Total_Nr_Part,
+			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
@@ -906,7 +906,7 @@ int main(int argc, char* argv[])
 			options_particle.adiabatic_index,
 			options_particle.vacuum_permeability,
 			options_particle.boltzmann,
-			Accu_Total_Nr_Part,
+			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
@@ -1592,54 +1592,6 @@ int main(int argc, char* argv[])
 		Save simulation to disk
 		*/
 
-		// MHD data
-		if (
-			(
-				options_mhd.save_mhd_n >= 0
-				and (
-					simulation_time == options_particle.time_start
-					or simulation_time >= time_end
-				)
-			) or (options_mhd.save_mhd_n > 0 and simulation_time >= next_mhd_save)
-		) {
-			if (next_mhd_save <= simulation_time) {
-				next_mhd_save
-					+= options_mhd.save_mhd_n
-					* ceil((simulation_time - next_mhd_save) / options_mhd.save_mhd_n);
-			}
-
-			if (rank == 0) {
-				cout << "Saving MHD at time " << simulation_time << endl;
-			}
-
-			if (
-				not pamhd::mhd::save(
-					boost::filesystem::canonical(
-						boost::filesystem::path(options_particle.output_directory)
-					).append("mhd_").generic_string(),
-					grid,
-					2,
-					simulation_time,
-					options_particle.adiabatic_index,
-					options_particle.proton_mass,
-					options_particle.vacuum_permeability,
-					pamhd::mhd::MHD_State_Conservative(),
-					pamhd::mhd::Electric_Current_Density(),
-					pamhd::particle::Solver_Info(),
-					pamhd::mhd::MPI_Rank(),
-					pamhd::mhd::Resistivity(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
-				)
-			) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					"Couldn't save mhd result."
-					<< std::endl;
-				abort();
-			}
-		}
-
 		// particles
 		if (
 			(options_particle.save_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))
@@ -1681,7 +1633,6 @@ int main(int argc, char* argv[])
 			}
 		}
 
-
 		if (
 			(
 				options_mhd.save_mhd_n >= 0
@@ -1698,7 +1649,7 @@ int main(int argc, char* argv[])
 			}
 
 			if (verbose and rank == 0) {
-				cout << "Saving MHD at time " << simulation_time << endl;
+				cout << "Saving MHD at time " << simulation_time << "... ";
 			}
 
 			if (
