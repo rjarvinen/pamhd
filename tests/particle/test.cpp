@@ -865,10 +865,6 @@ int main(int argc, char* argv[])
 			abort();
 		}
 
-		if (verbose && grid.get_rank() == 0) {
-			cout << "Accumulating particles at time " << simulation_time << " s" << endl;
-		}
-
 		pamhd::particle::accumulate_mhd_data(
 			inner_cells,
 			outer_cells,
