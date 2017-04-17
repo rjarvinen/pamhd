@@ -172,7 +172,7 @@ const auto Part_Des
 	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
 		return particle[pamhd::particle::Destination_Cell()];
 	};
-// reference
+// reference to mass of given particle's species
 const auto Part_SpM
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Species_Mass::data_type&{
 		return particle[pamhd::particle::Species_Mass()];
