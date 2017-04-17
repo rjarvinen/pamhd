@@ -77,7 +77,7 @@ private:
 
 	bool E_is_derived;
 
-	const Eigen::Vector3d& bg_B;
+	const Eigen::Vector3d bg_B;
 
 public:
 
@@ -95,7 +95,7 @@ public:
 		const std::array<Eigen::Vector3d, 27>& given_current_minus_velocity,
 		const std::array<Eigen::Vector3d, 27>& given_magnetic_field,
 		const bool given_E_is_derived,
-		const Eigen::Vector3d& given_bg_B = {0, 0, 0}
+		const Eigen::Vector3d given_bg_B = {0, 0, 0}
 	) :
 		charge_to_mass_ratio(given_charge_to_mass_ratio),
 		data_start(given_data_start),
@@ -142,11 +142,6 @@ public:
 		change[1]
 			= this->charge_to_mass_ratio
 			* (E_at_pos + state[1].cross(B_at_pos + this->bg_B));
-		/*std::cout
-			<< "v: " << state[1][0] << ", " << state[1][1] << ", " << state[1][2]
-			<< ", E: " << E_at_pos[0] << ", " << E_at_pos[1] << ", " << E_at_pos[2]
-			<< ", B: " << B_at_pos[0] << ", " << B_at_pos[1] << ", " << B_at_pos[2]
-			<< std::endl;*/
 	};
 };
 

@@ -1,7 +1,7 @@
 /*
 Particle-assisted magnetohydrodynamics.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ particles represent one of the fluids.
 #include "boost/filesystem.hpp"
 #include "boost/lexical_cast.hpp"
 #include "boost/numeric/odeint.hpp"
-#include "boost/program_options.hpp"
 #include "dccrg.hpp"
 #include "dccrg_cartesian_geometry.hpp"
 #include "Eigen/Core" // must be included before gensimcell
@@ -41,9 +40,6 @@ particles represent one of the fluids.
 #include "mpi.h" // must be included before gensimcell
 #include "gensimcell.hpp"
 
-#include "boundaries/copy_boundary.hpp"
-#include "boundaries/initial_condition.hpp"
-#include "boundaries/value_boundaries.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
 #include "mhd/boundaries.hpp"
@@ -71,31 +67,6 @@ for explanation of items identical to ones in those files
 unsigned long long int next_particle_id;
 
 int Poisson_Cell::transfer_switch = Poisson_Cell::INIT;
-
-struct Number_Density {
-	using data_type = double;
-	static std::string get_name() { return std::string("Bulk number density"); }
-	static std::string get_option_name() { return std::string("bulk-number-density"); }
-	static std::string get_option_help() { return std::string(""); }
-};
-struct Temperature {
-	using data_type = double;
-	static std::string get_name() { return std::string("Bulk temperature"); }
-	static std::string get_option_name() { return std::string("bulk-temperature"); }
-	static std::string get_option_help() { return std::string(""); }
-};
-struct Nr_Particles_In_Cell {
-	using data_type = double;
-	static std::string get_name() { return std::string("Nr particles in cell"); }
-	static std::string get_option_name() { return std::string("nr-particles-in-cell"); }
-	static std::string get_option_help() { return std::string(""); }
-};
-struct Replace_Particles {
-	using data_type = double;
-	static std::string get_name() { return std::string("Replace particles"); }
-	static std::string get_option_name() { return std::string("replace-particles"); }
-	static std::string get_option_help() { return std::string("Whether to replace (> 0) or add (<= 0) particles with create_particles()"); }
-};
 
 
 // cell class used by this program
@@ -399,697 +370,520 @@ int main(int argc, char* argv[])
 	}
 
 
-	pamhd::boundaries::Initial_Condition<
-		uint64_t,
-		double,
-		std::array<double, 3>,
-		pamhd::mhd::Magnetic_Field
-	> initial_field;
-
-	pamhd::boundaries::Value_Boundaries<
-		uint64_t,
-		double,
-		double,
-		std::array<double, 3>,
-		pamhd::mhd::Magnetic_Field
-	> value_bdy_field;
-
-	pamhd::boundaries::Copy_Boundary<
-		uint64_t,
-		double,
-		std::array<double, 3>
-	> copy_bdy_field;
-
-	std::vector<
-		// one initial condition for each population
-		pamhd::boundaries::Initial_Condition<
-			uint64_t,
-			double,
-			std::array<double, 3>,
-			Number_Density,
-			Temperature,
-			pamhd::particle::Bulk_Velocity,
-			Nr_Particles_In_Cell,
-			pamhd::particle::Charge_Mass_Ratio,
-			pamhd::particle::Species_Mass,
-			Replace_Particles
-		>
-	> initial_particles;
-
-	pamhd::boundaries::Value_Boundaries<
-		uint64_t,
-		double,
-		double,
-		std::array<double, 3>,
-		Number_Density,
-		Temperature,
-		pamhd::particle::Bulk_Velocity,
-		Nr_Particles_In_Cell,
-		pamhd::particle::Charge_Mass_Ratio,
-		pamhd::particle::Species_Mass
-	> value_bdy_particle;
-
-	pamhd::boundaries::Copy_Boundary<
-		uint64_t,
-		double,
-		std::array<double, 3>
-	> copy_bdy_particle;
-
-	pamhd::boundaries::Initial_Condition<
-		uint64_t,
-		double,
-		std::array<double, 3>,
-		pamhd::mhd::Number_Density,
-		pamhd::mhd::Velocity,
-		pamhd::mhd::Pressure
-	> init_cond_fluid1;
-
-	pamhd::boundaries::Value_Boundaries<
-		uint64_t,
-		double,
-		double,
-		std::array<double, 3>,
-		pamhd::mhd::Number_Density,
-		pamhd::mhd::Velocity,
-		pamhd::mhd::Pressure
-	> value_bdy_fluid1;
-
-	pamhd::boundaries::Copy_Boundary<
-		uint64_t,
-		double,
-		std::array<double, 3>
-	> copy_bdy_fluid1;
-
-	pamhd::grid::Options grid_options;
-	grid_options.data.set_expression(pamhd::grid::Number_Of_Cells(), "{1, 1, 1}");
-	grid_options.data.set_expression(pamhd::grid::Volume(), "{1, 1, 1}");
-	grid_options.data.set_expression(pamhd::grid::Start(), "{0, 0, 0}");
-	grid_options.data.set_expression(pamhd::grid::Periodic(), "{false, false, false}");
-
-	bool verbose = false;
-	size_t
-		poisson_iterations_max = 1000,
-		poisson_iterations_min = 0,
-		nr_initial_populations = 1;
-	double
-		max_time_step = std::numeric_limits<double>::infinity(),
-		save_mhd_n = -1,
-		save_particle_n = -1,
-		start_time = 0,
-		end_time = 1,
-		time_step_factor = 0.5,
-		remove_div_B_n = 0.1,
-		poisson_norm_stop = 1e-10,
-		poisson_norm_increase_max = 10,
-		adiabatic_index = 5.0 / 3.0,    
-		vacuum_permeability = 4e-7 * M_PI,
-		proton_mass = 1.672621777e-27,
-		particle_temp_nrj_ratio = 1.3806488e-23;
-
-	std::string
-		mhd_solver_str("hll_athena"),
-		config_file_name(""),
-		lb_name("RCB"),
-		output_directory("./");
-
-	boost::program_options::options_description
-		general_options("Usage: program_name [options], where options are"),
-		initial_field_options(""),
-		initial_particle_options(""),
-		initial_fluid_options(""),
-		value_boundary_options(""),
-		copy_boundary_options("");
-
-	// handle general options
-	general_options.add_options()
-		("help", "Print this help message")
-		("verbose", "Print run time information")
-		("initial-help", "Print help for initial condition options")
-		("config-file",
-			boost::program_options::value<std::string>(&config_file_name)
-				->default_value(config_file_name),
-			"Read options also from file arg (command line has priority, "
-			"not read if empty string)")
-		("output-directory",
-			boost::program_options::value<std::string>(&output_directory)
-				->default_value(output_directory),
-			"Output simulation results into directory arg (relative to "
-			"current working directory, must include final dir separator")
-		("time-start",
-			boost::program_options::value<double>(&start_time)
-				->default_value(start_time),
-			"Start time of simulation (s)")
-		("time-length",
-			boost::program_options::value<double>(&end_time)
-				->default_value(end_time),
-			"Length of simulation (s)")
-		("save-particle-n",
-			boost::program_options::value<double>(&save_particle_n)
-				->default_value(save_particle_n),
-			"Save results every arg seconds, 0 saves "
-			"initial and final states, -1 doesn't save")
-		("save-mhd-n",
-			boost::program_options::value<double>(&save_mhd_n)
-				->default_value(save_mhd_n),
-			"Save fluid results every arg seconds, 0 saves "
-			"initial and final states, -1 doesn't save")
-		("nr-initial-populations",
-			boost::program_options::value<size_t>(&nr_initial_populations)
-				->default_value(nr_initial_populations),
-			"Number of initial particle populations")
-		("time-step-factor",
-			boost::program_options::value<double>(&time_step_factor)
-				->default_value(time_step_factor),
-			"Multiply maximum allowed time step (CFL condition) with factor arg")
-		("max-time-step",
-			boost::program_options::value<double>(&max_time_step)
-				->default_value(max_time_step),
-			"Maximum length of simulation time step, before " "physical/mathematical/numerical considerations")
-		("vacuum-permeability",
-			boost::program_options::value<double>(&vacuum_permeability)
-				->default_value(vacuum_permeability),
-			"https://en.wikipedia.org/wiki/Vacuum_permeability in V*s/(A*m)")
-		("adiabatic-index",
-			boost::program_options::value<double>(&adiabatic_index)
-				->default_value(adiabatic_index),
-			"https://en.wikipedia.org/wiki/Heat_capacity_ratio")
-		("proton-mass",
-			boost::program_options::value<double>(&proton_mass)
-				->default_value(proton_mass),
-			"Mass of a proton in kg")
-		("load-balancer",
-			boost::program_options::value<std::string>(&lb_name)
-				->default_value(lb_name),
-			"Load balancing algorithm to use (for example RANDOM, "
-			"RCB, HSFC, HYPERGRAPH; for a list of available algorithms see "
-			"http://www.cs.sandia.gov/zoltan/ug_html/ug_alg.html)")
-		("solver-mhd",
-			boost::program_options::value<std::string>(&mhd_solver_str)
-				->default_value(mhd_solver_str),
-			"MHD solver to use, one of: hll_athena")
-		("remove-div-B-n",
-			boost::program_options::value<double>(&remove_div_B_n)
-				->default_value(remove_div_B_n),
-			"Remove divergence of magnetic field every arg seconds (<= 0 doesn't remove)")
-		("boltzmann",
-			boost::program_options::value<double>(&particle_temp_nrj_ratio)
-				->default_value(particle_temp_nrj_ratio),
-			"Ratio of energy and temperature when calculating particle velocities (J/K, Boltzmann constant)");
-
-
-	grid_options.add_options("grid.", general_options);
-	initial_field.add_initialization_options("initial-field.", general_options);
-	init_cond_fluid1.add_initialization_options("initial-fluid.", general_options);
-	value_bdy_field.add_initialization_options("field-value-boundaries.", general_options);
-	value_bdy_fluid1.add_initialization_options("value-boundary-fluid.", general_options);
-	copy_bdy_field.add_initialization_options("field-copy-boundaries.", general_options);
-	copy_bdy_fluid1.add_initialization_options("copy-boundary-fluid.", general_options);
-	value_bdy_particle.add_initialization_options("particle-value-boundaries.", general_options);
-	copy_bdy_particle.add_initialization_options("particle-copy-boundaries.", general_options);
-
-	boost::program_options::variables_map option_variables;
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(general_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options: " << e.what()
+	// read and parse json data from configuration file
+	if (argc != 2) {
+		if (argc < 2 and rank == 0) {
+			std::cerr
+				<< "Name of configuration file required."
 				<< std::endl;
 		}
-		abort();
-	}
-	boost::program_options::notify(option_variables);
-
-	if (option_variables.count("help") > 0) {
-		if (rank == 0) {
-			cout << general_options << endl;
+		if (argc > 2 and rank == 0) {
+			std::cerr
+				<< "Too many arguments given to " << argv[0]
+				<< ": " << argc - 1 << ", should be 1"
+				<< std::endl;
 		}
 		MPI_Finalize();
-		return EXIT_SUCCESS;
+		return EXIT_FAILURE;
 	}
 
-	if (option_variables.count("verbose") > 0) {
-		verbose = true;
-	}
-
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					general_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse general options from file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-		boost::program_options::notify(option_variables);
-	}
-
-	if (option_variables.count("help") > 0) {
+	std::ifstream json_file(argv[1]);
+	if (not json_file.good()) {
 		if (rank == 0) {
-			cout << general_options << endl;
+			std::cerr << "Couldn't open configuration file " << argv[1] << std::endl;
 		}
 		MPI_Finalize();
-		return EXIT_SUCCESS;
+		return EXIT_FAILURE;
 	}
 
-	initial_field.add_options("initial-field.", initial_field_options);
-	value_bdy_field.add_options("field-value-boundaries.", value_boundary_options);
-	copy_bdy_field.add_options("field-copy-boundaries.", copy_boundary_options);
-	value_bdy_particle.add_options("particle-value-boundaries.", value_boundary_options);
-	copy_bdy_particle.add_options("particle-copy-boundaries.", value_boundary_options);
-	init_cond_fluid1.add_options("initial-fluid.", initial_fluid_options);
-	value_bdy_fluid1.add_options("value-boundary-fluid.", value_boundary_options);
-	copy_bdy_fluid1.add_options("copy-boundary-fluid.", copy_boundary_options);
+	std::string json{
+		std::istreambuf_iterator<char>(json_file),
+		std::istreambuf_iterator<char>()
+	};
 
-	// field initial condition
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(initial_field_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "initial condition of magnetic field: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
+	rapidjson::Document document;
+	document.Parse(json.c_str());
+	if (document.HasParseError()) {
+		std::cerr << "Couldn't parse json data in file " << argv[1]
+			<< " at character position " << document.GetErrorOffset()
+			<< ": " << rapidjson::GetParseError_En(document.GetParseError())
+			<< std::endl;
+		MPI_Finalize();
+		return EXIT_FAILURE;
 	}
-	if (config_file_name != "") {
+
+	// options
+	pamhd::particle::Options options_particle{document};
+	pamhd::mhd::Options options_mhd{document};
+
+	if (rank == 0 and options_particle.output_directory != "") {
 		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					initial_field_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for initial condition "
-					<< "of magnetic field from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-	// fluid initial condition
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(initial_fluid_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "initial condition of magnetic field: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
-	}
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					initial_fluid_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for initial condition "
-					<< "of magnetic field from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-	// add particle init options
-	initial_particles.resize(nr_initial_populations);
-	for (size_t i = 0; i < initial_particles.size(); i++) {
-		initial_particles[i].add_initialization_options(
-			"initial-particles.population" + boost::lexical_cast<std::string>(i + 1) + ".",
-			initial_particle_options
-		);
-	}
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(initial_particle_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "initial condition of particles: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
-	}
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					initial_particle_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for initial condition "
-					<< "of particles from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-	for (size_t i = 0; i < initial_particles.size(); i++) {
-		initial_particles[i].add_options(
-			"initial-particles.population" + boost::lexical_cast<std::string>(i + 1) + ".",
-			initial_particle_options
-		);
-	}
-
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(initial_particle_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "initial condition of particles: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
-	}
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					initial_particle_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for initial condition "
-					<< "of particles from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-	// value boundary options
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(value_boundary_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "value boundary conditions: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
-	}
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					value_boundary_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for value boundaries "
-					<< "from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-	// copy boundary options
-	try {
-		boost::program_options::store(
-			boost::program_options::command_line_parser(argc, argv)
-				.options(copy_boundary_options)
-				.allow_unregistered()
-				.run(),
-			option_variables
-		);
-	} catch (std::exception& e) {
-		if (rank == 0) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't parse command line options for "
-				<< "copy boundary conditions: "
-				<< e.what()
-				<< std::endl;
-		}
-		abort();
-	}
-	if (config_file_name != "") {
-		try {
-			boost::program_options::store(
-				boost::program_options::parse_config_file<char>(
-					config_file_name.c_str(),
-					copy_boundary_options,
-					true
-				),
-				option_variables
-			);
-		} catch (std::exception& e) {
-			if (rank == 0) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-					<< "Couldn't parse options for copy boundaries "
-					<< "from configuration file "
-					<< config_file_name << ": " << e.what()
-					<< std::endl;
-			}
-			abort();
-		}
-	}
-	boost::program_options::notify(option_variables);
-
-
-	if (rank == 0 and output_directory != "") {
-		try {
-			boost::filesystem::create_directories(output_directory);
+			boost::filesystem::create_directories(options_particle.output_directory);
 		} catch (const boost::filesystem::filesystem_error& e) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
-				"Couldn't create output directory " << output_directory << ": "
+				"Couldn't create output directory "
+				<< options_particle.output_directory << ": "
 				<< e.what()
 				<< std::endl;
 			abort();
 		}
 	}
+	/* TODO if (rank == 0 and options_mhd.output_directory != "") {
+		try {
+			boost::filesystem::create_directories(options_particle.output_directory);
+		} catch (const boost::filesystem::filesystem_error& e) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
+				"Couldn't create output directory "
+				<< options_particle.output_directory << ": "
+				<< e.what()
+				<< std::endl;
+			abort();
+		}
+	}*/
+
+	int particle_stepper = -1;
+	if (options_particle.solver == "euler") {
+		particle_stepper = 0;
+	} else if (options_particle.solver == "midpoint") {
+		particle_stepper = 1;
+	} else if (options_particle.solver == "rk4") {
+		particle_stepper = 2;
+	} else if (options_particle.solver == "rkck54") {
+		particle_stepper = 3;
+	} else if (options_particle.solver == "rkf78") {
+		particle_stepper = 4;
+	} else {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+			<< "Unsupported solver: " << options_particle.solver
+			<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
+			<< std::endl;
+		abort();
+	}
 
 
-	Grid grid;
+	using geometry_id_t = unsigned int;
+
+	pamhd::boundaries::Geometries<
+		geometry_id_t,
+		std::array<double, 3>,
+		double,
+		uint64_t
+	> geometries;
+	geometries.set(document);
+
+
+
+
+
+
+	pamhd::boundaries::Multivariable_Initial_Conditions<
+		geometry_id_t,
+		pamhd::mhd::Number_Density,
+		pamhd::mhd::Number_Density2,
+		pamhd::mhd::Velocity,
+		pamhd::mhd::Velocity2,
+		pamhd::mhd::Pressure,
+		pamhd::mhd::Pressure2,
+		pamhd::mhd::Magnetic_Field
+	> initial_conditions;
+	initial_conditions.set(document);
+
+	pamhd::boundaries::Multivariable_Boundaries<
+		uint64_t,
+		geometry_id_t,
+		pamhd::mhd::Number_Density,
+		pamhd::mhd::Number_Density2,
+		pamhd::mhd::Velocity,
+		pamhd::mhd::Velocity2,
+		pamhd::mhd::Pressure,
+		pamhd::mhd::Pressure2,
+		pamhd::mhd::Magnetic_Field
+	> boundaries;
+	boundaries.set(document);
+
+	pamhd::mhd::Background_Magnetic_Field<
+		pamhd::mhd::Magnetic_Field::data_type
+	> background_B;
+	background_B.set(document);
+
+
+
+
+	pamhd::boundaries::Multivariable_Initial_Conditions<
+		geometry_id_t,
+		pamhd::particle::Magnetic_Field
+	> initial_conditions_fields;
+	initial_conditions_fields.set(document);
+
+	// separate initial and (TODO) boundary conditions for each particle population
+	std::vector<
+		pamhd::boundaries::Multivariable_Initial_Conditions<
+			geometry_id_t,
+			pamhd::particle::Bdy_Number_Density,
+			pamhd::particle::Bdy_Temperature,
+			pamhd::particle::Bdy_Velocity,
+			pamhd::particle::Bdy_Nr_Particles_In_Cell,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Species_Mass
+		>
+	> initial_conditions_particles;
+	for (size_t population_id = 0; population_id < 99; population_id++) {
+		const auto& obj_population_i
+			= document.FindMember(
+				(
+					"particle-population-"
+					+ boost::lexical_cast<std::string>(population_id)
+				).c_str()
+			);
+		if (obj_population_i == document.MemberEnd()) {
+			if (population_id == 0) {
+				continue; // allow population ids to start from 0 and 1
+			} else {
+				break;
+			}
+		}
+		const auto& obj_population = obj_population_i->value;
+
+		const auto old_size = initial_conditions_particles.size();
+		initial_conditions_particles.resize(old_size + 1);
+		initial_conditions_particles[old_size].set(obj_population);
+	}
+
+	pamhd::mhd::Background_Magnetic_Field<
+		pamhd::mhd::Magnetic_Field::data_type
+	> background_B;
+	background_B.set(document);
+
+
+	const auto mhd_solver
+		= [&options_mhd, &background_B, &rank](){
+			if (options_mhd.solver == "rusanov") {
+
+				return pamhd::mhd::get_flux_rusanov<
+					pamhd::mhd::MHD_Conservative,
+					pamhd::mhd::Magnetic_Field::data_type,
+					pamhd::mhd::Mass_Density,
+					pamhd::mhd::Momentum_Density,
+					pamhd::mhd::Total_Energy_Density,
+					pamhd::mhd::Magnetic_Field
+				>;
+
+			} else if (options_mhd.solver == "hll-athena") {
+
+				return pamhd::mhd::athena::get_flux_hll<
+					pamhd::mhd::MHD_Conservative,
+					pamhd::mhd::Magnetic_Field::data_type,
+					pamhd::mhd::Mass_Density,
+					pamhd::mhd::Momentum_Density,
+					pamhd::mhd::Total_Energy_Density,
+					pamhd::mhd::Magnetic_Field
+				>;
+
+			} /* TODO else if (options_mhd.solver == "hlld-athena") {
+
+				if (background_B.exists() and rank == 0) {
+					std::cout << "NOTE: background magnetic field ignored by hlld-athena solver." << std::endl;
+				}
+
+				return pamhd::mhd::athena::get_flux_hlld<
+					pamhd::mhd::MHD_Conservative,
+					pamhd::mhd::Magnetic_Field::data_type,
+					pamhd::mhd::Mass_Density,
+					pamhd::mhd::Momentum_Density,
+					pamhd::mhd::Total_Energy_Density,
+					pamhd::mhd::Magnetic_Field
+				>;
+
+			} else if (options_mhd.solver == "roe-athena") {
+
+				if (background_B.exists() and rank == 0) {
+					std::cout << "NOTE: background magnetic field ignored by roe-athena solver." << std::endl;
+				}
+
+				return pamhd::mhd::athena::get_flux_roe<
+					pamhd::mhd::MHD_Conservative,
+					pamhd::mhd::Magnetic_Field::data_type,
+					pamhd::mhd::Mass_Density,
+					pamhd::mhd::Momentum_Density,
+					pamhd::mhd::Total_Energy_Density,
+					pamhd::mhd::Magnetic_Field
+				>;
+			} */else {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+					<< "Unsupported solver: " << options_mhd.solver
+					<< std::endl;
+				abort();
+			}
+		}();
+
 
 	/*
-	Set/update derived grid parameters based on given options
+	Prepare resistivity
 	*/
 
-	// muparserx doesn't support uint64_t so convert from int
-	const auto nr_cells_tmp
-		= grid_options.data.get_data(pamhd::grid::Number_Of_Cells());
+	pamhd::boundaries::Math_Expression<pamhd::mhd::Resistivity> resistivity;
+	mup::Value J_val;
+	mup::Variable J_var(&J_val);
+	resistivity.add_expression_variable("J", J_var);
 
-	const std::array<uint64_t, 3> number_of_cells{{
-		uint64_t(nr_cells_tmp[0]),
-		uint64_t(nr_cells_tmp[1]),
-		uint64_t(nr_cells_tmp[2])
-	}};
+	const auto resistivity_name = pamhd::mhd::Resistivity::get_option_name();
+	if (not document.HasMember(resistivity_name.c_str())) {
+		if (rank == 0) {
+			std::cerr << __FILE__ "(" << __LINE__
+				<< "): Configuration file doesn't have a "
+				<< resistivity_name << " key."
+				<< std::endl;
+		};
+		MPI_Finalize();
+		return EXIT_FAILURE;
+	}
+	const auto& json_resistivity = document[resistivity_name.c_str()];
+	if (not json_resistivity.IsString()) {
+		if (rank == 0) {
+			std::cerr << __FILE__ "(" << __LINE__
+				<< "): Resistivity option is not of type string."
+				<< std::endl;
+		};
+		MPI_Finalize();
+		return EXIT_FAILURE;
+	}
 
-	const std::array<double, 3>
-		simulation_volume
-			= grid_options.data.get_data(pamhd::grid::Volume()),
-		cell_volume{{
-			simulation_volume[0] / number_of_cells[0],
-			simulation_volume[1] / number_of_cells[1],
-			simulation_volume[2] / number_of_cells[2]
-		}};
+	resistivity.set_expression(json_resistivity.GetString());
+
+
+	/*
+	Initialize simulation grid
+	*/
+	Grid grid;
+
+	pamhd::grid::Options grid_options;
+	grid_options.set(document);
 
 	const unsigned int neighborhood_size = 1;
-	const auto periodic = grid_options.data.get_data(pamhd::grid::Periodic());
-	if (
-		not grid.initialize(
-			number_of_cells,
-			comm,
-			lb_name.c_str(),
-			neighborhood_size,
-			0,
-			periodic[0],
-			periodic[1],
-			periodic[2]
-		)
-	) {
+	const auto& number_of_cells = grid_options.get_number_of_cells();
+	const auto& periodic = grid_options.get_periodic();
+	if (not grid.initialize(
+		number_of_cells,
+		comm,
+		options_particle.lb_name.c_str(),
+		neighborhood_size,
+		0,
+		periodic[0],
+		periodic[1],
+		periodic[2]
+	)) {
 		std::cerr << __FILE__ << ":" << __LINE__
 			<< ": Couldn't initialize grid."
 			<< std::endl;
 		abort();
 	}
 
+	// set grid geometry
+	const std::array<double, 3>
+		simulation_volume
+			= grid_options.get_volume(),
+		cell_volume{
+			simulation_volume[0] / number_of_cells[0],
+			simulation_volume[1] / number_of_cells[1],
+			simulation_volume[2] / number_of_cells[2]
+		};
+
 	dccrg::Cartesian_Geometry::Parameters geom_params;
-	geom_params.start = grid_options.data.get_data(pamhd::grid::Start());
+	geom_params.start = grid_options.get_start();
 	geom_params.level_0_cell_length = cell_volume;
 
 	if (not grid.set_geometry(geom_params)) {
-		std::cerr << __FILE__ << "(" << __LINE__ << "): "
-			<< "Couldn't set grid geometry."
+		std::cerr << __FILE__ << ":" << __LINE__
+			<< ": Couldn't set grid geometry."
 			<< std::endl;
 		abort();
 	}
 
 	grid.balance_load();
 
-	// create copies of remote neighbor cells' data
-	grid.update_copies_of_remote_neighbors();
+	// update owner process of cells for saving into file
+	for (auto& cell: grid.cells) {
+		(*cell.data)[pamhd::mhd::MPI_Rank()] = rank;
+	}
 
-	const auto
-		inner_cell_ids = grid.get_local_cells_not_on_process_boundary(),
-		outer_cell_ids = grid.get_local_cells_on_process_boundary(),
-		remote_cell_ids = grid.get_remote_cells_on_process_boundary(),
-		cell_ids = grid.get_cells();
-	auto
-		mhd_inner_cell_ids = inner_cell_ids,
-		mhd_outer_cell_ids = outer_cell_ids;
+	// assign cells into boundary geometries
+	for (const auto& cell: grid.cells) {
+		const auto
+			start = grid.geometry.get_min(cell.id),
+			end = grid.geometry.get_max(cell.id);
+		geometries.overlaps(start, end, cell.id);
+	}
+
+	// pointer to data of every local cell and its neighbor(s)
+	const auto& cell_data_pointers = grid.get_cell_data_pointers();
+
+	// index of first outer cell in dccrg's cell data pointer cache
+	size_t outer_cell_start_i = 0;
+	for (const auto& item: cell_data_pointers) {
+		outer_cell_start_i++;
+		if (get<0>(item) == dccrg::error_cell) {
+			break;
+		}
+	}
+
 
 	/*
-	Initialize
+	Simulate
 	*/
 
+	const double time_end = options_particle.time_start + options_particle.time_length;
+	double
+		max_dt = 0,
+		simulation_time = options_particle.time_start,
+		next_particle_save = options_particle.save_n,
+		next_mhd_save = options_mhd.save_mhd_n,
+		next_rem_div_B = options_mhd.remove_div_B_n;
+
+	std::vector<uint64_t>
+		cells = grid.get_cells(),
+		inner_cells = grid.get_local_cells_not_on_process_boundary(),
+		outer_cells = grid.get_local_cells_on_process_boundary(),
+		remote_cells = grid.get_remote_cells_on_process_boundary();
+
+
 	if (verbose and rank == 0) {
-		cout << "Initializing magnetic field... " << endl;
-	}
-	pamhd::initialize_field(
-		initial_field,
-		grid,
-		cell_ids,
-		0,
-		Mag
-	);
-	if (verbose and rank == 0) {
-		cout << "done." << endl;
+		cout << "Initializing particles and magnetic field... " << endl;
 	}
 
-	// set initial condition
+	pamhd::mhd::initialize_magnetic_field<pamhd::particle::Magnetic_Field>(
+		geometries,
+		initial_conditions_fields,
+		background_B,
+		grid,
+		cells,
+		simulation_time,
+		options_particle.vacuum_permeability,
+		Mag, Mag_f,
+		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
+	);
+
+	// update background field between processes
+	Cell::set_transfer_all(
+		true,
+		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+	);
+	grid.update_copies_of_remote_neighbors();
+	Cell::set_transfer_all(
+		false,
+		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+	);
+
+	// initialize resistivity
+	for (auto& cell: grid.cells) {
+		Res(*cell.data) = 0;
+	}
+
+	/* TODO pamhd::mhd::apply_magnetic_field_boundaries(
+		grid,
+		boundaries,
+		geometries,
+		simulation_time,
+		Mag
+	);*/
+
+
+	pamhd::mhd::N_initialize(
+		geometries,
+		initial_conditions,
+		background_B,
+		grid,
+		cells,
+		simulation_time,
+		options_mhd.adiabatic_index,
+		options_mhd.vacuum_permeability,
+		options_mhd.proton_mass,
+		verbose,
+		Mas1, Mas2, Mom1, Mom2, Nrj1, Nrj2, Mag,
+		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
+		Mas1_f, Mas2_f, Mom1_f, Mom2_f, Nrj1_f, Nrj2_f, Mag_f
+	);
+
+	/*pamhd::mhd::N_apply_boundaries(
+		grid,
+		boundaries,
+		geometries,
+		simulation_time,
+		Mas1, Mas2,
+		Mom1, Mom2,
+		Nrj1, Nrj2,
+		Mag,
+		options_mhd.proton_mass,
+		options_mhd.adiabatic_index,
+		options_mhd.vacuum_permeability
+	);*/
+
+
 	std::mt19937_64 random_source;
 
-	if (verbose and rank == 0) {
-		cout << "Initializing particles... " << endl;
-	}
-	for (size_t i = 0; i < initial_particles.size(); i++) {
-		bool replace = false;
-		if (
-			initial_particles[i].default_data.get_data(
-				Replace_Particles(), {{0, 0, 0}}, 0
-			) > 0
-		) {
-			replace = true;
-		}
-		const auto nr_particles_created
-			= pamhd::particle::initialize<
-				Number_Density,
-				Temperature,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Bulk_Velocity,
-				Nr_Particles_In_Cell,
-				pamhd::particle::Particles_Internal,
-				pamhd::particle::Particle_Internal,
-				pamhd::particle::Mass,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Position,
-				pamhd::particle::Velocity,
-				pamhd::particle::Particle_ID,
-				pamhd::particle::Species_Mass
-			>(
-				initial_particles[i],
-				start_time,
-				cell_ids,
-				grid,
-				random_source,
-				particle_temp_nrj_ratio,
-				next_particle_id,
-				grid.get_comm_size(),
-				replace,
-				verbose
-			);
+	unsigned long long int nr_particles_created = 0;
+	for (auto& init_cond_part: initial_conditions_particles) {
+		nr_particles_created = pamhd::particle::initialize_particles<
+			pamhd::particle::Particle_Internal,
+			pamhd::particle::Mass,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Position,
+			pamhd::particle::Velocity,
+			pamhd::particle::Particle_ID,
+			pamhd::particle::Species_Mass
+		>(
+			geometries,
+			init_cond_part,
+			simulation_time,
+			cells,
+			grid,
+			random_source,
+			options_particle.boltzmann,
+			next_particle_id,
+			grid.get_comm_size(),
+			false,
+			true,
+			Part_Int,
+			Bdy_N,
+			Bdy_V,
+			Bdy_T,
+			Bdy_Nr_Par,
+			Bdy_SpM,
+			Bdy_C2M,
+			Sol_Info
+		);
 		next_particle_id += nr_particles_created * grid.get_comm_size();
 	}
+
+	// TODO: apply boundaries
+
 	if (verbose and rank == 0) {
-		cout << "done." << endl;
+		cout << "done initializing particles and fields." << endl;
+	}
+
+
+	/*
+	TODO Classify cells into normal, boundary and dont_solve
+	*/
+	/*pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
+		grid, boundaries, geometries, Sol_Info
+	);*/
+	for (const auto& cell: grid.cells) {
+		Sol_Info(*cell.data) = pamhd::particle::Solver_Info::normal;
+	}
+	// make lists from above for divergence removal functions
+	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
+	for (const auto& cell: grid.cells) {
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			skip_cells.push_back(cell.id);
+		} else if (Sol_Info(*cell.data) > 0) {
+			bdy_cells.push_back(cell.id);
+		} else {
+			solve_cells.push_back(cell.id);
+		}
 	}
 
 	/*
@@ -1169,28 +963,6 @@ int main(int argc, char* argv[])
 	}
 
 
-	const auto mhd_solver
-		= [&mhd_solver_str](){
-			if (mhd_solver_str == "hll_athena") {
-
-				return pamhd::mhd::athena::get_flux_N_hll<
-					pamhd::mhd::MHD_State_Conservative::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
-			} else {
-
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ") Invalid solver: "
-					<< mhd_solver_str << ", use --help to list available solvers"
-					<< std::endl;
-				abort();
-			}
-		}();
-
-
 	double
 		max_dt = 0,
 		simulation_time = start_time,
@@ -1198,38 +970,7 @@ int main(int argc, char* argv[])
 		next_mhd_save = simulation_time + save_mhd_n,
 		next_rem_div_B = simulation_time + remove_div_B_n;
 
-	pamhd::mhd::Boundary_Classifier<pamhd::mhd::Cell_Type> bdy_classifier_fluid1;
-	pamhd::mhd::Boundary_Classifier<pamhd::particle::Cell_Type_Particle> bdy_classifier_particle;
-	pamhd::mhd::Boundary_Classifier<pamhd::mhd::Cell_Type_Field> bdy_classifier_field;
-
-	bdy_classifier_fluid1.classify<
-		pamhd::mhd::Value_Boundary_Id,
-		pamhd::mhd::Copy_Source
-	>(
-		simulation_time,
-		grid,
-		value_bdy_fluid1,
-		copy_bdy_fluid1
-	);
-	bdy_classifier_particle.classify<
-		pamhd::particle::Value_Boundary_Id_Particle,
-		pamhd::particle::Copy_Source_Particle
-	>(
-		simulation_time,
-		grid,
-		value_bdy_particle,
-		copy_bdy_particle
-	);
-	bdy_classifier_field.classify<
-		pamhd::mhd::Value_Boundary_Id_Field,
-		pamhd::mhd::Copy_Source_Field
-	>(
-		simulation_time,
-		grid,
-		value_bdy_field,
-		copy_bdy_field
-	);
-
+	...
 	size_t simulated_steps = 0;
 	while (simulation_time < end_time) {
 		simulated_steps++;
@@ -1668,170 +1409,8 @@ int main(int argc, char* argv[])
 		}
 
 
-		/*
-		Boundaries
-		*/
 
-		const auto& cell_data_pointers = grid.get_cell_data_pointers();
-
-		// value boundaries
-		for (const auto& cell_item: cell_data_pointers) {
-			const auto& cell_id = get<0>(cell_item);
-			if (cell_id == dccrg::error_cell) {
-				continue;
-			}
-
-			// skip neighbor cells
-			const auto& offset = get<2>(cell_item);
-			if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-				continue;
-			}
-
-			auto* const cell_data = get<1>(cell_item);
-
-			// field(s)
-			if ((*cell_data)[pamhd::mhd::Cell_Type_Field()] == bdy_classifier_field.value_boundary_cell) {
-				const auto& bdy_id = (*cell_data)[pamhd::mhd::Value_Boundary_Id_Field()];
-				const auto cell_center = grid.geometry.get_center(cell_id);
-				Mag(*cell_data)
-					= value_bdy_field.get_data(
-						pamhd::mhd::Magnetic_Field(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-			}
-
-			// fluid
-			if ((*cell_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.value_boundary_cell) {
-				const auto& bdy_id = (*cell_data)[pamhd::mhd::Value_Boundary_Id()];
-				const auto cell_center = grid.geometry.get_center(cell_id);
-
-				const auto mass_density
-					= proton_mass * value_bdy_fluid1.get_data(
-						pamhd::mhd::Number_Density(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-				const auto velocity
-					= value_bdy_fluid1.get_data(
-						pamhd::mhd::Velocity(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-				const auto pressure
-					= value_bdy_fluid1.get_data(
-						pamhd::mhd::Pressure(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-
-				Mas1(*cell_data) = mass_density;
-				Mom1(*cell_data) = mass_density * velocity;
-				if (mass_density > 0 and pressure > 0) {
-					Nrj1(*cell_data) = pamhd::mhd::get_total_energy_density(
-						mass_density,
-						velocity,
-						pressure,
-						// add magnetic field contribution after particles
-						std::array<double, 3>{{0, 0, 0}},
-						adiabatic_index,
-						vacuum_permeability
-					);
-				} else {
-					Nrj1(*cell_data) = 0;
-				}
-			}
-
-			// particles
-			if ((*cell_data)[pamhd::particle::Cell_Type_Particle()] == bdy_classifier_particle.value_boundary_cell) {
-				const auto& bdy_id = (*cell_data)[pamhd::mhd::Value_Boundary_Id()];
-				const auto
-					cell_start = grid.geometry.get_min(cell_id),
-					cell_end = grid.geometry.get_max(cell_id),
-					cell_length = grid.geometry.get_length(cell_id),
-					cell_center = grid.geometry.get_center(cell_id);
-
-				const auto
-					number_density
-						= value_bdy_particle.get_data(
-							Number_Density(),
-							bdy_id,
-							cell_center,
-							simulation_time
-						),
-					temperature
-						= value_bdy_particle.get_data(
-							Temperature(),
-							bdy_id,
-							cell_center,
-							simulation_time
-						),
-					charge_mass_ratio
-						= value_bdy_particle.get_data(
-							pamhd::particle::Charge_Mass_Ratio(),
-							bdy_id,
-							cell_center,
-							simulation_time
-						),
-					species_mass
-						= value_bdy_particle.get_data(
-							pamhd::particle::Species_Mass(),
-							bdy_id,
-							cell_center,
-							simulation_time
-						),
-					mass_density = number_density * species_mass,
-					mass
-						= mass_density
-						* cell_length[0]
-						* cell_length[1]
-						* cell_length[2];
-
-				const auto bulk_velocity
-					= value_bdy_particle.get_data(
-						pamhd::particle::Bulk_Velocity(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-				const auto nr_particles
-					= value_bdy_particle.get_data(
-						Nr_Particles_In_Cell(),
-						bdy_id,
-						cell_center,
-						simulation_time
-					);
-
-				(*cell_data)[pamhd::particle::Particles_Internal()]
-					= pamhd::particle::create_particles<
-						pamhd::particle::Particle_Internal,
-						pamhd::particle::Mass,
-						pamhd::particle::Charge_Mass_Ratio,
-						pamhd::particle::Position,
-						pamhd::particle::Velocity,
-						pamhd::particle::Particle_ID,
-						pamhd::particle::Species_Mass
-					>(
-						bulk_velocity,
-						Eigen::Vector3d{cell_start[0], cell_start[1], cell_start[2]},
-						Eigen::Vector3d{cell_end[0], cell_end[1], cell_end[2]},
-						Eigen::Vector3d{temperature, temperature, temperature},
-						nr_particles,
-						charge_mass_ratio,
-						mass,
-						species_mass,
-						particle_temp_nrj_ratio,
-						random_source,
-						next_particle_id,
-						grid.get_comm_size()
-					);
-				next_particle_id += nr_particles * grid.get_comm_size();
-
-				pamhd::particle::fill_mhd_fluid_values(
+				/*pamhd::particle::fill_mhd_fluid_values(
 					{cell_id},
 					grid,
 					adiabatic_index,
@@ -1843,45 +1422,20 @@ int main(int argc, char* argv[])
 					Bulk_Relative_Velocity2_Getter,
 					Particle_List_Getter,
 					Mas2, Mom2, Nrj2, Mag
-				);
-			}
+				);*/
 
 			// add magnetic nrj to fluid boundary cells
-			if ((*cell_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.value_boundary_cell) {
+			/*if ((*cell_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.value_boundary_cell) {
 				const auto& bdy_id = (*cell_data)[pamhd::mhd::Value_Boundary_Id()];
 
 				const auto mass_frac
 					= Mas1(*cell_data)
 					/ (Mas1(*cell_data) + Mas2(*cell_data));
 				Nrj1(*cell_data) += mass_frac * 0.5 * Mag(*cell_data).squaredNorm() / vacuum_permeability;
-			}
-		}
-
-		// provide up-to-date data for copy boundaries
-		Cell::set_transfer_all(
-			true,
-			pamhd::mhd::Magnetic_Field(),
-			pamhd::mhd::HD1_State(),
-			pamhd::mhd::Cell_Type_Field(),
-			pamhd::mhd::Cell_Type(),
-			pamhd::particle::Cell_Type_Particle(),
-			pamhd::particle::Nr_Particles_External(),
-			pamhd::particle::Nr_Particles_Internal()
-		);
-		grid.update_copies_of_remote_neighbors();
-		Cell::set_transfer_all(
-			false,
-			pamhd::mhd::Magnetic_Field(),
-			pamhd::mhd::HD1_State(),
-			pamhd::mhd::Cell_Type_Field(),
-			pamhd::mhd::Cell_Type(),
-			pamhd::particle::Cell_Type_Particle(),
-			pamhd::particle::Nr_Particles_External(),
-			pamhd::particle::Nr_Particles_Internal()
-		);
+			}*/
 
 		// update particle lists
-		pamhd::particle::resize_receiving_containers<
+		/*pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_Internal,
 			pamhd::particle::Particles_Internal
 		>(remote_cell_ids, grid);
@@ -1899,143 +1453,9 @@ int main(int argc, char* argv[])
 			false,
 			pamhd::particle::Particles_Internal(),
 			pamhd::particle::Particles_External()
-		);
+		);*/
 
-		// copy boundaries
-		for (const auto& cell_item: cell_data_pointers) {
-			const auto& cell_id = get<0>(cell_item);
-			if (cell_id == dccrg::error_cell) {
-				continue;
-			}
-
-			const auto& offset = get<2>(cell_item);
-			if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-				continue;
-			}
-
-			auto* const target_data = get<1>(cell_item);
-
-			// fields
-			if ((*target_data)[pamhd::mhd::Cell_Type_Field()] == bdy_classifier_field.copy_boundary_cell) {
-				const auto& source_id = (*target_data)[pamhd::mhd::Copy_Source_Field()];
-				auto* const source_data = grid[source_id];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for source cell: " << source_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-				Mag(*target_data) = Mag(*source_data);
-			}
-
-			// fluid
-			if ((*target_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.copy_boundary_cell) {
-				const auto& source_id = (*target_data)[pamhd::mhd::Copy_Source()];
-				auto* const source_data = grid[source_id];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for source cell: " << source_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-
-				Mas1(*target_data) = Mas1(*source_data);
-				Mom1(*target_data) = Mom1(*source_data);
-				Nrj1(*target_data) = Nrj1(*source_data);
-			}
-
-			// particles
-			if ((*target_data)[pamhd::particle::Cell_Type_Particle()] == bdy_classifier_particle.copy_boundary_cell) {
-				const auto& source_id = (*target_data)[pamhd::particle::Copy_Source_Particle()];
-				auto* const source_data = grid[source_id];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for source cell: " << source_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-
-				if ((*source_data)[pamhd::particle::Particles_External()].size() != 0) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						"Source cell has external particles: " << source_id
-						<< std::endl;
-					abort();
-				}
-
-				const auto& src_particles = (*source_data)[pamhd::particle::Particles_Internal()];
-				const auto src_nr_particles = src_particles.size();
-				const auto src_bulk_velocity
-					= pamhd::particle::get_bulk_velocity<
-						pamhd::particle::Mass,
-						pamhd::particle::Velocity,
-						pamhd::particle::Species_Mass
-					>(src_particles);
-				const auto src_temperature
-					= pamhd::particle::get_temperature<
-						pamhd::particle::Mass,
-						pamhd::particle::Velocity,
-						pamhd::particle::Species_Mass
-					>(src_particles, particle_temp_nrj_ratio);
-
-				double
-					src_charge_mass_ratio = 0,
-					src_species_mass = 0,
-					src_mass = 0;
-				for (const auto src_particle: src_particles) {
-					src_mass += src_particle[pamhd::particle::Mass()];
-					src_species_mass += src_particle[pamhd::particle::Species_Mass()];
-					src_charge_mass_ratio += src_particle[pamhd::particle::Charge_Mass_Ratio()];
-				}
-				src_species_mass /= src_nr_particles;
-				src_charge_mass_ratio /= src_nr_particles;
-
-				const auto
-					target_start = grid.geometry.get_min(cell_id),
-					target_end = grid.geometry.get_max(cell_id);
-
-				(*target_data)[pamhd::particle::Particles_Internal()]
-					= pamhd::particle::create_particles<
-						pamhd::particle::Particle_Internal,
-						pamhd::particle::Mass,
-						pamhd::particle::Charge_Mass_Ratio,
-						pamhd::particle::Position,
-						pamhd::particle::Velocity,
-						pamhd::particle::Particle_ID,
-						pamhd::particle::Species_Mass
-					>(
-						src_bulk_velocity,
-						Eigen::Vector3d{target_start[0], target_start[1], target_start[2]},
-						Eigen::Vector3d{target_end[0], target_end[1], target_end[2]},
-						Eigen::Vector3d{src_temperature, src_temperature, src_temperature},
-						src_nr_particles,
-						src_charge_mass_ratio,
-						src_mass,
-						src_species_mass,
-						particle_temp_nrj_ratio,
-						random_source,
-						next_particle_id,
-						grid.get_comm_size()
-					);
-				next_particle_id += src_nr_particles * grid.get_comm_size();
-
-				pamhd::particle::fill_mhd_fluid_values(
-					{cell_id},
-					grid,
-					adiabatic_index,
-					vacuum_permeability,
-					particle_temp_nrj_ratio,
-					Number_Of_Particles_Getter,
-					Bulk_Mass_Getter,
-					Bulk_Momentum_Getter,
-					Bulk_Relative_Velocity2_Getter,
-					Particle_List_Getter,
-					Mas2, Mom2, Nrj2, Mag
-				);
-			}
-		}
+		// TODO copy boundaries
 
 		/*
 		Save result(s) to file(s)

@@ -249,7 +249,7 @@ if 'background-magnetic-field' in form_data:
 		print 'background magnetic field value missing from form data:<br>'
 		print_form_data(form_data)
 		exit()
-	bg_B['values'] = [
+	bg_B['value'] = [
 		float(form_data.getfirst('background-B-value-x')),
 		float(form_data.getfirst('background-B-value-y')),
 		float(form_data.getfirst('background-B-value-z'))
