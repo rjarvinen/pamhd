@@ -69,7 +69,9 @@ which doesn't use generic cell
 */
 int Poisson_Cell::transfer_switch = Poisson_Cell::INIT;
 
+// data stored in every cell of simulation grid
 using Cell = pamhd::mhd::Cell2;
+// simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 // reference magnetic field in given cell

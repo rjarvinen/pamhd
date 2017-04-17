@@ -72,7 +72,9 @@ Copy boundaries have no effect in this program and shouldn't be used in config f
 using namespace std;
 namespace odeint = boost::numeric::odeint;
 
+// data stored in every cell of simulation grid
 using Cell = pamhd::particle::Cell_test_particle;
+// simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 

@@ -69,7 +69,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 using namespace std;
 namespace odeint = boost::numeric::odeint;
 
+// data stored in every cell of simulation grid
 using Cell = pamhd::particle::Cell_hyb_particle;
+// simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 
