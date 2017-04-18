@@ -1240,7 +1240,6 @@ int main(int argc, char* argv[])
 			pamhd::mhd::Magnetic_Field(),
 			pamhd::mhd::HD1_State(),
 			pamhd::mhd::HD2_State(),
-			//pamhd::mhd::Cell_Type_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid.start_remote_neighbor_copy_updates();
@@ -1368,7 +1367,6 @@ int main(int argc, char* argv[])
 			pamhd::mhd::Magnetic_Field(),
 			pamhd::mhd::HD1_State(),
 			pamhd::mhd::HD2_State(),
-			//pamhd::mhd::Cell_Type_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 
@@ -1717,18 +1715,9 @@ int main(int argc, char* argv[])
 					pamhd::mhd::HD2_State(),
 					pamhd::mhd::Magnetic_Field(),
 					pamhd::mhd::Electric_Current_Density(),
-					//pamhd::mhd::Cell_Type(),
 					pamhd::mhd::MPI_Rank(),
 					pamhd::mhd::Resistivity()
 				)
-					/*pamhd::mhd::MHD_State_Conservative(),
-					pamhd::mhd::Electric_Current_Density(),
-					pamhd::particle::Solver_Info(),
-					pamhd::mhd::MPI_Rank(),
-					pamhd::mhd::Resistivity(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()*/
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
 					"Couldn't save mhd result."
