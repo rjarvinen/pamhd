@@ -278,7 +278,8 @@ int plot_1d(
 	const std::string& pressure_cmd,
 	const std::string& velocity_cmd,
 	const std::string& magnetic_field_cmd,
-	const std::string& current_density_cmd
+	const std::string& current_density_cmd,
+	const std::string& total_density_pressure_cmd
 ) {
 	const string gnuplot_file_name(output_file_name_prefix + ".dat");
 	ofstream gnuplot_file(gnuplot_file_name);
@@ -412,6 +413,49 @@ int plot_1d(
 		}
 	}
 	gnuplot_file << "end\nreset\n";
+
+	// total mass density and pressure
+	gnuplot_file
+		<< common_cmd
+		<< "\nset output '"
+		<< output_file_name_prefix + ".png"
+		<< "'\nset xlabel 'Dimension "
+		<< to_string(tube_dim + 1)
+		<< "'\nset xrange [" << to_string(tube_start)
+		<< " : " << to_string(tube_end)
+		<< "]\n" << total_density_pressure_cmd
+		<< "\nplot "
+		     "'-' using 1:2 axes x1y1 with line linewidth 2, "
+		     "'-' u 1:2 axes x1y2 w l lt 3 lw 2\n";
+
+	for (const auto& cell_id: cells) {
+		const auto
+			mas1 = simulation_data.at(cell_id)[HD1_State()][Mass_Density()],
+			mas2 = simulation_data.at(cell_id)[HD2_State()][Mass_Density()],
+			tot = mas1 + mas2;
+		const auto x = geometry.get_center(cell_id)[tube_dim];
+		gnuplot_file << x << " " << tot << "\n";
+	}
+	gnuplot_file << "end\n";
+
+	for (const auto& cell_id: cells) {
+		const auto
+			&hd1_data = simulation_data.at(cell_id)[HD1_State()],
+			&hd2_data = simulation_data.at(cell_id)[HD2_State()];
+		const auto x = geometry.get_center(cell_id)[tube_dim];
+		gnuplot_file
+			<< x << " "
+			<< get_pressure(
+				hd1_data[Mass_Density()] + hd2_data[Mass_Density()],
+				hd1_data[Momentum_Density()] + hd2_data[Momentum_Density()],
+				hd1_data[Total_Energy_Density()] + hd2_data[Total_Energy_Density()],
+				simulation_data.at(cell_id)[Magnetic_Field()],
+				adiabatic_index,
+				vacuum_permeability
+			) << "\n";
+	}
+	gnuplot_file << "end\nreset\n";
+
 
 	// total velocity
 	gnuplot_file
@@ -1051,6 +1095,16 @@ int main(int argc, char* argv[])
 		velocity_plot_1d("set ylabel \"Velocity\""),
 		magnetic_field_plot_1d("set ylabel \"Magnetic field\""),
 		current_density_plot_1d("set ylabel \"Current density\""),
+		total_density_pressure_plot_1d(
+			"set ylabel \"Mass density\" textcolor lt 1\n"
+			"set y2label \"Pressure\" textcolor lt 3\n"
+			"unset key\n"
+			"set ytics nomirror\n"
+			"set format x '%.2e'\n"
+			"set format y '%.2e'\n"
+			"set format y2 '%.2e'\n"
+			"set y2tics auto"
+		),
 		common_plot_2d(
 			"set term png enhanced size 800, 600\n"
 			"set pal gray\n"
@@ -1086,6 +1140,10 @@ int main(int argc, char* argv[])
 			boost::program_options::value<std::string>(&pressure_plot_1d)
 				->default_value(pressure_plot_1d),
 			"Gnuplot command(s) for plotting pressure in 1d")
+		("total-density-pressure-1d",
+			boost::program_options::value<std::string>(&total_density_pressure_plot_1d)
+				->default_value(total_density_pressure_plot_1d),
+			"Gnuplot command(s) for plotting mass density in 1d")
 		("velocity-1d",
 			boost::program_options::value<std::string>(&velocity_plot_1d)
 				->default_value(velocity_plot_1d),
@@ -1251,7 +1309,8 @@ int main(int argc, char* argv[])
 				pressure_plot_1d,
 				velocity_plot_1d,
 				magnetic_field_plot_1d,
-				current_density_plot_1d
+				current_density_plot_1d,
+				total_density_pressure_plot_1d
 			);
 			break;
 		case 2:
