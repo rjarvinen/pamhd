@@ -251,14 +251,18 @@ template <
 
 		Mas(*cell_data) = mass_density;
 		Mom(*cell_data) = mass_density * velocity;
-		Nrj(*cell_data) = get_total_energy_density(
-			mass_density,
-			velocity,
-			pressure,
-			Mag(*cell_data),
-			adiabatic_index,
-			vacuum_permeability
-		);
+		if (mass_density > 0 and pressure > 0) {
+			Nrj(*cell_data) = get_total_energy_density(
+				mass_density,
+				velocity,
+				pressure,
+				Mag(*cell_data),
+				adiabatic_index,
+				vacuum_permeability
+			);
+		} else {
+			Nrj(*cell_data) = 0;
+		}
 	}
 
 	if (verbose and grid.get_rank() == 0) {
@@ -373,14 +377,18 @@ template <
 				abort();
 			}
 
-			Nrj(*cell_data) = get_total_energy_density(
-				Mas(*cell_data),
-				Mom(*cell_data) / Mas(*cell_data),
-				pressure,
-				Mag(*cell_data),
-				adiabatic_index,
-				vacuum_permeability
-			);
+			if (Mas(*cell_data) > 0 and pressure > 0) {
+				Nrj(*cell_data) = get_total_energy_density(
+					Mas(*cell_data),
+					Mom(*cell_data) / Mas(*cell_data),
+					pressure,
+					Mag(*cell_data),
+					adiabatic_index,
+					vacuum_permeability
+				);
+			} else {
+				Nrj(*cell_data) = 0;
+			}
 		}
 	}
 
