@@ -799,7 +799,7 @@ int main(int argc, char* argv[])
 			options_particle.boltzmann,
 			next_particle_id,
 			grid.get_comm_size(),
-			true,
+			false,
 			true,
 			Part_Int,
 			Bdy_N,
