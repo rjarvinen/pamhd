@@ -1178,15 +1178,6 @@ int main(int argc, char* argv[])
 			pamhd::particle::Nr_Particles_External()
 		);
 
-
-
-
-
-
-
-
-
-
 		// transfer J for calculating additional contributions to B
 		Cell::set_transfer_all(true, pamhd::mhd::Electric_Current_Density());
 		grid.start_remote_neighbor_copy_updates();
