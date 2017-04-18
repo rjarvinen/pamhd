@@ -1622,6 +1622,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		// mhd
 		if (
 			(
 				options_mhd.save_mhd_n >= 0

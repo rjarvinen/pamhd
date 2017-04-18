@@ -70,6 +70,7 @@ particles represent one of the fluids.
 
 
 using namespace std;
+namespace odeint = boost::numeric::odeint;
 
 /*
 See comments in ../mhd/two_test.cpp and ../particle/test.cpp
@@ -383,6 +384,19 @@ const auto Mag_f
 	};*/
 
 
+// references to background magnetic fields
+const auto Bg_B_Pos_X
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
+	};
+const auto Bg_B_Pos_Y
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Y()];
+	};
+const auto Bg_B_Pos_Z
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Z()];
+	};
 
 // flux / total change of magnetic field over one time step
 const auto Mag_f
@@ -835,19 +849,24 @@ int main(int argc, char* argv[])
 		Res(*cell.data) = 0;
 	}
 
-	// set B to 0 before initializing fluids to get correct total energy
+	// zero B before initializing fluids to get correct total energy
+	for (auto& cell: grid.cells) {
+		Mag(*cell.data) = {0, 0, 0};
+	}
+
+	// fluid 1
 	pamhd::mhd::initialize_fluid(
 		geometries,
-		initial_conditions,
+		initial_conditions_fluid,
 		grid,
 		cells,
 		simulation_time,
 		options_mhd.adiabatic_index,
 		options_mhd.vacuum_permeability,
 		options_mhd.proton_mass,
-		verbose,
+		true,
 		Mas1, Mom1, Nrj1, Mag,
-		Mas_f, Mom_f, Nrj_f
+		Mas1_f, Mom1_f, Nrj1_f
 	);
 
 	// particles
@@ -887,12 +906,52 @@ int main(int argc, char* argv[])
 		next_particle_id += nr_particles_created * grid.get_comm_size();
 	}
 
-	// accumulate particle data to fluid 2
+	// fluid 2 from particles
+	accumulate_mhd_data(
+		inner_cells,
+		outer_cells,
+		grid,
+		Part_Int,
+		Part_Pos,
+		Part_Mas_Cell,
+		Part_SpM_Cell,
+		Part_Mom,
+		Part_RV2,
+		Nr_Particles,
+		Bulk_Mass_Getter,
+		Bulk_Momentum_Getter,
+		Bulk_Relative_Velocity2_Getter,
+		Bulk_Velocity_Getter,
+		Accu_List_Number_Of_Particles_Getter,
+		Accu_List_Bulk_Mass_Getter,
+		Accu_List_Bulk_Momentum_Getter,
+		Accu_List_Bulk_Relative_Velocity2_Getter,
+		Accu_List_Target_Getter,
+		Accu_List_Length_Getter,
+		Accu_List_Getter,
+		pamhd::particle::Nr_Accumulated_To_Cells(),
+		pamhd::particle::Accumulated_To_Cells(),
+		pamhd::particle::Bulk_Velocity()
+	);
+
+	pamhd::particle::fill_mhd_fluid_values(
+		cells,
+		grid,
+		options_mhd.adiabatic_index,
+		options_mhd.vacuum_permeability,
+		options_particle.boltzmann,
+		Nr_Particles,
+		Bulk_Mass_Getter,
+		Bulk_Momentum_Getter,
+		Bulk_Relative_Velocity2_Getter,
+		Part_Int,
+		Mas2, Mom2, Nrj2, Mag
+	);
 
 	// magnetic field
 	pamhd::mhd::initialize_magnetic_field<pamhd::mhd::Magnetic_Field>(
 		geometries,
-		initial_conditions,
+		initial_conditions_fluid,
 		background_B,
 		grid,
 		cells,
@@ -916,70 +975,14 @@ int main(int argc, char* argv[])
 		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
 	);
 
-	/*
-	Add contribution of magnetic field energy to total energy of fluid 1
-	*/
-
-	// accumulate particle mass to Mas2 for fluid total energy adjustment
-	for (const auto& cell: grid.cells) {
-		// accumulate below doesn't zero the variable
-		Bulk_Mass_Getter(*cell.data) = 0;
-	}
-	pamhd::particle::accumulate(
-		cell_ids,
-		grid,
-		Part_Int,
-		Particle_Position_Getter,
-		Particle_Mass_Getter,
-		Bulk_Mass_Getter,
-		Accu_List_Bulk_Mass_Getter,
-		Accu_List_Target_Getter,
-		Accu_List_Length_Getter,
-		Accu_List_Getter
-	);
-
-	Cell::set_transfer_all(true, pamhd::particle::Nr_Accumulated_To_Cells());
-	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::particle::Nr_Accumulated_To_Cells());
-
-	pamhd::particle::allocate_accumulation_lists(
-		grid,
-		Accu_List_Getter,
-		Accu_List_Length_Getter
-	);
-
-	Cell::set_transfer_all(true, pamhd::particle::Accumulated_To_Cells());
-	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::particle::Accumulated_To_Cells());
-
-	pamhd::particle::accumulate_from_remote_neighbors(
-		grid,
-		Bulk_Mass_Getter,
-		Accu_List_Bulk_Mass_Getter,
-		Accu_List_Target_Getter,
-		Accu_List_Getter
-	);
-	for (const auto& cell: grid.cells) {
-		const auto length = grid.geometry.get_length(cell.id);
-		const auto volume = length[0] * length[1] * length[2];
-		Mas2(*cell.data) = Bulk_Mass_Getter(*cell.data) / volume;
-	}
-
-	// add magnetic field contribution to total energy density
-	for (const auto& cell: grid.cells) {
-		const auto
-			total_mass = Mas1(*cell.data) + Mas2(*cell.data),
-			mass_frac1 = Mas1(*cell.data) / total_mass;
-		Nrj1(*cell.data) += mass_frac1 * 0.5 * Mag(*cell.data).squaredNorm() / options_mhd.vacuum_permeability;
-	}
-
+	// add magnetic field contribution to total energy densities
 	for (const auto& cell: grid.cells) {
 		const auto
 			total_mass = Mas1(*cell.data) + Mas2(*cell.data),
 			mass_frac1 = Mas1(*cell.data) / total_mass,
 			mass_frac2 = Mas2(*cell.data) / total_mass;
-		Nrj1(*cell_data) += mass_frac1 * 0.5 * Mag(*cell_data).squaredNorm() / vacuum_permeability;
-		Nrj2(*cell_data) += mass_frac2 * 0.5 * Mag(*cell_data).squaredNorm() / vacuum_permeability;
+		Nrj1(*cell.data) += mass_frac1 * 0.5 * Mag(*cell.data).squaredNorm() / options_mhd.vacuum_permeability;
+		Nrj2(*cell.data) += mass_frac2 * 0.5 * Mag(*cell.data).squaredNorm() / options_mhd.vacuum_permeability;
 	}
 
 
@@ -1011,21 +1014,14 @@ int main(int argc, char* argv[])
 	}
 
 
-	double
-		max_dt = 0,
-		simulation_time = start_time,
-		next_particle_save = simulation_time + save_particle_n,
-		next_mhd_save = simulation_time + save_mhd_n,
-		next_rem_div_B = simulation_time + remove_div_B_n;
-
 	size_t simulated_steps = 0;
-	while (simulation_time < end_time) {
+	while (simulation_time < time_end) {
 		simulated_steps++;
 
 		double
 			// don't step over the final simulation time
-			until_end = end_time - simulation_time,
-			local_time_step = min(min(time_step_factor * max_dt, until_end), max_time_step),
+			until_end = time_end - simulation_time,
+			local_time_step = min(min(options_mhd.time_step_factor * max_dt, until_end), max_dt),
 			time_step = -1;
 
 		if (
@@ -1049,12 +1045,12 @@ int main(int argc, char* argv[])
 			outer_cells,
 			grid,
 			Part_Int,
-			Particle_Position_Getter,
-			Particle_Mass_Getter,
-			Particle_Species_Mass_Getter,
-			Particle_Momentum_Getter,
-			Particle_Relative_Velocity2_Getter,
-			Number_Of_Particles_Getter,
+			Part_Pos,
+			Part_Mas_Cell,
+			Part_SpM_Cell,
+			Part_Mom,
+			Part_RV2,
+			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
@@ -1076,12 +1072,12 @@ int main(int argc, char* argv[])
 		grid.start_remote_neighbor_copy_updates();
 
 		pamhd::particle::fill_mhd_fluid_values(
-			cell_ids,
+			cells,
 			grid,
 			options_mhd.adiabatic_index,
 			options_mhd.vacuum_permeability,
 			options_particle.boltzmann,
-			Number_Of_Particles_Getter,
+			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
@@ -1182,24 +1178,65 @@ int main(int argc, char* argv[])
 
 		max_dt = std::numeric_limits<double>::max();
 
-		// outer particles
-		max_dt = min(
-			max_dt,
-			pamhd::particle::solve<
-				pamhd::particle::Current_Minus_Velocity,
-				pamhd::mhd::Magnetic_Field,
-				pamhd::particle::Nr_Particles_External,
-				pamhd::particle::Particles_Internal,
-				pamhd::particle::Particles_External,
-				pamhd::particle::Position,
-				pamhd::particle::Velocity,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Mass,
-				pamhd::particle::Destination_Cell,
-				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
-			>(time_step, outer_cells, grid)
-		);
+		// TODO: don't use preprocessor
+		#define SOLVE_WITH_STEPPER(given_type, given_cells) \
+			pamhd::particle::solve<\
+				given_type\
+			>(\
+				time_step,\
+				given_cells,\
+				grid,\
+				background_B,\
+				options_particle.vacuum_permeability,\
+				true,\
+				Ele,\
+				Mag,\
+				Nr_Ext,\
+				Part_Int,\
+				Part_Ext,\
+				Part_Pos,\
+				Part_Vel,\
+				Part_C2M,\
+				Part_Mas,\
+				Part_Des\
+			)
 
+		// outer cells
+		switch (particle_stepper) {
+		case 0:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, outer_cells)
+			);
+			break;
+		case 1:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, outer_cells)
+			);
+			break;
+		case 2:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, outer_cells)
+			);
+			break;
+		case 3:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, outer_cells)
+			);
+			break;
+		case 4:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, outer_cells)
+			);
+			break;
+		default:
+			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
+			abort();
+		}
 
 		Cell::set_transfer_all(
 			true,
@@ -1229,13 +1266,12 @@ int main(int argc, char* argv[])
 			std::make_pair(Mom1, Mom2),
 			std::make_pair(Nrj1, Nrj2),
 			Mag,
+			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
 			std::make_pair(Mas1_f, Mas2_f),
 			std::make_pair(Mom1_f, Mom2_f),
 			std::make_pair(Nrj1_f, Nrj2_f),
 			Mag_f,
-			Cell_t,
-			bdy_classifier_fluid1.normal_cell,
-			bdy_classifier_fluid1.dont_solve_cell
+			Sol_Info_P
 		);
 		max_dt = min(
 			max_dt,
@@ -1243,29 +1279,49 @@ int main(int argc, char* argv[])
 		);
 
 		// inner particles
-		max_dt = min(
-			max_dt,
-			pamhd::particle::solve<
-				pamhd::particle::Current_Minus_Velocity,
-				pamhd::mhd::Magnetic_Field,
-				pamhd::particle::Nr_Particles_External,
-				pamhd::particle::Particles_Internal,
-				pamhd::particle::Particles_External,
-				pamhd::particle::Position,
-				pamhd::particle::Velocity,
-				pamhd::particle::Charge_Mass_Ratio,
-				pamhd::particle::Mass,
-				pamhd::particle::Destination_Cell,
-				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
-			>(time_step, inner_cells, grid)
-		);
+		switch (particle_stepper) {
+		case 0:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, inner_cells)
+			);
+			break;
+		case 1:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, inner_cells)
+			);
+			break;
+		case 2:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, inner_cells)
+			);
+			break;
+		case 3:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, inner_cells)
+			);
+			break;
+		case 4:
+			max_dt = min(
+				max_dt,
+				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, inner_cells)
+			);
+			break;
+		default:
+			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
+			abort();
+		}
+		#undef SOLVE_WITH_STEPPER
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
 		// outer MHD
 		std::tie(
 			solve_max_dt,
-			std::ignore
+			solve_index
 		) = pamhd::mhd::N_solve(
 			mhd_solver,
 			solve_index + 1,
@@ -1277,23 +1333,37 @@ int main(int argc, char* argv[])
 			std::make_pair(Mom1, Mom2),
 			std::make_pair(Nrj1, Nrj2),
 			Mag,
+			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
 			std::make_pair(Mas1_f, Mas2_f),
 			std::make_pair(Mom1_f, Mom2_f),
 			std::make_pair(Nrj1_f, Nrj2_f),
 			Mag_f,
-			Cell_t,
-			bdy_classifier_fluid1.normal_cell,
-			bdy_classifier_fluid1.dont_solve_cell
+			Sol_Info_P
 		);
 		max_dt = min(
 			max_dt,
 			solve_max_dt
 		);
 
+		pamhd::divergence::get_curl(
+			outer_cells,
+			grid,
+			Mag,
+			Cur
+		);
+		for (const auto& cell: outer_cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+		}
+
 		pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(remote_cell_ids, grid);
+		>(remote_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(
@@ -1305,11 +1375,72 @@ int main(int argc, char* argv[])
 			pamhd::particle::Nr_Particles_External()
 		);
 
+		// transfer J for calculating additional contributions to B
+		Cell::set_transfer_all(true, pamhd::mhd::Electric_Current_Density());
+		grid.start_remote_neighbor_copy_updates();
 
-		Cell::set_transfer_all(
-			true,
-			pamhd::particle::Particles_External()
+		// add contribution to change of B from resistivity
+		pamhd::divergence::get_curl(
+			inner_cells,
+			grid,
+			Cur,
+			Mag_res
 		);
+		for (const auto& cell: inner_cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+
+			J_val = Cur(*cell_data).norm();
+			Res(*cell_data) = resistivity.evaluate(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, asin(c[2] / r), atan2(c[1], c[0])
+			);
+
+			//TODO keep pressure/temperature constant despite electric resistivity
+			Mag_res(*cell_data) *= -Res(*cell_data);
+			Mag_f(*cell_data) += Mag_res(*cell_data);
+		}
+
+		grid.wait_remote_neighbor_copy_update_receives();
+
+		pamhd::divergence::get_curl(
+			outer_cells,
+			grid,
+			Cur,
+			Mag_res
+		);
+		for (const auto& cell: outer_cells) {
+			auto* const cell_data = grid[cell];
+			if (cell_data == nullptr) {
+				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+
+			const auto c = grid.geometry.get_center(cell);
+			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+
+			J_val = Cur(*cell_data).norm();
+			Res(*cell_data) = resistivity.evaluate(
+				simulation_time,
+				c[0], c[1], c[2],
+				r, asin(c[2] / r), atan2(c[1], c[0])
+			);
+
+			Mag_res(*cell_data) *= -Res(*cell_data);
+			Mag_f(*cell_data) += Mag_res(*cell_data);
+		}
+
+		grid.wait_remote_neighbor_copy_update_sends();
+		Cell::set_transfer_all(false, pamhd::mhd::Electric_Current_Density());
+
+		Cell::set_transfer_all(true, pamhd::particle::Particles_External());
 		grid.start_remote_neighbor_copy_updates();
 
 		pamhd::mhd::apply_fluxes_N(
@@ -1322,8 +1453,7 @@ int main(int argc, char* argv[])
 			std::make_pair(Mom1_f, Mom2_f),
 			std::make_pair(Nrj1_f, Nrj2_f),
 			Mag_f,
-			Cell_t,
-			bdy_classifier_fluid1.normal_cell
+			Sol_Info_P
 		);
 
 		pamhd::particle::incorporate_external_particles<
@@ -1363,12 +1493,11 @@ int main(int argc, char* argv[])
 
 
 		/*
-		Solution(s) done for this step.
+		Remove divergence of magnetic field
 		*/
 
-		// remove divergence of magnetic field
-		if (remove_div_B_n > 0 and simulation_time >= next_rem_div_B) {
-			next_rem_div_B += remove_div_B_n;
+		if (options_mhd.remove_div_B_n > 0 and simulation_time >= next_rem_div_B) {
+			next_rem_div_B += options_mhd.remove_div_B_n;
 
 			if (rank == 0) {
 				cout << "Removing divergence of B at time "
@@ -1376,8 +1505,8 @@ int main(int argc, char* argv[])
 				cout.flush();
 			}
 
-			// save old value of B in case div removal fails
-			for (const auto& cell: cell_ids) {
+			// save old B in case div removal fails
+			for (const auto& cell: cells) {
 				auto* const cell_data = grid[cell];
 				if (cell_data == nullptr) {
 					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
@@ -1394,16 +1523,17 @@ int main(int argc, char* argv[])
 				pamhd::mhd::Magnetic_Field(),
 				pamhd::mhd::Magnetic_Field_Divergence()
 			);
+
 			const auto div_before
 				= pamhd::divergence::remove(
-					cell_ids,
-					{},
-					{},
+					solve_cells,
+					bdy_cells,
+					skip_cells,
 					grid,
 					Mag,
 					Mag_div,
 					[](Cell& cell_data)
-						-> typename pamhd::mhd::Scalar_Potential_Gradient::data_type&
+						-> pamhd::mhd::Scalar_Potential_Gradient::data_type&
 					{
 						return cell_data[pamhd::mhd::Scalar_Potential_Gradient()];
 					},
@@ -1412,6 +1542,7 @@ int main(int argc, char* argv[])
 					options_mhd.poisson_norm_stop,
 					2,
 					options_mhd.poisson_norm_increase_max,
+					0,
 					false
 				);
 			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field_Divergence());
@@ -1420,7 +1551,7 @@ int main(int argc, char* argv[])
 			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
-					cell_ids,
+					solve_cells,
 					grid,
 					Mag,
 					Mag_div
@@ -1433,7 +1564,7 @@ int main(int argc, char* argv[])
 						<< "), restoring previous value (" << div_before << ")."
 						<< endl;
 				}
-				for (const auto& cell: cell_ids) {
+				for (const auto& cell: cells) {
 					auto* const cell_data = grid[cell];
 					if (cell_data == nullptr) {
 						std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
@@ -1446,16 +1577,26 @@ int main(int argc, char* argv[])
 				}
 
 			} else {
+
 				if (rank == 0) {
 					cout << div_before << " -> " << div_after << endl;
 				}
-				// TODO: keep pressure/temperature constant over div removal
-				// needs latest accumulated particle mass
+
+				// keep pressure/temperature constant over div removal
+				for (const auto& cell: grid.cells) {
+					const auto
+						mag_nrj_diff = (
+							Mag(*cell.data).squaredNorm()
+							- Mag_tmp(*cell.data).squaredNorm()
+						) / (2 * options_mhd.vacuum_permeability),
+						total_mass = Mas1(*cell.data) + Mas2(*cell.data),
+						mass_frac1 = Mas1(*cell.data) / total_mass,
+						mass_frac2 = Mas2(*cell.data) / total_mass;
+					Nrj1(*cell.data) += mass_frac1 * mag_nrj_diff;
+					Nrj2(*cell.data) += mass_frac2 * mag_nrj_diff;
+				}
 			}
-
 		}
-
-
 
 				/*pamhd::particle::fill_mhd_fluid_values(
 					{cell_id},
@@ -1463,7 +1604,7 @@ int main(int argc, char* argv[])
 					options_mhd.adiabatic_index,
 					options_mhd.vacuum_permeability,
 					options_particle.boltzmann,
-					Number_Of_Particles_Getter,
+					Nr_Particles,
 					Bulk_Mass_Getter,
 					Bulk_Momentum_Getter,
 					Bulk_Relative_Velocity2_Getter,
@@ -1485,11 +1626,11 @@ int main(int argc, char* argv[])
 		/*pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_Internal,
 			pamhd::particle::Particles_Internal
-		>(remote_cell_ids, grid);
+		>(remote_cells, grid);
 		pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(remote_cell_ids, grid);
+		>(remote_cells, grid);
 		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Particles_Internal(),
@@ -1505,14 +1646,16 @@ int main(int argc, char* argv[])
 		// TODO copy boundaries
 
 		/*
-		Save result(s) to file(s)
+		Save simulation to disk
 		*/
+
+		// particles
 		if (
-			(save_particle_n >= 0 and (simulation_time == 0 or simulation_time >= end_time))
-			or (save_particle_n > 0 and simulation_time >= next_particle_save)
+			(options_particle.save_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))
+			or (options_particle.save_n > 0 and simulation_time >= next_particle_save)
 		) {
 			if (next_particle_save <= simulation_time) {
-				next_particle_save += save_particle_n;
+				next_particle_save += options_particle.save_n;
 			}
 
 			if (rank == 0) {
@@ -1528,7 +1671,7 @@ int main(int argc, char* argv[])
 					pamhd::particle::Particles_Internal
 				>(
 					boost::filesystem::canonical(
-						boost::filesystem::path(output_directory)
+						boost::filesystem::path(options_mhd.output_directory)
 					).append("particle_").generic_string(),
 					grid,
 					simulation_time,
@@ -1549,12 +1692,13 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		// mhd
 		if (
-			(save_mhd_n >= 0 and (simulation_time == 0 or simulation_time >= end_time))
-			or (save_mhd_n > 0 and simulation_time >= next_mhd_save)
+			(options_mhd.save_mhd_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))
+			or (options_mhd.save_mhd_n > 0 and simulation_time >= next_mhd_save)
 		) {
 			if (next_mhd_save <= simulation_time) {
-				next_mhd_save += save_mhd_n;
+				next_mhd_save += options_mhd.save_mhd_n;
 			}
 
 			if (rank == 0) {
@@ -1564,7 +1708,7 @@ int main(int argc, char* argv[])
 			if (
 				not pamhd::mhd::save(
 					boost::filesystem::canonical(
-						boost::filesystem::path(output_directory)
+						boost::filesystem::path(options_mhd.output_directory)
 					).append("2mhd_").generic_string(),
 					grid,
 					0,
@@ -1580,6 +1724,14 @@ int main(int argc, char* argv[])
 					pamhd::mhd::MPI_Rank(),
 					pamhd::mhd::Resistivity()
 				)
+					/*pamhd::mhd::MHD_State_Conservative(),
+					pamhd::mhd::Electric_Current_Density(),
+					pamhd::particle::Solver_Info(),
+					pamhd::mhd::MPI_Rank(),
+					pamhd::mhd::Resistivity(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()*/
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
 					"Couldn't save mhd result."
