@@ -51,10 +51,8 @@ particles represent one of the fluids.
 #include "mhd/common.hpp"
 #include "mhd/options.hpp"
 #include "mhd/save.hpp"
-//#include "mhd/N_boundaries.hpp"
 #include "mhd/N_solve.hpp"
 #include "mhd/N_hll_athena.hpp"
-//#include "mhd/N_initialize.hpp"
 #include "mhd/initialize.hpp"
 #include "mhd/N_rusanov.hpp"
 #include "mhd/variables.hpp"
@@ -66,7 +64,6 @@ particles represent one of the fluids.
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
 #include "particle/variables.hpp"
-//#include "pamhd/initialize.hpp"
 
 
 using namespace std;
@@ -1711,7 +1708,7 @@ int main(int argc, char* argv[])
 						boost::filesystem::path(options_mhd.output_directory)
 					).append("2mhd_").generic_string(),
 					grid,
-					0,
+					2,
 					simulation_time,
 					options_mhd.adiabatic_index,
 					options_mhd.proton_mass,
