@@ -1,7 +1,7 @@
 /*
 Handles options of MHD part of PAMHD.
 
-Copyright 2016 Ilja Honkonen
+Copyright 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -56,26 +56,9 @@ struct Options
 	};
 
 
-	std::string
-		solver = "roe_athena",
-		lb_name = "RCB",
-		output_directory = "";
-
-	size_t
-		poisson_iterations_max = 1000,
-		poisson_iterations_min = 0;
-
+	std::string solver = "roe_athena";
 	double
-		save_mhd_n = -1,
-		time_start = 0,
-		time_length = 1,
-		time_step_factor = 0.5,
-		remove_div_B_n = 0.1,
-		poisson_norm_stop = 1e-10,
-		poisson_norm_increase_max = 10,
-		adiabatic_index = 5.0 / 3.0,    
-		vacuum_permeability = 4e-7 * M_PI,
-		proton_mass = 1.672621777e-27,
+		save_n = -1,
 		min_pressure = 0;
 
 	void set(const rapidjson::Value& object) {
@@ -87,100 +70,7 @@ struct Options
 				+ "JSON data doesn't have a save-mhd-n key."
 			);
 		}
-		save_mhd_n = object["save-mhd-n"].GetDouble();
-
-		if (not object.HasMember("time-start")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a time-start key."
-			);
-		}
-		time_start = object["time-start"].GetDouble();
-
-		if (not object.HasMember("time-length")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a time-length key."
-			);
-		}
-		time_length = object["time-length"].GetDouble();
-
-		if (not object.HasMember("time-step-factor")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a time-step-factor key."
-			);
-		}
-		time_step_factor = object["time-step-factor"].GetDouble();
-
-		if (not object.HasMember("remove-div-B-n")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a remove-div-B-n key."
-			);
-		}
-		remove_div_B_n = object["remove-div-B-n"].GetDouble();
-
-		if (not object.HasMember("poisson-norm-stop")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a poisson-norm-stop key."
-			);
-		}
-		poisson_norm_stop = object["poisson-norm-stop"].GetDouble();
-
-		if (not object.HasMember("poisson-norm-increase-max")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a poisson-norm-increase-max key."
-			);
-		}
-		poisson_norm_increase_max = object["poisson-norm-increase-max"].GetDouble();
-
-		if (not object.HasMember("adiabatic-index")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a adiabatic-index key."
-			);
-		}
-		adiabatic_index = object["adiabatic-index"].GetDouble();
-		if (not isnormal(adiabatic_index) or adiabatic_index < 0) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Invalid adiabatic index: " + std::to_string(adiabatic_index)
-				+ ", should be > 0"
-			);
-		}
-
-		if (not object.HasMember("vacuum-permeability")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a vacuum-permeability key."
-			);
-		}
-		vacuum_permeability = object["vacuum-permeability"].GetDouble();
-		if (not isnormal(vacuum_permeability) or vacuum_permeability < 0) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Invalid vacuum permeability: " + std::to_string(vacuum_permeability)
-				+ ", should be > 0"
-			);
-		}
-
-		if (not object.HasMember("proton-mass")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a proton-mass key."
-			);
-		}
-		proton_mass = object["proton-mass"].GetDouble();
-		if (not isnormal(proton_mass) or proton_mass < 0) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Invalid proton_mass: " + std::to_string(proton_mass)
-				+ ", should be > 0"
-			);
-		}
+		save_n = object["save-mhd-n"].GetDouble();
 
 		if (not object.HasMember("solver-mhd")) {
 			throw std::invalid_argument(
@@ -201,18 +91,6 @@ struct Options
 				+ ", should be one of rusanov, hll-athena, hlld-athena, roe-athena."
 			);
 		}
-
-		if (object.HasMember("output-directory")) {
-			output_directory = object["output-directory"].GetString();
-		}
-
-		if (not object.HasMember("load-balancer")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a load-balancer key."
-			);
-		}
-		lb_name = object["load-balancer"].GetString();
 
 		if (not object.HasMember("minimum-pressure")) {
 			throw std::invalid_argument(

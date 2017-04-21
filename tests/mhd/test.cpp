@@ -1,7 +1,7 @@
 /*
 MHD test program of PAMHD.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -22,17 +22,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "array"
 #include "cmath"
 #include "cstdlib"
-#include "exception"
 #include "fstream"
-#include "iostream"
-#include "string"
-#include "fstream"
-#include "iomanip"
 #include "iostream"
 #include "limits"
 #include "streambuf"
 #include "string"
-#include "type_traits"
+#include "vector"
 
 #include "boost/filesystem.hpp"
 #include "boost/lexical_cast.hpp"
@@ -47,6 +42,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "boundaries/geometries.hpp"
 #include "boundaries/multivariable_boundaries.hpp"
 #include "boundaries/multivariable_initial_conditions.hpp"
+#include "divergence/options.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
 #include "mhd/background_magnetic_field.hpp"
@@ -61,6 +57,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "mhd/save.hpp"
 #include "mhd/solve.hpp"
 #include "mhd/variables.hpp"
+#include "simulation_options.hpp"
 
 
 using namespace std;
@@ -76,7 +73,23 @@ using Cell = pamhd::mhd::Cell;
 // simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
-// reference to total mass density of all fluids in given cell
+// returns reference to background magnetic field at +X face of given cell
+const auto Bg_B_Pos_X
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
+	};
+// reference to +Y face background magnetic field
+const auto Bg_B_Pos_Y
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Y()];
+	};
+// ref to +Z face bg B
+const auto Bg_B_Pos_Z
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Z()];
+	};
+
+// returns reference to total mass density in given cell
 const auto Mas
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
 		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Mass_Density()];
@@ -92,26 +105,6 @@ const auto Nrj
 const auto Mag
 	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
 		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Magnetic_Field()];
-	};
-
-// references to background magnetic fields
-const auto Bg_B_Pos_X
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
-	};
-const auto Bg_B_Pos_Y
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Y()];
-	};
-const auto Bg_B_Pos_Z
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Z()];
-	};
-
-// solver info variable for boundary logic
-const auto Sol_Info
-	= [](Cell& cell_data)->typename pamhd::mhd::Solver_Info::data_type&{
-		return cell_data[pamhd::mhd::Solver_Info()];
 	};
 
 // field before divergence removal in case removal fails
@@ -139,8 +132,12 @@ const auto Cur
 	= [](Cell& cell_data)->typename pamhd::mhd::Electric_Current_Density::data_type&{
 		return cell_data[pamhd::mhd::Electric_Current_Density()];
 	};
-
-// flux / total change of mass density over one time step
+// solver info variable for boundary logic
+const auto Sol_Info
+	= [](Cell& cell_data)->typename pamhd::mhd::Solver_Info::data_type&{
+		return cell_data[pamhd::mhd::Solver_Info()];
+	};
+// total change of mass density over one time step
 const auto Mas_f
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
 		return cell_data[pamhd::mhd::MHD_Flux_Conservative()][pamhd::mhd::Mass_Density()];
@@ -166,7 +163,6 @@ int main(int argc, char* argv[])
 	using std::get;
 	using std::min;
 	using std::sqrt;
-
 
 	/*
 	Initialize MPI
@@ -196,8 +192,10 @@ int main(int argc, char* argv[])
 		abort();
 	}
 
+	/*
+	Parse configuration file
+	*/
 
-	// read and parse json data from configuration file
 	if (argc != 2) {
 		if (argc < 2 and rank == 0) {
 			std::cerr
@@ -239,16 +237,18 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	// mhd options
+	pamhd::Options options_sim{document};
+	pamhd::grid::Options options_grid{document};
+	pamhd::divergence::Options options_div_B{document};
 	pamhd::mhd::Options options_mhd{document};
 
-	if (rank == 0 and options_mhd.output_directory != "") {
+	if (rank == 0 and options_sim.output_directory != "") {
 		try {
-			boost::filesystem::create_directories(options_mhd.output_directory);
+			boost::filesystem::create_directories(options_sim.output_directory);
 		} catch (const boost::filesystem::filesystem_error& e) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 				"Couldn't create output directory "
-				<< options_mhd.output_directory << ": "
+				<< options_sim.output_directory << ": "
 				<< e.what()
 				<< std::endl;
 			abort();
@@ -288,7 +288,6 @@ int main(int argc, char* argv[])
 		pamhd::mhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
-
 
 	const auto mhd_solver
 		= [&options_mhd, &background_B, &rank](){
@@ -351,7 +350,6 @@ int main(int argc, char* argv[])
 			}
 		}();
 
-
 	/*
 	Prepare resistivity
 	*/
@@ -389,18 +387,15 @@ int main(int argc, char* argv[])
 	/*
 	Initialize simulation grid
 	*/
-	Grid grid;
-
-	pamhd::grid::Options grid_options;
-	grid_options.set(document);
-
 	const unsigned int neighborhood_size = 0;
-	const auto& number_of_cells = grid_options.get_number_of_cells();
-	const auto& periodic = grid_options.get_periodic();
+	const auto& number_of_cells = options_grid.get_number_of_cells();
+	const auto& periodic = options_grid.get_periodic();
+
+	Grid grid;
 	if (not grid.initialize(
 		number_of_cells,
 		comm,
-		options_mhd.lb_name.c_str(),
+		options_sim.lb_name.c_str(),
 		neighborhood_size,
 		0,
 		periodic[0],
@@ -416,7 +411,7 @@ int main(int argc, char* argv[])
 	// set grid geometry
 	const std::array<double, 3>
 		simulation_volume
-			= grid_options.get_volume(),
+			= options_grid.get_volume(),
 		cell_volume{
 			simulation_volume[0] / number_of_cells[0],
 			simulation_volume[1] / number_of_cells[1],
@@ -424,7 +419,7 @@ int main(int argc, char* argv[])
 		};
 
 	dccrg::Cartesian_Geometry::Parameters geom_params;
-	geom_params.start = grid_options.get_start();
+	geom_params.start = options_grid.get_start();
 	geom_params.level_0_cell_length = cell_volume;
 
 	if (not grid.set_geometry(geom_params)) {
@@ -466,12 +461,12 @@ int main(int argc, char* argv[])
 	Simulate
 	*/
 
-	const double time_end = options_mhd.time_start + options_mhd.time_length;
+	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
 		max_dt = 0,
-		simulation_time = options_mhd.time_start,
-		next_mhd_save = options_mhd.save_mhd_n,
-		next_rem_div_B = options_mhd.remove_div_B_n;
+		simulation_time = options_sim.time_start,
+		next_mhd_save = options_mhd.save_n,
+		next_rem_div_B = options_div_B.remove_n;
 
 	std::vector<uint64_t>
 		cells = grid.get_cells(),
@@ -479,8 +474,7 @@ int main(int argc, char* argv[])
 		outer_cells = grid.get_local_cells_on_process_boundary();
 
 	// initialize MHD
-	const bool verbose = true;
-	if (verbose and rank == 0) {
+	if (rank == 0) {
 		cout << "Initializing MHD... " << endl;
 	}
 
@@ -491,7 +485,7 @@ int main(int argc, char* argv[])
 		grid,
 		cells,
 		simulation_time,
-		options_mhd.vacuum_permeability,
+		options_sim.vacuum_permeability,
 		Mag, Mag_f,
 		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
 	);
@@ -501,10 +495,10 @@ int main(int argc, char* argv[])
 		grid,
 		cells,
 		simulation_time,
-		options_mhd.adiabatic_index,
-		options_mhd.vacuum_permeability,
-		options_mhd.proton_mass,
-		verbose,
+		options_sim.adiabatic_index,
+		options_sim.vacuum_permeability,
+		options_sim.proton_mass,
+		true,
 		Mas, Mom, Nrj, Mag,
 		Mas_f, Mom_f, Nrj_f
 	);
@@ -542,11 +536,11 @@ int main(int argc, char* argv[])
 		geometries,
 		simulation_time,
 		Mas, Mom, Nrj, Mag,
-		options_mhd.proton_mass,
-		options_mhd.adiabatic_index,
-		options_mhd.vacuum_permeability
+		options_sim.proton_mass,
+		options_sim.adiabatic_index,
+		options_sim.vacuum_permeability
 	);
-	if (verbose and rank == 0) {
+	if (rank == 0) {
 		cout << "Done initializing MHD" << endl;
 	}
 
@@ -579,7 +573,7 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = min(options_mhd.time_step_factor * max_dt, until_end),
+			local_time_step = min(options_sim.time_step_factor * max_dt, until_end),
 			time_step = -1;
 
 		if (
@@ -605,7 +599,7 @@ int main(int argc, char* argv[])
 
 		max_dt = std::numeric_limits<double>::max();
 
-		if (verbose and rank == 0) {
+		if (rank == 0) {
 			cout << "Solving MHD at time " << simulation_time
 				<< " s with time step " << time_step << " s" << endl;
 		}
@@ -626,7 +620,7 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+			Cur(*cell_data) /= options_sim.vacuum_permeability;
 		}
 
 		double solve_max_dt = -1;
@@ -639,8 +633,8 @@ int main(int argc, char* argv[])
 			0,
 			grid,
 			time_step,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
 			Mas, Mom, Nrj, Mag,
 			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
 			Mas_f, Mom_f, Nrj_f, Mag_f,
@@ -661,8 +655,8 @@ int main(int argc, char* argv[])
 			solve_index + 1,
 			grid,
 			time_step,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
 			Mas, Mom, Nrj, Mag,
 			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
 			Mas_f, Mom_f, Nrj_f, Mag_f,
@@ -685,7 +679,7 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+			Cur(*cell_data) /= options_sim.vacuum_permeability;
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
@@ -761,8 +755,8 @@ int main(int argc, char* argv[])
 		pamhd::mhd::apply_fluxes<pamhd::mhd::Solver_Info>(
 			grid,
 			options_mhd.min_pressure,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
 			Mas, Mom, Nrj, Mag,
 			Mas_f, Mom_f, Nrj_f, Mag_f,
 			Sol_Info
@@ -775,10 +769,10 @@ int main(int argc, char* argv[])
 		Remove divergence of magnetic field
 		*/
 
-		if (options_mhd.remove_div_B_n > 0 and simulation_time >= next_rem_div_B) {
-			next_rem_div_B += options_mhd.remove_div_B_n;
+		if (options_div_B.remove_n > 0 and simulation_time >= next_rem_div_B) {
+			next_rem_div_B += options_div_B.remove_n;
 
-			if (verbose and rank == 0) {
+			if (rank == 0) {
 				cout << "Removing divergence of B at time "
 					<< simulation_time << "...  ";
 				cout.flush();
@@ -816,11 +810,11 @@ int main(int argc, char* argv[])
 					{
 						return cell_data[pamhd::mhd::Scalar_Potential_Gradient()];
 					},
-					options_mhd.poisson_iterations_max,
-					options_mhd.poisson_iterations_min,
-					options_mhd.poisson_norm_stop,
+					options_div_B.poisson_iterations_max,
+					options_div_B.poisson_iterations_min,
+					options_div_B.poisson_norm_stop,
 					2,
-					options_mhd.poisson_norm_increase_max,
+					options_div_B.poisson_norm_increase_max,
 					0,
 					false
 				);
@@ -838,7 +832,7 @@ int main(int argc, char* argv[])
 
 			// restore old B
 			if (div_after > div_before) {
-				if (verbose and rank == 0) {
+				if (rank == 0) {
 					cout << "failed (" << div_after
 						<< "), restoring previous value (" << div_before << ")."
 						<< endl;
@@ -857,7 +851,7 @@ int main(int argc, char* argv[])
 
 			} else {
 
-				if (verbose and rank == 0) {
+				if (rank == 0) {
 					cout << div_before << " -> " << div_after << endl;
 				}
 
@@ -875,7 +869,7 @@ int main(int argc, char* argv[])
 						= (
 							Mag(*cell_data).squaredNorm()
 							- Mag_tmp(*cell_data).squaredNorm()
-						) / (2 * options_mhd.vacuum_permeability);
+						) / (2 * options_sim.vacuum_permeability);
 
 					Nrj(*cell_data) += mag_nrj_diff;
 				}
@@ -896,9 +890,9 @@ int main(int argc, char* argv[])
 			geometries,
 			simulation_time,
 			Mas, Mom, Nrj, Mag,
-			options_mhd.proton_mass,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability
+			options_sim.proton_mass,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability
 		);
 
 
@@ -908,34 +902,34 @@ int main(int argc, char* argv[])
 
 		if (
 			(
-				options_mhd.save_mhd_n >= 0
+				options_mhd.save_n >= 0
 				and (
-					simulation_time == options_mhd.time_start
+					simulation_time == options_sim.time_start
 					or simulation_time >= time_end
 				)
-			) or (options_mhd.save_mhd_n > 0 and simulation_time >= next_mhd_save)
+			) or (options_mhd.save_n > 0 and simulation_time >= next_mhd_save)
 		) {
 			if (next_mhd_save <= simulation_time) {
 				next_mhd_save
-					+= options_mhd.save_mhd_n
-					* ceil((simulation_time - next_mhd_save) / options_mhd.save_mhd_n);
+					+= options_mhd.save_n
+					* ceil((simulation_time - next_mhd_save) / options_mhd.save_n);
 			}
 
-			if (verbose and rank == 0) {
+			if (rank == 0) {
 				cout << "Saving MHD at time " << simulation_time << endl;
 			}
 
 			if (
 				not pamhd::mhd::save(
 					boost::filesystem::canonical(
-						boost::filesystem::path(options_mhd.output_directory)
+						boost::filesystem::path(options_sim.output_directory)
 					).append("mhd_").generic_string(),
 					grid,
 					2,
 					simulation_time,
-					options_mhd.adiabatic_index,
-					options_mhd.proton_mass,
-					options_mhd.vacuum_permeability,
+					options_sim.adiabatic_index,
+					options_sim.proton_mass,
+					options_sim.vacuum_permeability,
 					pamhd::mhd::MHD_State_Conservative(),
 					pamhd::mhd::Electric_Current_Density(),
 					pamhd::mhd::Solver_Info(),
@@ -954,7 +948,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (verbose and rank == 0) {
+	if (rank == 0) {
 		cout << "Simulation finished at time " << simulation_time << endl;
 	}
 	MPI_Finalize();

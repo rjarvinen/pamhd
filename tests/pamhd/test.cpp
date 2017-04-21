@@ -45,6 +45,7 @@ particles represent one of the fluids.
 #include "boundaries/geometries.hpp"
 #include "boundaries/multivariable_boundaries.hpp"
 #include "boundaries/multivariable_initial_conditions.hpp"
+#include "divergence/options.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
 #include "mhd/background_magnetic_field.hpp"
@@ -64,6 +65,7 @@ particles represent one of the fluids.
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
 #include "particle/variables.hpp"
+#include "simulation_options.hpp"
 
 
 using namespace std;
@@ -533,53 +535,44 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	// options
-	pamhd::particle::Options options_particle{document};
+	pamhd::Options options_sim{document};
+	pamhd::grid::Options options_grid{document};
+	pamhd::divergence::Options options_div_B{document};
 	pamhd::mhd::Options options_mhd{document};
+	pamhd::particle::Options options_particle{document};
 
-	if (rank == 0 and options_particle.output_directory != "") {
+	if (rank == 0 and options_sim.output_directory != "") {
 		try {
-			boost::filesystem::create_directories(options_particle.output_directory);
+			boost::filesystem::create_directories(options_sim.output_directory);
 		} catch (const boost::filesystem::filesystem_error& e) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 				"Couldn't create output directory "
-				<< options_particle.output_directory << ": "
+				<< options_sim.output_directory << ": "
 				<< e.what()
 				<< std::endl;
 			abort();
 		}
 	}
-	/* TODO if (rank == 0 and options_mhd.output_directory != "") {
-		try {
-			boost::filesystem::create_directories(options_particle.output_directory);
-		} catch (const boost::filesystem::filesystem_error& e) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
-				"Couldn't create output directory "
-				<< options_particle.output_directory << ": "
-				<< e.what()
+
+	const int particle_stepper = [&](){
+		if (options_particle.solver == "euler") {
+			return 0;
+		} else if (options_particle.solver == "midpoint") {
+			return 1;
+		} else if (options_particle.solver == "rk4") {
+			return 2;
+		} else if (options_particle.solver == "rkck54") {
+			return 3;
+		} else if (options_particle.solver == "rkf78") {
+			return 4;
+		} else {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+				<< "Unsupported solver: " << options_particle.solver
+				<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
 				<< std::endl;
 			abort();
 		}
-	}*/
-
-	int particle_stepper = -1;
-	if (options_particle.solver == "euler") {
-		particle_stepper = 0;
-	} else if (options_particle.solver == "midpoint") {
-		particle_stepper = 1;
-	} else if (options_particle.solver == "rk4") {
-		particle_stepper = 2;
-	} else if (options_particle.solver == "rkck54") {
-		particle_stepper = 3;
-	} else if (options_particle.solver == "rkf78") {
-		particle_stepper = 4;
-	} else {
-		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-			<< "Unsupported solver: " << options_particle.solver
-			<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
-			<< std::endl;
-		abort();
-	}
+	}();
 
 
 	using geometry_id_t = unsigned int;
@@ -756,7 +749,7 @@ int main(int argc, char* argv[])
 	if (not grid.initialize(
 		number_of_cells,
 		comm,
-		options_particle.lb_name.c_str(),
+		options_sim.lb_name.c_str(),
 		neighborhood_size,
 		0,
 		periodic[0],
@@ -822,13 +815,13 @@ int main(int argc, char* argv[])
 	Simulate
 	*/
 
-	const double time_end = options_particle.time_start + options_particle.time_length;
+	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
 		max_dt = 0,
-		simulation_time = options_particle.time_start,
+		simulation_time = options_sim.time_start,
 		next_particle_save = options_particle.save_n,
-		next_mhd_save = options_mhd.save_mhd_n,
-		next_rem_div_B = options_mhd.remove_div_B_n;
+		next_mhd_save = options_mhd.save_n,
+		next_rem_div_B = options_div_B.remove_n;
 
 	std::vector<uint64_t>
 		cells = grid.get_cells(),
@@ -858,9 +851,9 @@ int main(int argc, char* argv[])
 		grid,
 		cells,
 		simulation_time,
-		options_mhd.adiabatic_index,
-		options_mhd.vacuum_permeability,
-		options_mhd.proton_mass,
+		options_sim.adiabatic_index,
+		options_sim.vacuum_permeability,
+		options_sim.proton_mass,
 		true,
 		Mas1, Mom1, Nrj1, Mag,
 		Mas1_f, Mom1_f, Nrj1_f
@@ -886,7 +879,7 @@ int main(int argc, char* argv[])
 			cells,
 			grid,
 			random_source,
-			options_particle.boltzmann,
+			options_sim.boltzmann,
 			next_particle_id,
 			grid.get_comm_size(),
 			false,
@@ -934,9 +927,9 @@ int main(int argc, char* argv[])
 	pamhd::particle::fill_mhd_fluid_values(
 		cells,
 		grid,
-		options_mhd.adiabatic_index,
-		options_mhd.vacuum_permeability,
-		options_particle.boltzmann,
+		options_sim.adiabatic_index,
+		options_sim.vacuum_permeability,
+		options_sim.boltzmann,
 		Nr_Particles,
 		Bulk_Mass_Getter,
 		Bulk_Momentum_Getter,
@@ -953,7 +946,7 @@ int main(int argc, char* argv[])
 		grid,
 		cells,
 		simulation_time,
-		options_mhd.vacuum_permeability,
+		options_sim.vacuum_permeability,
 		Mag, Mag_f,
 		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
 	);
@@ -978,8 +971,8 @@ int main(int argc, char* argv[])
 			total_mass = Mas1(*cell.data) + Mas2(*cell.data),
 			mass_frac1 = Mas1(*cell.data) / total_mass,
 			mass_frac2 = Mas2(*cell.data) / total_mass;
-		Nrj1(*cell.data) += mass_frac1 * 0.5 * Mag(*cell.data).squaredNorm() / options_mhd.vacuum_permeability;
-		Nrj2(*cell.data) += mass_frac2 * 0.5 * Mag(*cell.data).squaredNorm() / options_mhd.vacuum_permeability;
+		Nrj1(*cell.data) += mass_frac1 * 0.5 * Mag(*cell.data).squaredNorm() / options_sim.vacuum_permeability;
+		Nrj2(*cell.data) += mass_frac2 * 0.5 * Mag(*cell.data).squaredNorm() / options_sim.vacuum_permeability;
 	}
 
 
@@ -1018,7 +1011,7 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = min(min(options_mhd.time_step_factor * max_dt, until_end), max_dt),
+			local_time_step = min(min(options_sim.time_step_factor * max_dt, until_end), max_dt),
 			time_step = -1;
 
 		if (
@@ -1071,9 +1064,9 @@ int main(int argc, char* argv[])
 		pamhd::particle::fill_mhd_fluid_values(
 			cells,
 			grid,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
-			options_particle.boltzmann,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
+			options_sim.boltzmann,
 			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
@@ -1096,7 +1089,7 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+			Cur(*cell_data) /= options_sim.vacuum_permeability;
 		}
 
 		grid.wait_remote_neighbor_copy_update_receives();
@@ -1114,7 +1107,7 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+			Cur(*cell_data) /= options_sim.vacuum_permeability;
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
@@ -1184,7 +1177,7 @@ int main(int argc, char* argv[])
 				given_cells,\
 				grid,\
 				background_B,\
-				options_particle.vacuum_permeability,\
+				options_sim.vacuum_permeability,\
 				true,\
 				Ele,\
 				Mag,\
@@ -1256,8 +1249,8 @@ int main(int argc, char* argv[])
 			0,
 			grid,
 			time_step,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
 			std::make_pair(Mas1, Mas2),
 			std::make_pair(Mom1, Mom2),
 			std::make_pair(Nrj1, Nrj2),
@@ -1323,8 +1316,8 @@ int main(int argc, char* argv[])
 			solve_index + 1,
 			grid,
 			time_step,
-			options_mhd.adiabatic_index,
-			options_mhd.vacuum_permeability,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability,
 			std::make_pair(Mas1, Mas2),
 			std::make_pair(Mom1, Mom2),
 			std::make_pair(Nrj1, Nrj2),
@@ -1353,7 +1346,7 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-			Cur(*cell_data) /= options_mhd.vacuum_permeability;
+			Cur(*cell_data) /= options_sim.vacuum_permeability;
 		}
 
 		pamhd::particle::resize_receiving_containers<
@@ -1491,8 +1484,8 @@ int main(int argc, char* argv[])
 		Remove divergence of magnetic field
 		*/
 
-		if (options_mhd.remove_div_B_n > 0 and simulation_time >= next_rem_div_B) {
-			next_rem_div_B += options_mhd.remove_div_B_n;
+		if (options_div_B.remove_n > 0 and simulation_time >= next_rem_div_B) {
+			next_rem_div_B += options_div_B.remove_n;
 
 			if (rank == 0) {
 				cout << "Removing divergence of B at time "
@@ -1532,11 +1525,11 @@ int main(int argc, char* argv[])
 					{
 						return cell_data[pamhd::mhd::Scalar_Potential_Gradient()];
 					},
-					options_mhd.poisson_iterations_max,
-					options_mhd.poisson_iterations_min,
-					options_mhd.poisson_norm_stop,
+					options_div_B.poisson_iterations_max,
+					options_div_B.poisson_iterations_min,
+					options_div_B.poisson_norm_stop,
 					2,
-					options_mhd.poisson_norm_increase_max,
+					options_div_B.poisson_norm_increase_max,
 					0,
 					false
 				);
@@ -1583,7 +1576,7 @@ int main(int argc, char* argv[])
 						mag_nrj_diff = (
 							Mag(*cell.data).squaredNorm()
 							- Mag_tmp(*cell.data).squaredNorm()
-						) / (2 * options_mhd.vacuum_permeability),
+						) / (2 * options_sim.vacuum_permeability),
 						total_mass = Mas1(*cell.data) + Mas2(*cell.data),
 						mass_frac1 = Mas1(*cell.data) / total_mass,
 						mass_frac2 = Mas2(*cell.data) / total_mass;
@@ -1596,9 +1589,9 @@ int main(int argc, char* argv[])
 				/*pamhd::particle::fill_mhd_fluid_values(
 					{cell_id},
 					grid,
-					options_mhd.adiabatic_index,
-					options_mhd.vacuum_permeability,
-					options_particle.boltzmann,
+					options_sim.adiabatic_index,
+					options_sim.vacuum_permeability,
+					options_sim.boltzmann,
 					Nr_Particles,
 					Bulk_Mass_Getter,
 					Bulk_Momentum_Getter,
@@ -1614,7 +1607,7 @@ int main(int argc, char* argv[])
 				const auto mass_frac
 					= Mas1(*cell_data)
 					/ (Mas1(*cell_data) + Mas2(*cell_data));
-				Nrj1(*cell_data) += mass_frac * 0.5 * Mag(*cell_data).squaredNorm() / options_mhd.vacuum_permeability;
+				Nrj1(*cell_data) += mass_frac * 0.5 * Mag(*cell_data).squaredNorm() / options_sim.vacuum_permeability;
 			}*/
 
 		// update particle lists
@@ -1666,13 +1659,13 @@ int main(int argc, char* argv[])
 					pamhd::particle::Particles_Internal
 				>(
 					boost::filesystem::canonical(
-						boost::filesystem::path(options_mhd.output_directory)
+						boost::filesystem::path(options_sim.output_directory)
 					).append("particle_").generic_string(),
 					grid,
 					simulation_time,
-					options_mhd.adiabatic_index,
-					options_mhd.vacuum_permeability,
-					options_particle.boltzmann
+					options_sim.adiabatic_index,
+					options_sim.vacuum_permeability,
+					options_sim.boltzmann
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
@@ -1689,11 +1682,11 @@ int main(int argc, char* argv[])
 
 		// mhd
 		if (
-			(options_mhd.save_mhd_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))
-			or (options_mhd.save_mhd_n > 0 and simulation_time >= next_mhd_save)
+			(options_mhd.save_n >= 0 and (simulation_time == 0 or simulation_time >= time_end))
+			or (options_mhd.save_n > 0 and simulation_time >= next_mhd_save)
 		) {
 			if (next_mhd_save <= simulation_time) {
-				next_mhd_save += options_mhd.save_mhd_n;
+				next_mhd_save += options_mhd.save_n;
 			}
 
 			if (rank == 0) {
@@ -1703,14 +1696,14 @@ int main(int argc, char* argv[])
 			if (
 				not pamhd::mhd::save(
 					boost::filesystem::canonical(
-						boost::filesystem::path(options_mhd.output_directory)
+						boost::filesystem::path(options_sim.output_directory)
 					).append("2mhd_").generic_string(),
 					grid,
 					2,
 					simulation_time,
-					options_mhd.adiabatic_index,
-					options_mhd.proton_mass,
-					options_mhd.vacuum_permeability,
+					options_sim.adiabatic_index,
+					options_sim.proton_mass,
+					options_sim.vacuum_permeability,
 					pamhd::mhd::HD1_State(),
 					pamhd::mhd::HD2_State(),
 					pamhd::mhd::Magnetic_Field(),

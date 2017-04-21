@@ -1,7 +1,7 @@
 /*
-Handles options of particle part of PAMHD.
+Handles divergence of magnetic field removal options of PAMHD.
 
-Copyright 2016, 2017 Ilja Honkonen
+Copyright 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -30,8 +30,8 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PAMHD_PARTICLE_OPTIONS_HPP
-#define PAMHD_PARTICLE_OPTIONS_HPP
+#ifndef PAMHD_DIV_OPTIONS_HPP
+#define PAMHD_DIV_OPTIONS_HPP
 
 
 #include "cmath"
@@ -41,7 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 namespace pamhd {
-namespace particle {
+namespace divergence {
 
 
 struct Options
@@ -55,38 +55,53 @@ struct Options
 		this->set(object);
 	};
 
-	std::string solver = "rkf78";
-	double save_n = -1;
+
+	size_t
+		poisson_iterations_max = 1000,
+		poisson_iterations_min = 0;
+	double
+		remove_n = -1,
+		poisson_norm_stop = 1e-15,
+		poisson_norm_increase_max = 10;
 
 	void set(const rapidjson::Value& object) {
-		using std::isnormal;
+		using std::to_string;
 
-		if (not object.HasMember("save-particle-n")) {
+		if (not object.HasMember("remove-div-B-n")) {
 			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a save-particle-n key."
+				std::string(__FILE__ "(") + to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a remove-div-B-n key."
 			);
 		}
-		save_n = object["save-particle-n"].GetDouble();
+		remove_n = object["remove-div-B-n"].GetDouble();
 
-		if (not object.HasMember("solver-particle")) {
+		if (not object.HasMember("poisson-norm-stop")) {
 			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a solver-particle key."
+				std::string(__FILE__ "(") + to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a poisson-norm-stop key."
 			);
 		}
-		solver = object["solver-particle"].GetString();
-		if (
-			solver != "euler"
-			and solver != "midpoint"
-			and solver != "rk4"
-			and solver != "rkck54"
-			and solver != "rkf78"
-		) {
+		poisson_norm_stop = object["poisson-norm-stop"].GetDouble();
+		if (poisson_norm_stop <= 0) {
 			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Invalid particle solver: " + solver
-				+ ", should be one of euler, midpoint."
+				std::string(__FILE__ "(") + to_string(__LINE__) + "): "
+				+ "poisson-norm-stop must be > 0 but is "
+				+ to_string(poisson_norm_stop)
+			);
+		}
+
+		if (not object.HasMember("poisson-norm-increase-max")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a poisson-norm-increase-max key."
+			);
+		}
+		poisson_norm_increase_max = object["poisson-norm-increase-max"].GetDouble();
+		if (poisson_norm_increase_max <= 1) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + to_string(__LINE__) + "): "
+				+ "poisson-norm-increase-max must be > 1 but is "
+				+ to_string(poisson_norm_increase_max)
 			);
 		}
 	}
@@ -95,4 +110,4 @@ struct Options
 }} // namespaces
 
 
-#endif // ifndef PAMHD_PARTICLE_OPTIONS_HPP
+#endif // ifndef PAMHD_DIV_OPTIONS_HPP

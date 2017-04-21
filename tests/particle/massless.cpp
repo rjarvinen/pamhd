@@ -72,15 +72,30 @@ Copy boundaries have no effect in this program and shouldn't be used in config f
 using namespace std;
 namespace odeint = boost::numeric::odeint;
 
+// counter for assigning unique id to particles
+unsigned long long int next_particle_id;
+
 // data stored in every cell of simulation grid
 using Cell = pamhd::particle::Cell_test_particle;
 // simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
-
-// unique particle id to assign to next particle
-unsigned long long int next_particle_id;
-
+// background magnetic field not stored on cell faces in this program
+pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type zero_bg_b = {0, 0, 0};
+const auto Bg_B_Pos_X
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return zero_bg_b;
+	};
+// reference to +Y face background magnetic field
+const auto Bg_B_Pos_Y
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return zero_bg_b;
+	};
+// ref to +Z face bg B
+const auto Bg_B_Pos_Z
+	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return zero_bg_b;
+	};
 
 // returns reference to magnetic field for propagating particles
 const auto Mag
@@ -161,24 +176,11 @@ const auto Part_Des
 	= [](pamhd::particle::Particle_External& particle)->typename pamhd::particle::Destination_Cell::data_type&{
 		return particle[pamhd::particle::Destination_Cell()];
 	};
-
-// required by magnetic field functions, not used by this model
-pamhd::particle::Magnetic_Field::data_type no_magnetic_field_flux_in_this_model{};
+// unused
+pamhd::mhd::Magnetic_Field::data_type zero_mag_flux = {0, 0, 0};
 const auto Mag_f
-	= [](Cell&)->typename pamhd::particle::Magnetic_Field::data_type&{
-		return no_magnetic_field_flux_in_this_model;
-	};
-const auto Bg_B_Pos_X
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return no_magnetic_field_flux_in_this_model;
-	};
-const auto Bg_B_Pos_Y
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
-		return no_magnetic_field_flux_in_this_model;
-	};
-const auto Bg_B_Pos_Z
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
-		return no_magnetic_field_flux_in_this_model;
+	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
+		return zero_mag_flux;
 	};
 
 

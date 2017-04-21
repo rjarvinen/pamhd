@@ -1,7 +1,7 @@
 /*
 Class for handling grid options.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -73,6 +73,15 @@ struct Periodic {
 class Options
 {
 public:
+	Options() = default;
+	Options(const Options& other) = default;
+	Options(Options&& other) = default;
+
+	Options(const rapidjson::Value& object)
+	{
+		this->set(object);
+	};
+
 
 	void set(const rapidjson::Value& object)
 	{
