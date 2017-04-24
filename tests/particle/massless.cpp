@@ -67,6 +67,7 @@ Copy boundaries have no effect in this program and shouldn't be used in config f
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
 #include "particle/variables.hpp"
+#include "simulation_options.hpp"
 
 
 using namespace std;
@@ -261,16 +262,17 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	// particle options
+	pamhd::Options options_sim{document};
+	pamhd::grid::Options options_grid{document};
 	pamhd::particle::Options options_particle{document};
 
-	if (rank == 0 and options_particle.output_directory != "") {
+	if (rank == 0 and options_sim.output_directory != "") {
 		try {
-			boost::filesystem::create_directories(options_particle.output_directory);
+			boost::filesystem::create_directories(options_sim.output_directory);
 		} catch (const boost::filesystem::filesystem_error& e) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 				"Couldn't create output directory "
-				<< options_particle.output_directory << ": "
+				<< options_sim.output_directory << ": "
 				<< e.what()
 				<< std::endl;
 			abort();
@@ -354,7 +356,7 @@ int main(int argc, char* argv[])
 	if (not grid.initialize(
 		number_of_cells,
 		comm,
-		options_particle.lb_name.c_str(),
+		options_sim.lb_name.c_str(),
 		neighborhood_size,
 		0,
 		periodic[0],
@@ -420,10 +422,10 @@ int main(int argc, char* argv[])
 	Simulate
 	*/
 
-	const double time_end = options_particle.time_start + options_particle.time_length;
+	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
 		max_dt = 0,
-		simulation_time = options_particle.time_start,
+		simulation_time = options_sim.time_start,
 		next_particle_save = options_particle.save_n;
 
 	std::vector<uint64_t>
@@ -442,7 +444,7 @@ int main(int argc, char* argv[])
 		grid,
 		cells,
 		simulation_time,
-		options_particle.vacuum_permeability,
+		options_sim.vacuum_permeability,
 		Mag, Mag_f,
 		Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z
 	);
@@ -472,7 +474,7 @@ int main(int argc, char* argv[])
 			cells,
 			grid,
 			random_source,
-			options_particle.boltzmann,
+			options_sim.boltzmann,
 			next_particle_id,
 			grid.get_comm_size(),
 			true,
@@ -505,8 +507,8 @@ int main(int argc, char* argv[])
 			cells,
 			grid,
 			random_source,
-			options_particle.boltzmann,
-			options_particle.vacuum_permeability,
+			options_sim.boltzmann,
+			options_sim.vacuum_permeability,
 			next_particle_id,
 			grid.get_comm_size(),
 			true,
@@ -523,7 +525,7 @@ int main(int argc, char* argv[])
 		);
 	next_particle_id += nr_particles_created * grid.get_comm_size();
 
-	if (options_particle.verbose and rank == 0) {
+	if (rank == 0) {
 		cout << "Done initializing particles" << endl;
 	}
 
@@ -554,7 +556,7 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = min(min(options_particle.time_step_factor * max_dt, until_end), max_dt),
+			local_time_step = min(min(options_sim.time_step_factor * max_dt, until_end), max_dt),
 			time_step = -1;
 
 		if (
@@ -577,7 +579,7 @@ int main(int argc, char* argv[])
 		Solve
 		*/
 
-		if (options_particle.verbose && grid.get_rank() == 0) {
+		if (rank == 0) {
 			cout << "Solving particles at time " << simulation_time
 				<< " s with time step " << time_step << " s" << endl;
 		}
@@ -607,7 +609,7 @@ int main(int argc, char* argv[])
 				given_cells,\
 				grid,\
 				background_B,\
-				options_particle.vacuum_permeability,\
+				options_sim.vacuum_permeability,\
 				false,\
 				Ele,\
 				Mag,\
@@ -759,8 +761,8 @@ int main(int argc, char* argv[])
 				cells,
 				grid,
 				random_source,
-				options_particle.boltzmann,
-				options_particle.vacuum_permeability,
+				options_sim.boltzmann,
+				options_sim.vacuum_permeability,
 				next_particle_id,
 				grid.get_comm_size(),
 				true,
@@ -790,7 +792,7 @@ int main(int argc, char* argv[])
 				next_particle_save += options_particle.save_n;
 			}
 
-			if (options_particle.verbose && rank == 0) {
+			if (rank == 0) {
 				cout << "Saving particles at time " << simulation_time << endl;
 			}
 
@@ -804,13 +806,13 @@ int main(int argc, char* argv[])
 					pamhd::particle::Particles_Internal
 				>(
 					boost::filesystem::canonical(
-						boost::filesystem::path(options_particle.output_directory)
+						boost::filesystem::path(options_sim.output_directory)
 					).append("particle_").generic_string(),
 					grid,
 					simulation_time,
 					0,
 					0,
-					options_particle.boltzmann
+					options_sim.boltzmann
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): Couldn't save particle result." << std::endl;
