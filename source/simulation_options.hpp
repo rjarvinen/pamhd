@@ -140,19 +140,15 @@ struct Options
 			);
 		}
 
-		if (not object.HasMember("particle-temp-nrj-ratio")) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a particle-temp-nrj-ratio key."
-			);
-		}
-		boltzmann = object["particle-temp-nrj-ratio"].GetDouble();
-		if (not isnormal(boltzmann) or boltzmann < 0) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Invalid particle temperature to energy ratio: " + std::to_string(boltzmann)
-				+ ", should be > 0"
-			);
+		if (object.HasMember("particle-temp-nrj-ratio")) {
+			boltzmann = object["particle-temp-nrj-ratio"].GetDouble();
+			if (not isnormal(boltzmann) or boltzmann < 0) {
+				throw std::invalid_argument(
+					std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+					+ "Invalid particle temperature to energy ratio: " + std::to_string(boltzmann)
+					+ ", should be > 0"
+				);
+			}
 		}
 
 		if (object.HasMember("output-directory")) {
