@@ -1005,7 +1005,7 @@ int main(int argc, char* argv[])
 				background_B,\
 				options_sim.vacuum_permeability,\
 				true,\
-				Ele,\
+				J_m_V,\
 				Mag,\
 				Nr_Ext,\
 				Part_Int,\

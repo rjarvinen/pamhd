@@ -1,7 +1,7 @@
 /*
 Serial test for particle accumulator of PAMHD.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -141,6 +141,26 @@ int main()
 		fabs(vec_accu[0] - 1) > 1e-10
 		or fabs(vec_accu[1] - 2) > 1e-10
 		or fabs(vec_accu[2] - 3) > 1e-10
+	) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Difference for accumulated vector too large from correct."
+			<< std::endl;
+		abort();
+	}
+
+	// test accumulation of negative values
+	const auto vec_accu2
+		= get_accumulated_value(
+			Vector3d{-1, -2, -3},
+			Vector3d{0, 0, 0},
+			Vector3d{1, 1, 1},
+			Vector3d{0, 0, 0},
+			Vector3d{1, 1, 1}
+		);
+	if (
+		fabs(vec_accu2[0] + 1) > 1e-10
+		or fabs(vec_accu2[1] + 2) > 1e-10
+		or fabs(vec_accu2[2] + 3) > 1e-10
 	) {
 		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
 			<< "Difference for accumulated vector too large from correct."
