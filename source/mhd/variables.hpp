@@ -301,11 +301,11 @@ using Cell2 = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::mhd::HD1_State,
 	pamhd::mhd::HD2_State,
-	pamhd::mhd::Magnetic_Field,
 	pamhd::mhd::Electric_Current_Density,
 	pamhd::mhd::Solver_Info,
 	pamhd::mhd::MPI_Rank,
 	pamhd::mhd::Resistivity,
+	pamhd::mhd::Magnetic_Field,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_X,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_Y,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_Z,
@@ -317,7 +317,6 @@ using Cell2 = gensimcell::Cell<
 	pamhd::mhd::HD2_Flux,
 	pamhd::mhd::Magnetic_Field_Flux
 >;
-
 
 }} // namespaces
 

@@ -86,11 +86,13 @@ using Cell = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::mhd::HD1_State, // fluid
 	pamhd::mhd::HD2_State, // particles
-	pamhd::mhd::Magnetic_Field,
 	pamhd::mhd::Electric_Current_Density,
 	pamhd::particle::Solver_Info,
 	pamhd::mhd::MPI_Rank,
 	pamhd::mhd::Resistivity,
+	pamhd::particle::Electric_Field,
+	pamhd::particle::Magnetic_Field,
+	pamhd::particle::Number_Of_Particles,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_X,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_Y,
 	pamhd::mhd::Bg_Magnetic_Field_Pos_Z,
@@ -101,8 +103,6 @@ using Cell = gensimcell::Cell<
 	pamhd::mhd::HD1_Flux,
 	pamhd::mhd::HD2_Flux,
 	pamhd::mhd::Magnetic_Field_Flux,
-	pamhd::particle::Electric_Field,
-	pamhd::particle::Number_Of_Particles,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
 	pamhd::particle::Bdy_Temperature,
@@ -316,8 +316,8 @@ const auto Nrj
 		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};*/
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
+		return cell_data[pamhd::particle::Magnetic_Field()];
 	};
 
 // field before divergence removal in case removal fails
@@ -1058,7 +1058,7 @@ int main(int argc, char* argv[])
 		);
 
 		// B required for E calculation
-		Cell::set_transfer_all(true, pamhd::mhd::Magnetic_Field());
+		Cell::set_transfer_all(true, pamhd::particle::Magnetic_Field());
 		grid.start_remote_neighbor_copy_updates();
 
 		pamhd::particle::fill_mhd_fluid_values(
@@ -1111,7 +1111,7 @@ int main(int argc, char* argv[])
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field());
+		Cell::set_transfer_all(false, pamhd::particle::Magnetic_Field());
 
 		// inner: E = (J - V) x B
 		for (const auto& cell: inner_cells) {
@@ -1230,7 +1230,7 @@ int main(int argc, char* argv[])
 
 		Cell::set_transfer_all(
 			true,
-			pamhd::mhd::Magnetic_Field(),
+			pamhd::particle::Magnetic_Field(),
 			pamhd::mhd::HD1_State(),
 			pamhd::mhd::HD2_State(),
 			pamhd::particle::Nr_Particles_External()
@@ -1357,7 +1357,7 @@ int main(int argc, char* argv[])
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(
 			false,
-			pamhd::mhd::Magnetic_Field(),
+			pamhd::particle::Magnetic_Field(),
 			pamhd::mhd::HD1_State(),
 			pamhd::mhd::HD2_State(),
 			pamhd::particle::Nr_Particles_External()
@@ -1508,7 +1508,7 @@ int main(int argc, char* argv[])
 
 			Cell::set_transfer_all(
 				true,
-				pamhd::mhd::Magnetic_Field(),
+				pamhd::particle::Magnetic_Field(),
 				pamhd::mhd::Magnetic_Field_Divergence()
 			);
 
@@ -1536,7 +1536,7 @@ int main(int argc, char* argv[])
 			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field_Divergence());
 
 			grid.update_copies_of_remote_neighbors();
-			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field());
+			Cell::set_transfer_all(false, pamhd::particle::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
 					solve_cells,
@@ -1653,7 +1653,7 @@ int main(int argc, char* argv[])
 			if (
 				not pamhd::particle::save<
 					pamhd::particle::Electric_Field,
-					pamhd::mhd::Magnetic_Field,
+					pamhd::particle::Magnetic_Field,
 					pamhd::mhd::Electric_Current_Density,
 					pamhd::particle::Nr_Particles_Internal,
 					pamhd::particle::Particles_Internal
@@ -1706,10 +1706,13 @@ int main(int argc, char* argv[])
 					options_sim.vacuum_permeability,
 					pamhd::mhd::HD1_State(),
 					pamhd::mhd::HD2_State(),
-					pamhd::mhd::Magnetic_Field(),
+					pamhd::particle::Magnetic_Field(),
 					pamhd::mhd::Electric_Current_Density(),
 					pamhd::mhd::MPI_Rank(),
-					pamhd::mhd::Resistivity()
+					pamhd::mhd::Resistivity(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
+					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "

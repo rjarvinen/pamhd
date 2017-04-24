@@ -765,7 +765,7 @@ int main(int argc, char* argv[])
 				options_sim.vacuum_permeability,
 				next_particle_id,
 				grid.get_comm_size(),
-				true,
+				false,
 				Sol_Info,
 				Ele,
 				Mag,

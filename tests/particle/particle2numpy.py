@@ -143,28 +143,28 @@ def load(file_name, bulk_data, particle_data):
 		cell_id = item[0]
 
 		if bulk_data == None:
-			infile.seek(item[1] + 7 * 8, 0)
+			infile.seek(item[1] + 10 * 8, 0)
 		else:
 			infile.seek(item[1], 0)
 			# given by source/particle/save.hpp
 			temp_bulk_data = numpy.fromfile(
 				infile,
-				dtype = '3float, 3double, uint64',
+				dtype = '3double, 3double, 3double, uint64',
 				count = 1
 			)[0]
 			if cell_id in bulk_data:
-				bulk_data[cell_id].append((temp_bulk_data[0], temp_bulk_data[1]))
+				bulk_data[cell_id].append((temp_bulk_data[1], temp_bulk_data[2]))
 			else:
-				bulk_data[cell_id] = [(temp_bulk_data[0], temp_bulk_data[1])]
+				bulk_data[cell_id] = [(temp_bulk_data[1], temp_bulk_data[2])]
 
-		# given by Particle_Internal in source/particle/variables.hpp
 		if particle_data == None:
 			continue
 
+		# given by Particle_Internal in source/particle/variables.hpp
 		temp_particle_data = numpy.fromfile(
 			infile,
 			dtype = '3double, 3double, double, double, double, uint64',
-			count = temp_bulk_data[2]
+			count = temp_bulk_data[3]
 		)
 		for particle in temp_particle_data:
 			position, velocity, mass, species_mass, charge_mass_ratio, particle_id \

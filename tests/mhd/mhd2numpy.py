@@ -48,10 +48,8 @@ Example plotting y component of magnetic field from all cells in
 first given file as a function of cells' x coordinate (looks best
 with 1-dimensional simulation):
 python -i mhd2numpy.py mhd_0.000e+00_s.dc
-x = []
-By = []
-[x.append(mhd_data[cell_id][0][0][0]) for cell_id in mhd_data]
-[By.append(mhd_data[cell_id][0][5][1]) for cell_id in mhd_data]
+x = [mhd_data[cell_id][0][0][0] for cell_id in sorted(mhd_data.keys())]
+By = [mhd_data[cell_id][0][5][1] for cell_id in sorted(mhd_data.keys())]
 import matplotlib.pyplot as plot
 plot.plot(x, By)
 plot.show()
