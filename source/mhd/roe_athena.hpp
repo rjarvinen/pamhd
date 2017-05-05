@@ -603,20 +603,16 @@ template <
 			return data[Magnetic_Field_T()];
 		};
 	const auto Mas_g_p
-		= [](MHD_Primitive& data)->typename Mass_Density_T::data_type&{
+		= [](HD_Primitive& data)->typename Mass_Density_T::data_type&{
 			return data[Mass_Density_T()];
 		};
 	const auto Vel_g
-		= [](MHD_Primitive& data)->typename Velocity::data_type&{
+		= [](HD_Primitive& data)->typename Velocity::data_type&{
 			return data[Velocity()];
 		};
 	const auto Pre_g
-		= [](MHD_Primitive& data)->typename Pressure::data_type&{
+		= [](HD_Primitive& data)->typename Pressure::data_type&{
 			return data[Pressure()];
-		};
-	const auto Mag_g_p
-		= [](MHD_Primitive& data)->typename Magnetic_Field_T::data_type&{
-			return data[Magnetic_Field_T()];
 		};
 
 	if (state_neg[Mas] <= 0) {
@@ -705,19 +701,21 @@ template <
 		};
 
 	const auto
-		prim_neg_temp = get_primitive<MHD_Primitive>(
+		prim_neg_temp = get_primitive<HD_Primitive>(
 			state_neg,
+			Mag(state_neg),
 			adiabatic_index,
 			1.0,
-			Mas_g_p, Vel_g, Pre_g, Mag_g_p,
-			Mas_g, Mom_g, Nrj_g, Mag_g
+			Mas_g_p, Vel_g, Pre_g,
+			Mas_g, Mom_g, Nrj_g
 		),
-		prim_pos_temp = get_primitive<MHD_Primitive>(
+		prim_pos_temp = get_primitive<HD_Primitive>(
 			state_pos,
+			Mag(state_pos),
 			adiabatic_index,
 			1.0,
-			Mas_g_p, Vel_g, Pre_g, Mag_g_p,
-			Mas_g, Mom_g, Nrj_g, Mag_g
+			Mas_g_p, Vel_g, Pre_g,
+			Mas_g, Mom_g, Nrj_g
 		);
 
 	const Prim1DS
@@ -727,8 +725,8 @@ template <
 			prim_neg_temp[Vel][1],
 			prim_neg_temp[Vel][2],
 			prim_neg_temp[Pre],
-			prim_neg_temp[Mag][1] / std::sqrt(vacuum_permeability),
-			prim_neg_temp[Mag][2] / std::sqrt(vacuum_permeability)
+			state_neg[Mag][1] / std::sqrt(vacuum_permeability),
+			state_neg[Mag][2] / std::sqrt(vacuum_permeability)
 		},
 		Wr{
 			prim_pos_temp[Mas],
@@ -736,8 +734,8 @@ template <
 			prim_pos_temp[Vel][1],
 			prim_pos_temp[Vel][2],
 			prim_pos_temp[Pre],
-			prim_pos_temp[Mag][1] / std::sqrt(vacuum_permeability),
-			prim_pos_temp[Mag][2] / std::sqrt(vacuum_permeability)
+			state_pos[Mag][1] / std::sqrt(vacuum_permeability),
+			state_pos[Mag][2] / std::sqrt(vacuum_permeability)
 		};
 
 	const auto flux_temp

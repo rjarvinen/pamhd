@@ -37,6 +37,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "gensimcell.hpp"
 
+#include "variables.hpp"
 #include "mhd/common.hpp"
 #include "mhd/hll_athena.hpp"
 #include "mhd/hlld_athena.hpp"
@@ -58,9 +59,11 @@ constexpr size_t grid_length = 1000 + 2;
 
 using Cell = gensimcell::Cell<
 	gensimcell::Never_Transfer,
-	pamhd::mhd::MHD_State_Conservative,
-	pamhd::mhd::MHD_Flux_Conservative,
-	pamhd::mhd::Bg_Magnetic_Field_Pos_X
+	pamhd::mhd::HD_State_Conservative,
+	pamhd::Magnetic_Field,
+	pamhd::mhd::HD_Flux_Conservative,
+	pamhd::Magnetic_Field_Flux,
+	pamhd::Bg_Magnetic_Field_Pos_X
 >;
 using Grid = std::array<Cell, grid_length>;
 
@@ -73,48 +76,48 @@ Return a reference to data of corresponding variable in given simulation cell.
 // conservative MHD variables
 const auto Mas
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 
 const auto Mom
 	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 
 const auto Nrj
 	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
-		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 
 const auto Bg_Mag
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()];
 	};
 
 // fluxes of conservative MHD variables
 const auto Mas_f
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_Flux_Conservative()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 
 const auto Mom_f
 	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 
 const auto Nrj_f
 	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[pamhd::mhd::MHD_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 
 const auto Mag_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
-		return cell_data[pamhd::mhd::MHD_Flux_Conservative()][pamhd::mhd::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Flux::data_type&{
+		return cell_data[pamhd::Magnetic_Field_Flux()];
 	};
 
 
@@ -258,7 +261,6 @@ Returns the maximum allowed length of time step for the
 next step.
 */
 template <
-	class Solver,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -268,7 +270,7 @@ template <
 	class Total_Energy_Density_Flux_Getter,
 	class Magnetic_Field_Flux_Getter
 > double solve_mhd(
-	const Solver solver,
+	const pamhd::mhd::Solver solver,
 	Grid& grid,
 	const double dt,
 	const double adiabatic_index,
@@ -291,13 +293,22 @@ template <
 	const pamhd::mhd::Mass_Density mas{};
 	const pamhd::mhd::Momentum_Density mom{};
 	const pamhd::mhd::Total_Energy_Density nrj{};
-	const pamhd::mhd::Magnetic_Field mag{};
+	const pamhd::Magnetic_Field mag{};
 
 	const double
 		cell_size = get_cell_size(),
 		face_area = 1.0;
 
 	double max_dt = std::numeric_limits<double>::max();
+
+	// internal data type used by MHD solvers
+	using MHD = gensimcell::Cell<
+		gensimcell::Never_Transfer,
+		pamhd::mhd::Mass_Density,
+		pamhd::mhd::Momentum_Density,
+		pamhd::mhd::Total_Energy_Density,
+		pamhd::Magnetic_Field
+	>;
 
 	// calculate fluxes
 	for (size_t cell_i = 0; cell_i < std::tuple_size<Grid>::value - 1; cell_i++) {
@@ -307,7 +318,7 @@ template <
 			&neighbor = grid[cell_i + 1];
 
 		double max_vel = -1;
-		pamhd::mhd::MHD_Conservative state_neg, state_pos, flux;
+		MHD state_neg, state_pos, flux;
 		state_neg[mas] = Mas(cell);
 		state_neg[mom] = Mom(cell);
 		state_neg[nrj] = Nrj(cell);
@@ -318,18 +329,24 @@ template <
 		state_pos[mag] = Mag(neighbor);
 		const auto bg_magnetic_field = Bg_Mag(cell);
 
-		std::tie(
-			flux,
-			max_vel
-		) = solver(
-			state_neg,
-			state_pos,
-			bg_magnetic_field,
-			face_area,
-			dt,
-			adiabatic_index,
-			vacuum_permeability
-		);
+		switch (solver) {
+		case pamhd::mhd::Solver::rusanov:
+			std::tie(
+				flux,
+				max_vel
+			) = pamhd::mhd::get_flux_rusanov(
+				state_neg,
+				state_pos,
+				bg_magnetic_field,
+				face_area,
+				dt,
+				adiabatic_index,
+				vacuum_permeability
+			);
+			break;
+		default:
+			abort();
+		}
 
 		max_dt = std::min(max_dt, cell_size / max_vel);
 
@@ -750,55 +767,17 @@ int main(int argc, char* argv[])
 		verbose = true;
 	}
 
-	const auto solver
+	const pamhd::mhd::Solver solver
 		= [&solver_str](){
-
 			if (solver_str == "rusanov") {
-
-				return pamhd::mhd::get_flux_rusanov<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+				return pamhd::mhd::Solver::rusanov;
 			} else if (solver_str == "hll_athena") {
-
-				return pamhd::mhd::athena::get_flux_hll<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+				return pamhd::mhd::Solver::hll_athena;
 			} else if (solver_str == "hlld_athena") {
-
-				return pamhd::mhd::athena::get_flux_hlld<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+				return pamhd::mhd::Solver::hlld_athena;
 			} else if (solver_str == "roe_athena") {
-
-				return pamhd::mhd::athena::get_flux_roe<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+				return pamhd::mhd::Solver::roe_athena;
 			} else {
-
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") Invalid solver: "
 					<< solver_str << ", use --help to list available solvers"
 					<< std::endl;

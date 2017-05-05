@@ -57,7 +57,6 @@ Returns the maximum allowed length of time step for the next step on this proces
 */
 template <
 	class Solver_Info,
-	class Solver,
 	class Cell,
 	class Geometry,
 	class Mass_Density_Getter,
@@ -101,6 +100,14 @@ template <
 		);
 	}
 
+	// internal data type used by MHD solvers
+	using MHD = gensimcell::Cell<
+		gensimcell::Never_Transfer,
+		pamhd::mhd::Mass_Density,
+		pamhd::mhd::Momentum_Density,
+		pamhd::mhd::Total_Energy_Density,
+		pamhd::Magnetic_Field
+	>;
 	// shorthand for referring to variables of internal MHD data type
 	const Mass_Density mas_int{};
 	const Momentum_Density mom_int{};
@@ -282,18 +289,24 @@ template <
 			MHD_Conservative flux;
 			double max_vel;
 			try {
-				std::tie(
-					flux,
-					max_vel
-				) = solver(
-					state_neg,
-					state_pos,
-					bg_face_b,
-					shared_area,
-					dt,
-					adiabatic_index,
-					vacuum_permeability
-				);
+				switch (solver) {
+				case pamhd::mhd::Solver::rusanov:
+					std::tie(
+						flux,
+						max_vel
+					) = pamhd::mhd::get_flux_rusanov(
+						state_neg,
+						state_pos,
+						bg_face_b,
+						shared_area,
+						dt,
+						adiabatic_index,
+						vacuum_permeability
+					);
+					break;
+				default:
+					abort();
+				}
 			} catch (const std::domain_error& error) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 					<< "Solution failed between cells " << cell_id

@@ -75,18 +75,18 @@ using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 // returns reference to background magnetic field at +X face of given cell
 const auto Bg_B_Pos_X
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()];
 	};
 // reference to +Y face background magnetic field
 const auto Bg_B_Pos_Y
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Y()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_Y()];
 	};
 // ref to +Z face bg B
 const auto Bg_B_Pos_Z
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Z()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_Z()];
 	};
 
 // returns reference to total mass density in given cell
@@ -103,8 +103,8 @@ const auto Nrj
 		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
-		return cell_data[pamhd::mhd::MHD_State_Conservative()][pamhd::mhd::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::mhd::Magnetic_Field()];
 	};
 
 // field before divergence removal in case removal fails
@@ -506,16 +506,16 @@ int main(int argc, char* argv[])
 	// update background field between processes
 	Cell::set_transfer_all(
 		true,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 	grid.update_copies_of_remote_neighbors();
 	Cell::set_transfer_all(
 		false,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 
 	// initialize resistivity
@@ -935,9 +935,9 @@ int main(int argc, char* argv[])
 					pamhd::mhd::Solver_Info(),
 					pamhd::mhd::MPI_Rank(),
 					pamhd::mhd::Resistivity(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+					pamhd::Bg_Magnetic_Field_Pos_X(),
+					pamhd::Bg_Magnetic_Field_Pos_Y(),
+					pamhd::Bg_Magnetic_Field_Pos_Z()
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "

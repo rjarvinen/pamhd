@@ -43,6 +43,15 @@ namespace pamhd {
 namespace mhd {
 
 
+// available MHD solvers
+enum class Solver {
+	rusanov,
+	hll_athena,
+	hlld_athena,
+	roe_athena
+};
+
+
 /*!
 Returns pressure.
 
@@ -590,27 +599,25 @@ Throws std::domain_error if given a state with non-positive mass density.
 */
 template <
 	class Primitive,
+	class Conservative,
+	class Magnetic_Field,
 	class P_Mass_Density_Getter,
 	class Velocity_Getter,
 	class Pressure_Getter,
-	class P_Magnetic_Field_Getter,
-	class Conservative,
 	class C_Mass_Density_Getter,
 	class Momentum_Density_Getter,
-	class Total_Energy_Density_Getter,
-	class C_Magnetic_Field_Getter
+	class Total_Energy_Density_Getter
 > Primitive get_primitive(
 	Conservative data,
+	const Magnetic_Field& magnetic_field,
 	const double adiabatic_index,
 	const double vacuum_permeability,
 	const P_Mass_Density_Getter Mas_p,
 	const Velocity_Getter Vel,
 	const Pressure_Getter Pre,
-	const P_Magnetic_Field_Getter Mag_p,
 	const C_Mass_Density_Getter Mas_c,
 	const Momentum_Density_Getter Mom,
-	const Total_Energy_Density_Getter Nrj,
-	const C_Magnetic_Field_Getter Mag_c
+	const Total_Energy_Density_Getter Nrj
 ) {
 	using std::to_string;
 
@@ -630,11 +637,10 @@ template <
 			Mas_c(data),
 			Mom(data),
 			Nrj(data),
-			Mag_c(data),
+			magnetic_field,
 			adiabatic_index,
 			vacuum_permeability
 		);
-	Mag_p(ret_val) = Mag_c(data);
 
 	return ret_val;
 }
