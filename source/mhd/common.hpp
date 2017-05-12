@@ -60,20 +60,20 @@ Throws std::domain_error if given a state with non-positive mass density.
 Returns negative pressure if total energy in given state
 is smaller than kinetic + magnetic energies.
 
-Mom and mag must be compatible with std::array<double, 3>.
+Vector must be compatible with std::array<double, 3>.
 
 mag must not include background magnetic field.
 */
 template <
-	class Momentum_Density,
-	class Magnetic_Field
-> double get_pressure(
-	const double& mass_density,
-	const Momentum_Density& mom,
-	const double& total_energy_density,
-	const Magnetic_Field& mag,
-	const double adiabatic_index,
-	const double vacuum_permeability
+	class Vector,
+	class Scalar
+> Scalar get_pressure(
+	const Scalar& mass_density,
+	const Vector& mom,
+	const Scalar& total_energy_density,
+	const Vector& mag,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::to_string;
 
@@ -129,6 +129,7 @@ Throws std::domain_error if given a state with non-positive mass density.
 template <
 	class Container,
 	class Vector,
+	class Scalar,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -136,8 +137,8 @@ template <
 > Container get_flux(
 	Container& data,
 	const Vector& bg_face_magnetic_field,
-	const double adiabatic_index,
-	const double vacuum_permeability,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability,
 	const Mass_Density_Getter Mas,
 	const Momentum_Density_Getter Mom,
 	const Total_Energy_Density_Getter Nrj,
@@ -153,7 +154,7 @@ template <
 	}
 
 	const auto mag_tot = Mag(data) + bg_face_magnetic_field;
-	const double
+	const auto
 		inv_permeability = 1.0 / vacuum_permeability,
 		pressure_B0
 			= 0.5 * inv_permeability
@@ -220,18 +221,18 @@ Returns total energy density.
 
 Throws std::domain_error if given a state with non-positive mass density.
 
-Vel and mag must be compatible with std::array<double, 3>.
+Vector must be compatible with std::array<double, 3>.
 */
 template <
-	class Velocity,
-	class Magnetic_Field
-> double get_total_energy_density(
-	const double& mass_density,
-	const Velocity& vel,
-	const double& pressure,
-	const Magnetic_Field& mag,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	class Vector,
+	class Scalar
+> Scalar get_total_energy_density(
+	const Scalar& mass_density,
+	const Vector& vel,
+	const Scalar& pressure,
+	const Vector& mag,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::to_string;
 
@@ -292,15 +293,15 @@ Mom and mag must be compatible with std::array<double, 3>.
 mag must not include background magnetic field.
 */
 template <
-	class Momentum_Density,
-	class Magnetic_Field
-> double get_sound_speed(
-	const double& mass_density,
-	const Momentum_Density& mom,
-	const double& total_energy_density,
-	const Magnetic_Field& mag,
-	const double adiabatic_index,
-	const double vacuum_permeability
+	class Vector,
+	class Scalar
+> Scalar get_sound_speed(
+	const Scalar& mass_density,
+	const Vector& mom,
+	const Scalar& total_energy_density,
+	const Vector& mag,
+	const Scalar adiabatic_index,
+	const Scalar vacuum_permeability
 ) {
 	using std::to_string;
 
@@ -338,15 +339,16 @@ Returns speed of Alfvén wave.
 
 Throws std::domain_error if given a state with non-positive mass density.
 
-Mag must be compatible with std::array<double, 3>.
+Vector must be compatible with std::array<double, 3>.
 */
 template <
-	class Vector
-> double get_alfven_speed(
-	const double& mass_density,
+	class Vector,
+	class Scalar
+> Scalar get_alfven_speed(
+	const Scalar& mass_density,
 	const Vector& mag,
 	const Vector& bg_mag,
-	const double vacuum_permeability
+	const Scalar& vacuum_permeability
 ) {
 	using std::pow;
 	using std::sqrt;
@@ -373,18 +375,19 @@ Returns speed of fast magnetosonic wave in first dimension.
 
 Returns a non-negative value.
 
-Mom and mag must be compatible with std::array<double, 3>.
+Vector must be compatible with std::array<double, 3>.
 */
 template <
-	class Vector
-> double get_fast_magnetosonic_speed(
-	const double& mass_density,
+	class Vector,
+	class Scalar
+> Scalar get_fast_magnetosonic_speed(
+	const Scalar& mass_density,
 	const Vector& momentum_density,
-	const double& total_energy_density,
+	const Scalar& total_energy_density,
 	const Vector& mag,
 	const Vector& bg_mag,
-	const double adiabatic_index,
-	const double vacuum_permeability
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::pow;
 	using std::sqrt;
@@ -441,6 +444,7 @@ Ignores background magnetic field.
 template <
 	class MHD,
 	class Vector,
+	class Scalar,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
@@ -449,8 +453,8 @@ template <
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
-	const double adiabatic_index,
-	const double vacuum_permeability
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	const Mass_Density Mas{};
 	const Momentum_Density Mom{};
@@ -600,6 +604,8 @@ Throws std::domain_error if given a state with non-positive mass density.
 template <
 	class Primitive,
 	class Conservative,
+	class Vector,
+	class Scalar,
 	class Magnetic_Field,
 	class P_Mass_Density_Getter,
 	class Velocity_Getter,
@@ -609,9 +615,9 @@ template <
 	class Total_Energy_Density_Getter
 > Primitive get_primitive(
 	Conservative data,
-	const Magnetic_Field& magnetic_field,
-	const double adiabatic_index,
-	const double vacuum_permeability,
+	const Vector& magnetic_field,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability,
 	const P_Mass_Density_Getter Mas_p,
 	const Velocity_Getter Vel,
 	const Pressure_Getter Pre,
@@ -739,6 +745,7 @@ mass density or pressure check_new_state == true.
 */
 template <
 	class Container,
+	class Scalar,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -749,9 +756,9 @@ template <
 	class Magnetic_Field_Flux_Getter
 > void apply_fluxes(
 	Container& data,
-	const double factor,
-	const double adiabatic_index,
-	const double vacuum_permeability,
+	const Scalar& factor,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability,
 	const Mass_Density_Getter Mas,
 	const Momentum_Density_Getter Mom,
 	const Total_Energy_Density_Getter Nrj,
@@ -792,6 +799,7 @@ template <
 
 template <
 	class Container,
+	class Scalar,
 	class Mass_Density_Getters,
 	class Momentum_Density_Getters,
 	class Total_Energy_Density_Getters,
@@ -802,7 +810,7 @@ template <
 	class Magnetic_Field_Flux_Getter
 > void apply_fluxes_N(
 	Container& data,
-	const double factor,
+	const Scalar& factor,
 	const Mass_Density_Getters Mas,
 	const Momentum_Density_Getters Mom,
 	const Total_Energy_Density_Getters Nrj,
