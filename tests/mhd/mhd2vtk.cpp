@@ -1,7 +1,7 @@
 /*
 Program for converting MHD output of PAMHD to vtk format.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -49,14 +49,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mpi.h" // must be included before gensimcell
 #include "Eigen/Core" // must be included before gensimcell
 #include "gensimcell.hpp"
-//#include "prettyprint.hpp"
 
 #include "mhd/common.hpp"
 #include "mhd/save.hpp"
 #include "mhd/variables.hpp"
+#include "variables.hpp"
+
 
 using namespace std;
-using namespace pamhd::mhd;
 
 /*
 Reads simulation data from given file.
@@ -70,7 +70,7 @@ boost::optional<std::array<double, 4>> read_data(
 	dccrg::Mapping& cell_id_mapping,
 	dccrg::Grid_Topology& topology,
 	dccrg::Cartesian_Geometry& geometry,
-	unordered_map<uint64_t, Cell>& simulation_data,
+	unordered_map<uint64_t, pamhd::mhd::Cell>& simulation_data,
 	const std::string& file_name,
 	const int mpi_rank
 ) {
@@ -190,16 +190,16 @@ boost::optional<std::array<double, 4>> read_data(
 	);
 
 	// read cell data
-	Cell::set_transfer_all(
+	pamhd::mhd::Cell::set_transfer_all(
 		true,
-		MHD_State_Conservative(),
-		Electric_Current_Density(),
-		Solver_Info(),
-		MPI_Rank(),
-		Resistivity(),
-		Bg_Magnetic_Field_Pos_X(),
-		Bg_Magnetic_Field_Pos_Y(),
-		Bg_Magnetic_Field_Pos_Z()
+		pamhd::mhd::HD_State_Conservative(),
+		pamhd::Electric_Current_Density(),
+		pamhd::mhd::Solver_Info(),
+		pamhd::MPI_Rank(),
+		pamhd::Resistivity(),
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 	for (const auto& item: cells_offsets) {
 		const uint64_t
@@ -264,7 +264,7 @@ Writes given data in vtk format to given file appended with .vtk.
 */
 void convert(
 	const dccrg::Cartesian_Geometry& geometry,
-	const unordered_map<uint64_t, Cell>& simulation_data,
+	const unordered_map<uint64_t, pamhd::mhd::Cell>& simulation_data,
 	const std::string& output_file_name_prefix,
 	const double adiabatic_index,
 	const double vacuum_permeability
@@ -310,23 +310,23 @@ void convert(
 
 	vtk_file << "CELL_DATA " << cells.size() << "\n";
 
-	const MHD_State_Conservative MHD{};
+	constexpr pamhd::mhd::HD_State_Conservative HD{};
 
-	const Mass_Density Mas{};
+	constexpr pamhd::mhd::Mass_Density Mas{};
 	vtk_file << "SCALARS mass_density double 1\nlookup_table default\n";
 	for (const auto& cell: cells) {
-		const auto density = simulation_data.at(cell)[MHD][Mas];
+		const auto density = simulation_data.at(cell)[HD][Mas];
 		vtk_file << density << "\n";
 	}
 
 	vtk_file << "SCALARS pressure double 1\nlookup_table default\n";
 	for (const auto& cell: cells) {
 		const auto pressure
-			= get_pressure(
-				simulation_data.at(cell)[MHD][Mas],
-				simulation_data.at(cell)[MHD][Momentum_Density()],
-				simulation_data.at(cell)[MHD][Total_Energy_Density()],
-				simulation_data.at(cell)[MHD][Magnetic_Field()],
+			= pamhd::mhd::get_pressure(
+				simulation_data.at(cell)[HD][Mas],
+				simulation_data.at(cell)[HD][pamhd::mhd::Momentum_Density()],
+				simulation_data.at(cell)[HD][pamhd::mhd::Total_Energy_Density()],
+				simulation_data.at(cell)[pamhd::Magnetic_Field()],
 				adiabatic_index,
 				vacuum_permeability
 			);
@@ -334,33 +334,31 @@ void convert(
 		vtk_file << pressure << "\n";
 	}
 
-	const Momentum_Density Mom{};
+	constexpr pamhd::mhd::Momentum_Density Mom{};
 	vtk_file << "VECTORS velocity double\n";
 	for (const auto& cell: cells) {
-		const auto density = simulation_data.at(cell)[MHD][Mas];
-		if (not std::isnormal(density) or density < 0) {
-			vtk_file << "0 0 0\n";
-			continue;
-		}
-
-		const auto momentum = simulation_data.at(cell)[MHD][Mom];
+		const auto velocity
+			= pamhd::mhd::get_velocity(
+				simulation_data.at(cell)[HD][Mom],
+				simulation_data.at(cell)[HD][Mas]
+			);
 		vtk_file
-			<< momentum[0] / density << " "
-			<< momentum[1] / density << " "
-			<< momentum[2] / density << "\n";
+			<< velocity[0] << " "
+			<< velocity[1] << " "
+			<< velocity[2] << "\n";
 	}
 
-	const Magnetic_Field Mag{};
+	constexpr pamhd::Magnetic_Field Mag{};
 	vtk_file << "VECTORS magnetic_field double\n";
 	for (const auto& cell: cells) {
-		const auto magnetic_field = simulation_data.at(cell)[MHD][Mag];
+		const auto magnetic_field = simulation_data.at(cell)[Mag];
 		vtk_file
 			<< magnetic_field[0] << " "
 			<< magnetic_field[1] << " "
 			<< magnetic_field[2] << "\n";
 	}
 
-	const Electric_Current_Density Cur{};
+	constexpr pamhd::Electric_Current_Density Cur{};
 	vtk_file << "VECTORS current_density double\n";
 	for (const auto& cell: cells) {
 		const auto current_density = simulation_data.at(cell)[Cur];
@@ -372,15 +370,15 @@ void convert(
 
 	vtk_file << "SCALARS rank int 1\nlookup_table default\n";
 	for (const auto& cell: cells) {
-		vtk_file << simulation_data.at(cell)[MPI_Rank()] << "\n";
+		vtk_file << simulation_data.at(cell)[pamhd::MPI_Rank()] << "\n";
 	}
 
 	vtk_file << "SCALARS boundary_type int 1\nlookup_table default\n";
 	for (const auto& cell: cells) {
-		vtk_file << simulation_data.at(cell)[Solver_Info()] << "\n";
+		vtk_file << simulation_data.at(cell)[pamhd::mhd::Solver_Info()] << "\n";
 	}
 
-	const Bg_Magnetic_Field_Pos_X BgBPX{};
+	constexpr pamhd::Bg_Magnetic_Field_Pos_X BgBPX{};
 	vtk_file << "VECTORS background_B_pos_x double\n";
 	for (const auto& cell: cells) {
 		const auto magnetic_field = simulation_data.at(cell)[BgBPX];
@@ -390,7 +388,7 @@ void convert(
 			<< magnetic_field[2] << "\n";
 	}
 
-	const Bg_Magnetic_Field_Pos_Y BgBPY{};
+	constexpr pamhd::Bg_Magnetic_Field_Pos_Y BgBPY{};
 	vtk_file << "VECTORS background_B_pos_y double\n";
 	for (const auto& cell: cells) {
 		const auto magnetic_field = simulation_data.at(cell)[BgBPY];
@@ -400,7 +398,7 @@ void convert(
 			<< magnetic_field[2] << "\n";
 	}
 
-	const Bg_Magnetic_Field_Pos_Z BgBPZ{};
+	constexpr pamhd::Bg_Magnetic_Field_Pos_Z BgBPZ{};
 	vtk_file << "VECTORS background_B_pos_z double\n";
 	for (const auto& cell: cells) {
 		const auto magnetic_field = simulation_data.at(cell)[BgBPZ];
@@ -522,7 +520,7 @@ int main(int argc, char* argv[])
 		dccrg::Mapping cell_id_mapping;
 		dccrg::Grid_Topology topology;
 		dccrg::Cartesian_Geometry geometry(cell_id_mapping.length, cell_id_mapping, topology);
-		unordered_map<uint64_t, Cell> simulation_data;
+		unordered_map<uint64_t, pamhd::mhd::Cell> simulation_data;
 
 		boost::optional<std::array<double, 4>> header
 			= read_data(
@@ -542,7 +540,7 @@ int main(int argc, char* argv[])
 
 		convert(
 			geometry,
-			simulation_data,
+			std::cref(simulation_data),
 			input_files[i].substr(0, input_files[i].size() - 3),
 			(*header)[1],
 			(*header)[3]
