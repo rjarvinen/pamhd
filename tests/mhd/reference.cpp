@@ -329,24 +329,38 @@ template <
 		state_pos[mag] = Mag(neighbor);
 		const auto bg_magnetic_field = Bg_Mag(cell);
 
+		#define SOLVER(name) \
+			name< \
+				pamhd::mhd::Mass_Density, \
+				pamhd::mhd::Momentum_Density, \
+				pamhd::mhd::Total_Energy_Density, \
+				pamhd::Magnetic_Field \
+			>( \
+				state_neg, \
+				state_pos, \
+				bg_magnetic_field, \
+				face_area, \
+				dt, \
+				adiabatic_index, \
+				vacuum_permeability \
+			)
 		switch (solver) {
 		case pamhd::mhd::Solver::rusanov:
-			std::tie(
-				flux,
-				max_vel
-			) = pamhd::mhd::get_flux_rusanov(
-				state_neg,
-				state_pos,
-				bg_magnetic_field,
-				face_area,
-				dt,
-				adiabatic_index,
-				vacuum_permeability
-			);
+			std::tie(flux, max_vel) = SOLVER(pamhd::mhd::get_flux_rusanov);
+			break;
+		case pamhd::mhd::Solver::hll_athena:
+			std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_hll);
+			break;
+		case pamhd::mhd::Solver::hlld_athena:
+			std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_hlld);
+			break;
+		case pamhd::mhd::Solver::roe_athena:
+			std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_roe);
 			break;
 		default:
 			abort();
 		}
+		#undef SOLVER
 
 		max_dt = std::min(max_dt, cell_size / max_vel);
 

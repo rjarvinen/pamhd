@@ -53,20 +53,21 @@ See get_flux_hll() in hll_athena.hpp
 Equation 10.55 in ISBN 978-3-540-25202-3
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
-	class Magnetic_Field
-> std::tuple<MHD, double> get_flux_rusanov(
+	class Magnetic_Field,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, Scalar> get_flux_rusanov(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& bg_face_magnetic_field,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::isnormal;
 	using std::isfinite;

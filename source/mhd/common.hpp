@@ -606,7 +606,6 @@ template <
 	class Conservative,
 	class Vector,
 	class Scalar,
-	class Magnetic_Field,
 	class P_Mass_Density_Getter,
 	class Velocity_Getter,
 	class Pressure_Getter,

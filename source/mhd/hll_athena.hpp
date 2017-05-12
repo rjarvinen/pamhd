@@ -52,20 +52,21 @@ Returns the flux between states and maximum signal speed from cells' shared face
 \param [vacuum_permeability] en.wikipedia.org/wiki/Vacuum_permeability
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
-	class Magnetic_Field
-> std::tuple<MHD, double> get_flux_hll(
+	class Magnetic_Field,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, Scalar> get_flux_hll(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& bg_face_magnetic_field,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::isnormal;
 	using std::isfinite;

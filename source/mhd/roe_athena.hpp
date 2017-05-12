@@ -560,20 +560,21 @@ See get_flux_hll() in hll_athena.hpp
 Ignores background field.
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density_T,
 	class Momentum_Density_T,
 	class Total_Energy_Density_T,
-	class Magnetic_Field_T
-> std::tuple<MHD, double> get_flux_roe(
+	class Magnetic_Field_T,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, Scalar> get_flux_roe(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	const Vector bg_face_magnetic_field{0, 0, 0};
 
@@ -597,10 +598,6 @@ template <
 	const auto Nrj_g
 		= [](MHD& data)->typename Total_Energy_Density_T::data_type&{
 			return data[Total_Energy_Density_T()];
-		};
-	const auto Mag_g
-		= [](MHD& data)->typename Magnetic_Field_T::data_type&{
-			return data[Magnetic_Field_T()];
 		};
 	const auto Mas_g_p
 		= [](HD_Primitive& data)->typename Mass_Density_T::data_type&{
@@ -703,7 +700,7 @@ template <
 	const auto
 		prim_neg_temp = get_primitive<HD_Primitive>(
 			state_neg,
-			Mag(state_neg),
+			state_neg[Mag],
 			adiabatic_index,
 			1.0,
 			Mas_g_p, Vel_g, Pre_g,
@@ -711,7 +708,7 @@ template <
 		),
 		prim_pos_temp = get_primitive<HD_Primitive>(
 			state_pos,
-			Mag(state_pos),
+			state_pos[Mag],
 			adiabatic_index,
 			1.0,
 			Mas_g_p, Vel_g, Pre_g,

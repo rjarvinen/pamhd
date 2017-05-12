@@ -47,20 +47,21 @@ A multi-state HLL approximate Riemann solver for ideal MHD,
 Journal of Computational Physics, 208, 315-344, 2005.
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density_T,
 	class Momentum_Density_T,
 	class Total_Energy_Density_T,
-	class Magnetic_Field_T
-> std::tuple<MHD, double> get_flux_hlld(
+	class Magnetic_Field_T,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, Scalar> get_flux_hlld(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	const Vector bg_face_magnetic_field{0, 0, 0};
 
@@ -142,7 +143,7 @@ template <
 	}
 
 
-	constexpr double epsilon = std::numeric_limits<double>::epsilon();
+	constexpr auto epsilon = std::numeric_limits<Scalar>::epsilon();
 
 	/*
 	Figure 3 in M&K, Us are MHD states, Ss are signal speeds
