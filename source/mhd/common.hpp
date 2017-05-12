@@ -442,13 +442,13 @@ Throws std::domain_error if given a state with non-positive mass density.
 Ignores background magnetic field.
 */
 template <
-	class MHD,
-	class Vector,
-	class Scalar,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
-	class Magnetic_Field
+	class Magnetic_Field,
+	class MHD,
+	class Vector,
+	class Scalar
 > std::tuple<MHD, MHD> N_get_flux(
 	MHD& state_neg,
 	MHD& state_pos,

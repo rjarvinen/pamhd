@@ -1,7 +1,7 @@
 /*
 Two-fluid reference test program for MHD solvers of PAMHD.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -34,10 +34,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "string"
 #include "type_traits"
 
+#include "Eigen/Core"
 #include "gensimcell.hpp"
 
+#include "variables.hpp"
 #include "mhd/common.hpp"
 #include "mhd/N_hll_athena.hpp"
+#include "mhd/N_rusanov.hpp"
 #include "mhd/variables.hpp"
 
 
@@ -53,27 +56,14 @@ constexpr double
 // 1 boundary cell in each direction
 constexpr size_t grid_length = 1000 + 2;
 
-// only one magnetic field needed
-using HD_Conservative = gensimcell::Cell<
-	gensimcell::Always_Transfer,
-	pamhd::mhd::Mass_Density,
-	pamhd::mhd::Momentum_Density,
-	pamhd::mhd::Total_Energy_Density
->;
-
-struct HD1 { using data_type = HD_Conservative; };
-struct HD2 { using data_type = HD_Conservative; };
-struct HD1_Flux { using data_type = HD_Conservative; };
-struct HD2_Flux { using data_type = HD_Conservative; };
-
 using Cell = gensimcell::Cell<
 	gensimcell::Never_Transfer,
-	pamhd::mhd::Magnetic_Field,
-	HD1,
-	HD2,
-	pamhd::mhd::Magnetic_Field_Flux,
-	HD1_Flux,
-	HD2_Flux
+	pamhd::Magnetic_Field,
+	pamhd::mhd::HD_State_Conservative,
+	pamhd::mhd::HD2_State_Conservative,
+	pamhd::Magnetic_Field_Flux,
+	pamhd::mhd::HD_Flux_Conservative,
+	pamhd::mhd::HD2_Flux_Conservative
 >;
 using Grid = std::array<Cell, grid_length>;
 
@@ -84,40 +74,67 @@ Return a reference to data of corresponding variable in given simulation cell.
 */
 
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 const auto Mag_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field_Flux::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field_Flux()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Flux::data_type&{
+		return cell_data[pamhd::Magnetic_Field_Flux()];
 	};
 
 // fluid variables
 const auto Mas1
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[HD1()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom1
 	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[HD1()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj1
 	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[HD1()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 const auto Mas2
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[HD2()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom2
 	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[HD2()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj2
 	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[HD2()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
-// total quantities
+
+// fluxes of fluid variables
+const auto Mas1_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Mass_Density()];
+	};
+const auto Mom1_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
+	};
+const auto Nrj1_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
+	};
+const auto Mas2_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Mass_Density()];
+	};
+const auto Mom2_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
+	};
+const auto Nrj2_f
+	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
+	};
+
+// copies of total quantities
 const auto Mas
 	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type{
 		return Mas1(cell_data) + Mas2(cell_data);
@@ -129,32 +146,6 @@ const auto Mom
 const auto Nrj
 	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type{
 		return Nrj1(cell_data) + Nrj2(cell_data);
-	};
-
-// fluxes of fluid variables
-const auto Mas1_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[HD1_Flux()][pamhd::mhd::Mass_Density()];
-	};
-const auto Mom1_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[HD1_Flux()][pamhd::mhd::Momentum_Density()];
-	};
-const auto Nrj1_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[HD1_Flux()][pamhd::mhd::Total_Energy_Density()];
-	};
-const auto Mas2_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Mass_Density::data_type&{
-		return cell_data[HD2_Flux()][pamhd::mhd::Mass_Density()];
-	};
-const auto Mom2_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Momentum_Density::data_type&{
-		return cell_data[HD2_Flux()][pamhd::mhd::Momentum_Density()];
-	};
-const auto Nrj2_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Total_Energy_Density::data_type&{
-		return cell_data[HD2_Flux()][pamhd::mhd::Total_Energy_Density()];
 	};
 
 
@@ -220,66 +211,70 @@ void initialize_mhd(
 		"Grid must have at least one cell"
 	);
 
-	const pamhd::mhd::Mass_Density Mas{};
-	const pamhd::mhd::Momentum_Density Mom{};
-	const pamhd::mhd::Total_Energy_Density Nrj{};
-	const pamhd::mhd::Magnetic_Field Mag{};
-	const pamhd::mhd::Magnetic_Field_Flux Mag_f{};
+	constexpr pamhd::mhd::HD_State_Conservative HD1{};
+	constexpr pamhd::mhd::HD2_State_Conservative HD2{};
+	constexpr pamhd::mhd::HD_Flux_Conservative HD1_Flux{};
+	constexpr pamhd::mhd::HD2_Flux_Conservative HD2_Flux{};
+	constexpr pamhd::mhd::Mass_Density Mas{};
+	constexpr pamhd::mhd::Momentum_Density Mom{};
+	constexpr pamhd::mhd::Total_Energy_Density Nrj{};
+	constexpr pamhd::Magnetic_Field Mag{};
+	constexpr pamhd::Magnetic_Field_Flux Mag_f{};
 
 	for (size_t cell_i = 0; cell_i < grid.size(); cell_i++) {
 		auto& cell_data = grid[cell_i];
 
-		cell_data[HD1()][Mas]         =
-		cell_data[HD2()][Mas]         =
-		cell_data[HD1_Flux()][Mas]    =
-		cell_data[HD2_Flux()][Mas]    =
+		cell_data[HD1][Mas]         =
+		cell_data[HD2][Mas]         =
+		cell_data[HD1_Flux][Mas]    =
+		cell_data[HD2_Flux][Mas]    =
 
-		cell_data[HD1()][Mom][0]      =
-		cell_data[HD2()][Mom][0]      =
-		cell_data[HD1_Flux()][Mom][0] =
-		cell_data[HD2_Flux()][Mom][0] =
-		cell_data[HD1()][Mom][1]      =
-		cell_data[HD2()][Mom][1]      =
-		cell_data[HD1_Flux()][Mom][1] =
-		cell_data[HD2_Flux()][Mom][1] =
-		cell_data[HD1()][Mom][2]      =
-		cell_data[HD2()][Mom][2]      =
-		cell_data[HD1_Flux()][Mom][2] =
-		cell_data[HD2_Flux()][Mom][2] =
+		cell_data[HD1][Mom][0]      =
+		cell_data[HD2][Mom][0]      =
+		cell_data[HD1_Flux][Mom][0] =
+		cell_data[HD2_Flux][Mom][0] =
+		cell_data[HD1][Mom][1]      =
+		cell_data[HD2][Mom][1]      =
+		cell_data[HD1_Flux][Mom][1] =
+		cell_data[HD2_Flux][Mom][1] =
+		cell_data[HD1][Mom][2]      =
+		cell_data[HD2][Mom][2]      =
+		cell_data[HD1_Flux][Mom][2] =
+		cell_data[HD2_Flux][Mom][2] =
 
-		cell_data[HD1()][Nrj]         =
-		cell_data[HD2()][Nrj]         =
-		cell_data[HD1_Flux()][Nrj]    =
-		cell_data[HD2_Flux()][Nrj]    =
+		cell_data[HD1][Nrj]         =
+		cell_data[HD2][Nrj]         =
+		cell_data[HD1_Flux][Nrj]    =
+		cell_data[HD2_Flux][Nrj]    =
 
-		cell_data[Mag][0]             =
-		cell_data[Mag][1]             =
-		cell_data[Mag][2]             =
-		cell_data[Mag_f][0]           =
-		cell_data[Mag_f][1]           =
-		cell_data[Mag_f][2]           = 0;
+		cell_data[Mag][0]           =
+		cell_data[Mag][1]           =
+		cell_data[Mag][2]           =
+		cell_data[Mag_f][0]         =
+		cell_data[Mag_f][1]         =
+		cell_data[Mag_f][2]         = 0;
 
 		cell_data[Mag][0] = 1.5e-9;
 
 		// in every cell all mass must be in one of the fluids
 		const double center = get_cell_center(cell_i);
 		if (center < (get_grid_end() - get_grid_start()) / 2) {
-			cell_data[HD1()][Mas] = proton_mass * 3e6;
+			cell_data[HD1][Mas] = proton_mass * 3e6;
 			cell_data[Mag][1] = 1e-9;
-			cell_data[HD1()][Nrj] = pamhd::mhd::get_total_energy_density(
-				cell_data[HD1()][Mas],
-				cell_data[HD1()][Mom],
+			cell_data[HD1][Nrj] = pamhd::mhd::get_total_energy_density(
+				cell_data[HD1][Mas],
+				cell_data[HD1][Mom],
 				3e-12,
 				cell_data[Mag],
 				adiabatic_index,
 				vacuum_permeability
 			);
 		} else {
-			cell_data[HD2()][Mas] = proton_mass * 1e6;
+			cell_data[HD2][Mas] = proton_mass * 1e6;
 			cell_data[Mag][1] = -1e-9;
-			cell_data[HD2()][Nrj] = pamhd::mhd::get_total_energy_density(
-				cell_data[HD2()][Mas],
-				cell_data[HD2()][Mom],
+			cell_data[HD2][Nrj] = pamhd::mhd::get_total_energy_density(
+				cell_data[HD2][Mas],
+				cell_data[HD2][Mom],
 				1e-12,
 				cell_data[Mag],
 				adiabatic_index,
@@ -296,13 +291,34 @@ Returns the maximum allowed length of time step for the
 next step.
 */
 template <
-	class Solver
+	class Mass_Density_Getter,
+	class Momentum_Density_Getter,
+	class Total_Energy_Density_Getter,
+	class Magnetic_Field_Getter,
+	class Mass_Density_Flux_Getter1,
+	class Mass_Density_Flux_Getter2,
+	class Momentum_Density_Flux_Getter1,
+	class Momentum_Density_Flux_Getter2,
+	class Total_Energy_Density_Flux_Getter1,
+	class Total_Energy_Density_Flux_Getter2,
+	class Magnetic_Field_Flux_Getter
 > double solve_mhd(
-	const Solver solver,
+	const pamhd::mhd::Solver solver,
 	Grid& grid,
 	const double dt,
 	const double adiabatic_index,
-	const double vacuum_permeability
+	const double vacuum_permeability,
+	const Mass_Density_Getter Mas,
+	const Momentum_Density_Getter Mom,
+	const Total_Energy_Density_Getter Nrj,
+	const Magnetic_Field_Getter Mag,
+	const Mass_Density_Flux_Getter1 Mas1_f,
+	const Mass_Density_Flux_Getter2 Mas2_f,
+	const Momentum_Density_Flux_Getter1 Mom1_f,
+	const Momentum_Density_Flux_Getter2 Mom2_f,
+	const Total_Energy_Density_Flux_Getter1 Nrj1_f,
+	const Total_Energy_Density_Flux_Getter2 Nrj2_f,
+	const Magnetic_Field_Flux_Getter Mag_f
 ) {
 	static_assert(
 		std::tuple_size<Grid>::value >= 3,
@@ -313,13 +329,22 @@ template <
 	const pamhd::mhd::Mass_Density mas{};
 	const pamhd::mhd::Momentum_Density mom{};
 	const pamhd::mhd::Total_Energy_Density nrj{};
-	const pamhd::mhd::Magnetic_Field mag{};
+	const pamhd::Magnetic_Field mag{};
 
 	const double
 		cell_size = get_cell_size(),
 		face_area = 1.0;
 
 	double max_dt = std::numeric_limits<double>::max();
+
+	// internal data type used by MHD solvers
+	using MHD = gensimcell::Cell<
+		gensimcell::Never_Transfer,
+		pamhd::mhd::Mass_Density,
+		pamhd::mhd::Momentum_Density,
+		pamhd::mhd::Total_Energy_Density,
+		pamhd::Magnetic_Field
+	>;
 
 	// calculate fluxes
 	for (size_t cell_i = 0; cell_i < std::tuple_size<Grid>::value - 1; cell_i++) {
@@ -329,7 +354,7 @@ template <
 			&neighbor = grid[cell_i + 1];
 
 		double max_vel = -1;
-		pamhd::mhd::MHD_Conservative state_neg, state_pos, flux_neg, flux_pos;
+		MHD state_neg, state_pos, flux_neg, flux_pos;
 		state_neg[mas] = Mas(cell);
 		state_neg[mom] = Mom(cell);
 		state_neg[nrj] = Nrj(cell);
@@ -340,19 +365,32 @@ template <
 		state_pos[mag] = Mag(neighbor);
 
 		try {
-			std::tie(
-				flux_neg,
-				flux_pos,
-				max_vel
-			) = solver(
-				state_neg,
-				state_pos,
-				{0, 0, 0},
-				face_area,
-				dt,
-				adiabatic_index,
-				vacuum_permeability
-			);
+			#define SOLVER(name) \
+				name< \
+					pamhd::mhd::Mass_Density, \
+					pamhd::mhd::Momentum_Density, \
+					pamhd::mhd::Total_Energy_Density, \
+					pamhd::Magnetic_Field \
+				>( \
+					state_neg, \
+					state_pos, \
+					pamhd::Magnetic_Field::data_type{0, 0, 0}, \
+					face_area, \
+					dt, \
+					adiabatic_index, \
+					vacuum_permeability \
+				)
+			switch (solver) {
+			case pamhd::mhd::Solver::rusanov:
+				std::tie(flux_neg, flux_pos, max_vel) = SOLVER(pamhd::mhd::get_flux_N_rusanov);
+				break;
+			case pamhd::mhd::Solver::hll_athena:
+				std::tie(flux_neg, flux_pos, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_N_hll);
+				break;
+			default:
+				abort();
+			}
+			#undef SOLVER
 		} catch (const std::domain_error& error) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 				<< "Solution failed between cells " << cell_i
@@ -824,21 +862,13 @@ int main(int argc, char* argv[])
 		verbose = true;
 	}
 
-	const auto solver
+	const pamhd::mhd::Solver solver
 		= [&solver_str](){
-			if (solver_str == "hll_athena") {
-
-				return pamhd::mhd::athena::get_flux_N_hll<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+			if (solver_str == "rusanov") {
+				return pamhd::mhd::Solver::rusanov;
+			} else if (solver_str == "hll_athena") {
+				return pamhd::mhd::Solver::hll_athena;
 			} else {
-
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") Invalid solver: "
 					<< solver_str << ", use --help to list available solvers"
 					<< std::endl;
@@ -854,7 +884,7 @@ int main(int argc, char* argv[])
 	initialize_mhd(grid, adiabatic_index, vacuum_permeability);
 
 	if (plot) {
-		std::array<double, 3> empty{{0, 0, 0}};
+		const pamhd::Magnetic_Field::data_type empty{0, 0, 0};
 		const auto empty_mag = [&empty](Cell&){return empty;};
 		const std::string
 			mhd_gnuplot_file_name
@@ -919,7 +949,12 @@ int main(int argc, char* argv[])
 				grid,
 				time_step,
 				adiabatic_index,
-				vacuum_permeability
+				vacuum_permeability,
+				Mas, Mom, Nrj, Mag,
+				Mas1_f, Mas2_f,
+				Mom1_f, Mom2_f,
+				Nrj1_f, Nrj2_f,
+				Mag_f
 			)
 		);
 
@@ -963,7 +998,7 @@ int main(int argc, char* argv[])
 		if (plot && mhd_next_plot <= simulation_time) {
 			mhd_next_plot += mhd_plot_interval;
 
-			std::array<double, 3> empty{{0, 0, 0}};
+			const pamhd::Magnetic_Field::data_type empty{0, 0, 0};
 			const auto empty_mag = [&empty](Cell&){return empty;};
 
 			const std::string

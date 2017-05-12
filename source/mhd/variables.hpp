@@ -36,6 +36,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Eigen/Core" // must be included before gensimcell.hpp
 #include "gensimcell.hpp"
 
+#include "variables.hpp"
+
+
 namespace pamhd {
 namespace mhd {
 

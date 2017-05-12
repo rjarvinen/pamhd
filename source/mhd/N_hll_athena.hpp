@@ -25,10 +25,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "cmath"
 #include "limits"
+#include "string"
 #include "tuple"
-
-#include "boost/lexical_cast.hpp"
-#include "gensimcell.hpp"
 
 #include "mhd/common.hpp"
 
@@ -47,23 +45,25 @@ to all populations based on their fraction of mass vs total mass.
 Ignores background magnetic field.
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
-	class Magnetic_Field
-> std::tuple<MHD, MHD, double> get_flux_N_hll(
+	class Magnetic_Field,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, MHD, Scalar> get_flux_N_hll(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::isnormal;
 	using std::isfinite;
+	using std::to_string;
 
 	const Mass_Density Mas{};
 	const Momentum_Density Mom{};
@@ -73,8 +73,8 @@ template <
 	const Vector bg_face_magnetic_field{0, 0, 0};
 
 	const auto
-		flow_v_neg(state_neg[Mom] / state_neg[Mas]),
-		flow_v_pos(state_pos[Mom] / state_pos[Mas]);
+		flow_v_neg = get_velocity(state_neg[Mom], state_neg[Mas]),
+		flow_v_pos = get_velocity(state_pos[Mom], state_pos[Mas]);
 
 	const auto
 		pressure_thermal_neg
@@ -143,38 +143,39 @@ template <
 	if (not isnormal(pressure_thermal_neg) or pressure_thermal_neg < 0) {
 		throw std::domain_error(
 			"Invalid thermal pressure in state_neg: "
-			+ boost::lexical_cast<std::string>(pressure_thermal_neg)
+			+ to_string(pressure_thermal_neg)
 		);
 	}
 	if (not isfinite(pressure_magnetic_neg) or pressure_magnetic_neg < 0) {
 		throw std::domain_error(
 			"Invalid magnetic pressure in state_neg: "
-			+ boost::lexical_cast<std::string>(pressure_magnetic_neg)
+			+ to_string(pressure_magnetic_neg)
 		);
 	}
 	if (not isfinite(max_signal_neg)) {
 		throw std::domain_error(
-			"Invalid max signal speed in state_neg: "
-			+ boost::lexical_cast<std::string>(max_signal_neg)
+			"Invalid max signal speed in state_neg: " + to_string(max_signal_neg)
+			+ ", max signal: " + to_string(max_signal)
+			+ ", flow_v_neg[0]: " + to_string(flow_v_neg[0])
 		);
 	}
 
 	if (not isnormal(pressure_thermal_pos) or pressure_thermal_pos < 0) {
 		throw std::domain_error(
 			"Invalid thermal pressure in state_pos: "
-			+ boost::lexical_cast<std::string>(pressure_thermal_pos)
+			+ to_string(pressure_thermal_pos)
 		);
 	}
 	if (not isfinite(pressure_magnetic_pos) or pressure_magnetic_pos < 0) {
 		throw std::domain_error(
 			"Invalid magnetic pressure in state_pos: "
-			+ boost::lexical_cast<std::string>(pressure_magnetic_pos)
+			+ to_string(pressure_magnetic_pos)
 		);
 	}
 	if (not isfinite(max_signal_pos)) {
 		throw std::domain_error(
 			"Invalid max signal speed in state_pos: "
-			+ boost::lexical_cast<std::string>(max_signal_pos)
+			+ to_string(max_signal_pos)
 		);
 	}
 
@@ -196,8 +197,6 @@ template <
 
 	MHD flux_neg, flux_pos;
 	std::tie(flux_neg, flux_pos) = N_get_flux<
-		MHD,
-		Vector,
 		Mass_Density,
 		Momentum_Density,
 		Total_Energy_Density,

@@ -56,20 +56,21 @@ to all populations based on their fraction of mass vs total mass.
 Ignores background magnetic field.
 */
 template <
-	class MHD,
-	class Vector,
 	class Mass_Density,
 	class Momentum_Density,
 	class Total_Energy_Density,
-	class Magnetic_Field
-> std::tuple<MHD, MHD, double> get_flux_N_rusanov(
+	class Magnetic_Field,
+	class MHD,
+	class Vector,
+	class Scalar
+> std::tuple<MHD, MHD, Scalar> get_flux_N_rusanov(
 	MHD& state_neg,
 	MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
-	const double& area,
-	const double& dt,
-	const double& adiabatic_index,
-	const double& vacuum_permeability
+	const Scalar& area,
+	const Scalar& dt,
+	const Scalar& adiabatic_index,
+	const Scalar& vacuum_permeability
 ) {
 	using std::isnormal;
 	using std::isfinite;
@@ -120,14 +121,12 @@ template <
 
 		max_fast_ms = std::max(fast_magnetosonic_neg, fast_magnetosonic_pos),
 		max_signal = std::max(
-			std::abs(state_neg[Mom][0] / state_neg[Mas]) + max_fast_ms,
-			std::abs(state_pos[Mom][0] / state_pos[Mas]) + max_fast_ms
+			std::abs(get_velocity(state_neg[Mom], state_neg[Mas])[0]) + max_fast_ms,
+			std::abs(get_velocity(state_pos[Mom], state_pos[Mas])[0]) + max_fast_ms
 		);
 
 	MHD flux_neg, flux_pos;
 	std::tie(flux_neg, flux_pos) = N_get_flux<
-		MHD,
-		Vector,
 		Mass_Density,
 		Momentum_Density,
 		Total_Energy_Density,
