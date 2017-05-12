@@ -39,8 +39,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dccrg.hpp"
 #include "gensimcell.hpp"
 
-#include "mhd/variables.hpp"
-
 
 namespace pamhd {
 namespace mhd {

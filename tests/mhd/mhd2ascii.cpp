@@ -1,7 +1,7 @@
 /*
 Program for converting MHD output of PAMHD to ASCII format.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -51,9 +51,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mhd/common.hpp"
 #include "mhd/save.hpp"
 #include "mhd/variables.hpp"
+#include "variables.hpp"
+
 
 using namespace std;
-using namespace pamhd::mhd;
 
 /*
 Reads simulation data from given file.
@@ -67,7 +68,7 @@ boost::optional<std::array<double, 4>> read_data(
 	dccrg::Mapping& cell_id_mapping,
 	dccrg::Grid_Topology& topology,
 	dccrg::Cartesian_Geometry& geometry,
-	unordered_map<uint64_t, Cell>& simulation_data,
+	unordered_map<uint64_t, pamhd::mhd::Cell>& simulation_data,
 	const std::string& file_name,
 	const int mpi_rank
 ) {
@@ -187,16 +188,17 @@ boost::optional<std::array<double, 4>> read_data(
 	);
 
 	// read cell data
-	Cell::set_transfer_all(
+	pamhd::mhd::Cell::set_transfer_all(
 		true,
-		MHD_State_Conservative(),
-		Electric_Current_Density(),
-		Solver_Info(),
-		MPI_Rank(),
-		Resistivity(),
-		Bg_Magnetic_Field_Pos_X(),
-		Bg_Magnetic_Field_Pos_Y(),
-		Bg_Magnetic_Field_Pos_Z()
+		pamhd::mhd::HD_State_Conservative(),
+		pamhd::Magnetic_Field(),
+		pamhd::Electric_Current_Density(),
+		pamhd::mhd::Solver_Info(),
+		pamhd::MPI_Rank(),
+		pamhd::Resistivity(),
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 	for (const auto& item: cells_offsets) {
 		const uint64_t
@@ -261,7 +263,7 @@ Writes given data in ascii format to given file appended with .txt.
 */
 void convert(
 	const dccrg::Cartesian_Geometry& geometry,
-	const unordered_map<uint64_t, Cell>& simulation_data,
+	const unordered_map<uint64_t, pamhd::mhd::Cell>& simulation_data,
 	const std::string& output_file_name_prefix,
 	const double adiabatic_index,
 	const double vacuum_permeability
@@ -297,12 +299,12 @@ void convert(
 			<< cell_center[1] << " "
 			<< cell_center[2] << " ";
 
-		const auto& mhd_data = simulation_data.at(cell_id)[MHD_State_Conservative()];
+		const auto& hd_data = simulation_data.at(cell_id)[pamhd::mhd::HD_State_Conservative()];
 
-		const auto& density = mhd_data[Mass_Density()];
+		const auto& density = hd_data[pamhd::mhd::Mass_Density()];
 		ascii_file << density << " ";
 
-		const auto& momentum = mhd_data[Momentum_Density()];
+		const auto& momentum = hd_data[pamhd::mhd::Momentum_Density()];
 		if (not std::isnormal(density) or density < 0) {
 			ascii_file << "0 0 0\n";
 		} else {
@@ -313,23 +315,23 @@ void convert(
 		}
 
 		const auto pressure
-			= get_pressure(
-				mhd_data[Mass_Density()],
-				mhd_data[Momentum_Density()],
-				mhd_data[Total_Energy_Density()],
-				mhd_data[Magnetic_Field()],
+			= pamhd::mhd::get_pressure(
+				hd_data[pamhd::mhd::Mass_Density()],
+				hd_data[pamhd::mhd::Momentum_Density()],
+				hd_data[pamhd::mhd::Total_Energy_Density()],
+				simulation_data.at(cell_id)[pamhd::Magnetic_Field()],
 				adiabatic_index,
 				vacuum_permeability
 			);
 		ascii_file << pressure << " ";
 
-		const auto& magnetic_field = mhd_data[Magnetic_Field()];
+		const auto& magnetic_field = simulation_data.at(cell_id)[pamhd::Magnetic_Field()];
 		ascii_file
 			<< magnetic_field[0] << " "
 			<< magnetic_field[1] << " "
 			<< magnetic_field[2] << " ";
 
-		const auto& current = simulation_data.at(cell_id)[Electric_Current_Density()];
+		const auto& current = simulation_data.at(cell_id)[pamhd::Electric_Current_Density()];
 		ascii_file
 			<< current[0] << " "
 			<< current[1] << " "
@@ -420,7 +422,7 @@ int main(int argc, char* argv[])
 		dccrg::Mapping cell_id_mapping;
 		dccrg::Grid_Topology topology;
 		dccrg::Cartesian_Geometry geometry(cell_id_mapping.length, cell_id_mapping, topology);
-		unordered_map<uint64_t, Cell> simulation_data;
+		unordered_map<uint64_t, pamhd::mhd::Cell> simulation_data;
 
 		boost::optional<std::array<double, 4>> header
 			= read_data(

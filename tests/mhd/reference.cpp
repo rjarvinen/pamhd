@@ -37,13 +37,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "gensimcell.hpp"
 
-#include "variables.hpp"
 #include "mhd/common.hpp"
 #include "mhd/hll_athena.hpp"
 #include "mhd/hlld_athena.hpp"
 #include "mhd/roe_athena.hpp"
 #include "mhd/rusanov.hpp"
 #include "mhd/variables.hpp"
+#include "variables.hpp"
+
 
 using namespace std;
 
