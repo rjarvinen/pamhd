@@ -568,7 +568,11 @@ int main(int argc, char* argv[])
 				<< " s with time step " << time_step << " s" << endl;
 		}
 
-		Cell::set_transfer_all(true, pamhd::mhd::HD_State_Conservative());
+		Cell::set_transfer_all(
+			true,
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::Magnetic_Field()
+		);
 		grid.start_remote_neighbor_copy_updates();
 
 		pamhd::divergence::get_curl(
@@ -647,7 +651,11 @@ int main(int argc, char* argv[])
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(false, pamhd::mhd::HD_State_Conservative());
+		Cell::set_transfer_all(
+			false,
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::Magnetic_Field()
+		);
 
 
 		// transfer J for calculating additional contributions to B
@@ -757,7 +765,7 @@ int main(int argc, char* argv[])
 
 			Cell::set_transfer_all(
 				true,
-				pamhd::mhd::HD_State_Conservative(),
+				pamhd::Magnetic_Field(),
 				pamhd::Magnetic_Field_Divergence()
 			);
 
@@ -785,7 +793,7 @@ int main(int argc, char* argv[])
 			Cell::set_transfer_all(false, pamhd::Magnetic_Field_Divergence());
 
 			grid.update_copies_of_remote_neighbors();
-			Cell::set_transfer_all(false, pamhd::mhd::HD_State_Conservative());
+			Cell::set_transfer_all(false, pamhd::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
 					solve_cells,
