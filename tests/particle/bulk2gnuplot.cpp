@@ -1,7 +1,7 @@
 /*
 Program for plotting bulk data of particle test of PAMHD with gnuplot.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -173,8 +173,8 @@ boost::optional<std::array<double, 4>> read_data(
 		Cell_test_particle::set_transfer_all(
 			true,
 			Electric_Field(),
-			Magnetic_Field(),
-			pamhd::mhd::Electric_Current_Density()
+			pamhd::Magnetic_Field(),
+			pamhd::Electric_Current_Density()
 		);
 		tie(
 			memory_address,
@@ -254,21 +254,21 @@ int plot_1d(
 		     "'-' u 1:2 w l lw 2 t 'B_3'\n";
 
 	for (const auto& cell_id: cells) {
-		const auto& B = simulation_data.at(cell_id)[Magnetic_Field()];
+		const auto& B = simulation_data.at(cell_id)[pamhd::Magnetic_Field()];
 		const double x = geometry.get_center(cell_id)[tube_dim];
 		gnuplot_file << x << " " << B[0] << "\n";
 	}
 	gnuplot_file << "end\n";
 
 	for (const auto& cell_id: cells) {
-		const auto& B = simulation_data.at(cell_id)[Magnetic_Field()];
+		const auto& B = simulation_data.at(cell_id)[pamhd::Magnetic_Field()];
 		const double x = geometry.get_center(cell_id)[tube_dim];
 		gnuplot_file << x << " " << B[1] << "\n";
 	}
 	gnuplot_file << "end\n";
 
 	for (const auto& cell_id: cells) {
-		const auto& B = simulation_data.at(cell_id)[Magnetic_Field()];
+		const auto& B = simulation_data.at(cell_id)[pamhd::Magnetic_Field()];
 		const double x = geometry.get_center(cell_id)[tube_dim];
 		gnuplot_file << x << " " << B[2] << "\n";
 	}

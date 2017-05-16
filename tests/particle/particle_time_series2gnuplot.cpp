@@ -1,7 +1,7 @@
 /*
 Program for plotting time series of particle output of PAMHD with gnuplot.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -191,7 +191,7 @@ boost::optional<std::array<double, 4>> read_data(
 		Cell_test_particle::set_transfer_all(
 			true,
 			Electric_Field(),
-			Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			Nr_Particles_Internal()
 		);
 		tie(
@@ -240,7 +240,7 @@ boost::optional<std::array<double, 4>> read_data(
 		Cell_test_particle::set_transfer_all(
 			false,
 			Electric_Field(),
-			Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			Nr_Particles_Internal()
 		);
 		Cell_test_particle::set_transfer_all(true, Particles_Internal());
@@ -617,7 +617,7 @@ int main(int argc, char* argv[])
 			} else if (vertical_variable == "E") {
 				vertical_value = cell_data[Electric_Field()].norm();
 			} else if (vertical_variable == "B") {
-				vertical_value = cell_data[Magnetic_Field()].norm();
+				vertical_value = cell_data[pamhd::Magnetic_Field()].norm();
 			}
 			if (horizontal_variable == "fileno") {
 				horizontal_value = 0;
@@ -704,7 +704,7 @@ int main(int argc, char* argv[])
 				} else if (vertical_variable == "E") {
 					vertical_value = cell_data[Electric_Field()].norm();
 				} else if (vertical_variable == "B") {
-					vertical_value = cell_data[Magnetic_Field()].norm();
+					vertical_value = cell_data[pamhd::Magnetic_Field()].norm();
 				}
 				if (horizontal_variable == "fileno") {
 					horizontal_value = double(i);
