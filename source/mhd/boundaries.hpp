@@ -145,7 +145,7 @@ template<
 	);
 
 	// magnetic field
-	constexpr pamhd::mhd::Magnetic_Field B{};
+	constexpr pamhd::Magnetic_Field B{};
 	for (const auto& cell: boundaries.get_value_boundary_cells(B)) {
 		auto* const cell_data = grid[cell];
 		if (cell_data == nullptr) {
@@ -234,7 +234,7 @@ template<
 	const Magnetic_Field_Getter& Mag
 ) {
 	// magnetic field
-	constexpr pamhd::mhd::Magnetic_Field B{};
+	constexpr pamhd::Magnetic_Field B{};
 	for (
 		size_t i = 0;
 		i < boundaries.get_number_of_value_boundaries(B);
@@ -271,7 +271,7 @@ template<
 			abort();
 		}
 
-		pamhd::mhd::Magnetic_Field::data_type source_value{0, 0, 0};
+		pamhd::Magnetic_Field::data_type source_value{0, 0, 0};
 		for (size_t i = 1; i < item.size(); i++) {
 			auto* source_data = grid[item[i]];
 			if (source_data == nullptr) {

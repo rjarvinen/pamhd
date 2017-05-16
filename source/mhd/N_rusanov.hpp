@@ -41,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "tuple"
 
 #include "mhd/common.hpp"
+#include "mhd/variables.hpp"
 
 
 namespace pamhd {
@@ -60,12 +61,11 @@ template <
 	class Momentum_Density,
 	class Total_Energy_Density,
 	class Magnetic_Field,
-	class MHD,
 	class Vector,
 	class Scalar
-> std::tuple<MHD, MHD, Scalar> get_flux_N_rusanov(
-	MHD& state_neg,
-	MHD& state_pos,
+> std::tuple<detail::MHD, detail::MHD, Scalar> get_flux_N_rusanov(
+	detail::MHD& state_neg,
+	detail::MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
 	const Scalar& area,
 	const Scalar& dt,
@@ -125,7 +125,7 @@ template <
 			std::abs(get_velocity(state_pos[Mom], state_pos[Mas])[0]) + max_fast_ms
 		);
 
-	MHD flux_neg, flux_pos;
+	detail::MHD flux_neg, flux_pos;
 	std::tie(flux_neg, flux_pos) = N_get_flux<
 		Mass_Density,
 		Momentum_Density,

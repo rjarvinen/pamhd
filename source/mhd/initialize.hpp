@@ -380,7 +380,7 @@ template <
 			if (Mas(*cell_data) > 0 and pressure > 0) {
 				Nrj(*cell_data) = get_total_energy_density(
 					Mas(*cell_data),
-					Mom(*cell_data) / Mas(*cell_data),
+					get_velocity(Mom(*cell_data), Mas(*cell_data)),
 					pressure,
 					Mag(*cell_data),
 					adiabatic_index,

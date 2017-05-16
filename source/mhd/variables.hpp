@@ -222,6 +222,18 @@ using Cell2 = gensimcell::Cell<
 	pamhd::Magnetic_Field_Flux
 >;
 
-}} // namespaces
+
+namespace detail {
+
+// internal data type used by MHD solvers
+using MHD = gensimcell::Cell<
+	gensimcell::Never_Transfer,
+	pamhd::mhd::Mass_Density,
+	pamhd::mhd::Momentum_Density,
+	pamhd::mhd::Total_Energy_Density,
+	pamhd::Magnetic_Field
+>;
+
+}}} // namespaces
 
 #endif // ifndef PAMHD_MHD_VARIABLES_HPP

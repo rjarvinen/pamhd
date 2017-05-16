@@ -327,6 +327,11 @@ template <
 			+ __func__
 			+ std::string(": ")
 			+ to_string(pressure)
+			+ ", from mass, momentum, energy and field: "
+			+ to_string(mass_density) + "; "
+			+ to_string(mom[0]) + ", " + to_string(mom[1]) + ", " + to_string(mom[2]) + "; "
+			+ to_string(total_energy_density) + "; "
+			+ to_string(mag[0]) + ", " + to_string(mag[1]) + ", " + to_string(mag[2])
 		);
 	}
 

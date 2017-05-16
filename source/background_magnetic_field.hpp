@@ -18,8 +18,8 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef PAMHD_MHD_BACKGROUND_MAGNETIC_FIELD_HPP
-#define PAMHD_MHD_BACKGROUND_MAGNETIC_FIELD_HPP
+#ifndef PAMHD_BACKGROUND_MAGNETIC_FIELD_HPP
+#define PAMHD_BACKGROUND_MAGNETIC_FIELD_HPP
 
 
 #include "cmath"
@@ -30,7 +30,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 
 namespace pamhd {
-namespace mhd {
 
 
 //! Vector assumed to support Eigen API.
@@ -221,7 +220,7 @@ public:
 
 };
 
-}} // namespaces
+} // namespace
 
 
-#endif // ifndef PAMHD_MHD_BACKGROUND_MAGNETIC_FIELD_HPP
+#endif // ifndef PAMHD_BACKGROUND_MAGNETIC_FIELD_HPP

@@ -1,7 +1,7 @@
 /*
 Two-fluid MHD test program of PAMHD.
 
-Copyright 2014, 2015, 2016 Ilja Honkonen
+Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -39,13 +39,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
+#include "background_magnetic_field.hpp"
 #include "boundaries/geometries.hpp"
 #include "boundaries/multivariable_boundaries.hpp"
 #include "boundaries/multivariable_initial_conditions.hpp"
 #include "divergence/options.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
-#include "mhd/background_magnetic_field.hpp"
 #include "mhd/common.hpp"
 #include "mhd/options.hpp"
 #include "mhd/save.hpp"
@@ -56,6 +56,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "mhd/N_rusanov.hpp"
 #include "mhd/variables.hpp"
 #include "simulation_options.hpp"
+#include "variables.hpp"
 
 
 using namespace std;
@@ -74,30 +75,30 @@ using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 // reference magnetic field in given cell
 const auto Mag
 	= [](Cell& cell_data)
-		-> typename pamhd::mhd::Magnetic_Field::data_type&
+		-> typename pamhd::Magnetic_Field::data_type&
 	{
-		return cell_data[pamhd::mhd::Magnetic_Field()];
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 // total change of magnetic field over one time step
 const auto Mag_f
 	= [](Cell& cell_data)
-		-> typename pamhd::mhd::Magnetic_Field::data_type&
+		-> typename pamhd::Magnetic_Field_Flux::data_type&
 	{
-		return cell_data[pamhd::mhd::Magnetic_Field_Flux()];
+		return cell_data[pamhd::Magnetic_Field_Flux()];
 	};
 
 // references to background magnetic fields
 const auto Bg_B_Pos_X
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_X()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_X::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()];
 	};
 const auto Bg_B_Pos_Y
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Y()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_Y()];
 	};
 const auto Bg_B_Pos_Z
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
-		return cell_data[pamhd::mhd::Bg_Magnetic_Field_Pos_Z()];
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+		return cell_data[pamhd::Bg_Magnetic_Field_Pos_Z()];
 	};
 
 // solver info variable for boundary logic
@@ -108,28 +109,28 @@ const auto Sol_Info
 
 // field before divergence removal in case removal fails
 const auto Mag_tmp
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field_Temp::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field_Temp()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Temp::data_type&{
+		return cell_data[pamhd::Magnetic_Field_Temp()];
 	};
 // divergence of magnetic field
 const auto Mag_div
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field_Divergence::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field_Divergence()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Divergence::data_type&{
+		return cell_data[pamhd::Magnetic_Field_Divergence()];
 	};
 // electrical resistivity
 const auto Res
-	= [](Cell& cell_data)->typename pamhd::mhd::Resistivity::data_type&{
-		return cell_data[pamhd::mhd::Resistivity()];
+	= [](Cell& cell_data)->typename pamhd::Resistivity::data_type&{
+		return cell_data[pamhd::Resistivity()];
 	};
 // adjustment to magnetic field due to resistivity
 const auto Mag_res
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field_Resistive::data_type&{
-		return cell_data[pamhd::mhd::Magnetic_Field_Resistive()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Resistive::data_type&{
+		return cell_data[pamhd::Magnetic_Field_Resistive()];
 	};
 // curl of magnetic field
 const auto Cur
-	= [](Cell& cell_data)->typename pamhd::mhd::Electric_Current_Density::data_type&{
-		return cell_data[pamhd::mhd::Electric_Current_Density()];
+	= [](Cell& cell_data)->typename pamhd::Electric_Current_Density::data_type&{
+		return cell_data[pamhd::Electric_Current_Density()];
 	};
 
 // reference to mass density of fluid 1 in given cell
@@ -137,38 +138,38 @@ const auto Mas1
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Mass_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_State()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom1
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Momentum_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_State()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj1
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Total_Energy_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_State()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 // reference to mass density of fluid 2 in given cell
 const auto Mas2
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Mass_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_State()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom2
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Momentum_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_State()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj2
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Total_Energy_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_State()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD2_State_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 
 // flux of mass density of fluid 1 over one time step
@@ -176,37 +177,37 @@ const auto Mas1_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Mass_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_Flux()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom1_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Momentum_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_Flux()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj1_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Total_Energy_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD1_Flux()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 const auto Mas2_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Mass_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_Flux()][pamhd::mhd::Mass_Density()];
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Mass_Density()];
 	};
 const auto Mom2_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Momentum_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_Flux()][pamhd::mhd::Momentum_Density()];
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Momentum_Density()];
 	};
 const auto Nrj2_f
 	= [](Cell& cell_data)
 		-> typename pamhd::mhd::Total_Energy_Density::data_type&
 	{
-		return cell_data[pamhd::mhd::HD2_Flux()][pamhd::mhd::Total_Energy_Density()];
+		return cell_data[pamhd::mhd::HD2_Flux_Conservative()][pamhd::mhd::Total_Energy_Density()];
 	};
 
 
@@ -327,7 +328,7 @@ int main(int argc, char* argv[])
 		pamhd::mhd::Velocity2,
 		pamhd::mhd::Pressure,
 		pamhd::mhd::Pressure2,
-		pamhd::mhd::Magnetic_Field
+		pamhd::Magnetic_Field
 	> initial_conditions;
 	initial_conditions.set(document);
 
@@ -340,39 +341,21 @@ int main(int argc, char* argv[])
 		pamhd::mhd::Velocity2,
 		pamhd::mhd::Pressure,
 		pamhd::mhd::Pressure2,
-		pamhd::mhd::Magnetic_Field
+		pamhd::Magnetic_Field
 	> boundaries;
 	boundaries.set(document);
 
-	pamhd::mhd::Background_Magnetic_Field<
-		pamhd::mhd::Magnetic_Field::data_type
+	pamhd::Background_Magnetic_Field<
+		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
-
 
 	const auto mhd_solver
 		= [&options_mhd, &background_B, &rank](){
 			if (options_mhd.solver == "rusanov") {
-
-				return pamhd::mhd::get_flux_N_rusanov<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
-
+				return pamhd::mhd::Solver::rusanov;
 			} else if (options_mhd.solver == "hll-athena") {
-
-				return pamhd::mhd::athena::get_flux_N_hll<
-					pamhd::mhd::MHD_Conservative,
-					pamhd::mhd::Magnetic_Field::data_type,
-					pamhd::mhd::Mass_Density,
-					pamhd::mhd::Momentum_Density,
-					pamhd::mhd::Total_Energy_Density,
-					pamhd::mhd::Magnetic_Field
-				>;
+				return pamhd::mhd::Solver::hll_athena;
 			} else {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
 					<< "Unsupported solver: " << options_mhd.solver
@@ -381,17 +364,16 @@ int main(int argc, char* argv[])
 			}
 		}();
 
-
 	/*
 	Prepare resistivity
 	*/
 
-	pamhd::boundaries::Math_Expression<pamhd::mhd::Resistivity> resistivity;
+	pamhd::boundaries::Math_Expression<pamhd::Resistivity> resistivity;
 	mup::Value J_val;
 	mup::Variable J_var(&J_val);
 	resistivity.add_expression_variable("J", J_var);
 
-	const auto resistivity_name = pamhd::mhd::Resistivity::get_option_name();
+	const auto resistivity_name = pamhd::Resistivity::get_option_name();
 	if (not document.HasMember(resistivity_name.c_str())) {
 		if (rank == 0) {
 			std::cerr << __FILE__ "(" << __LINE__
@@ -468,7 +450,7 @@ int main(int argc, char* argv[])
 
 	// update owner process of cells for saving into file
 	for (auto& cell: grid.cells) {
-		(*cell.data)[pamhd::mhd::MPI_Rank()] = rank;
+		(*cell.data)[pamhd::MPI_Rank()] = rank;
 	}
 
 	// assign cells into boundary geometries
@@ -531,16 +513,16 @@ int main(int argc, char* argv[])
 	// update background field between processes
 	Cell::set_transfer_all(
 		true,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 	grid.update_copies_of_remote_neighbors();
 	Cell::set_transfer_all(
 		false,
-		pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-		pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+		pamhd::Bg_Magnetic_Field_Pos_X(),
+		pamhd::Bg_Magnetic_Field_Pos_Y(),
+		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 
 	// initialize resistivity
@@ -627,9 +609,9 @@ int main(int argc, char* argv[])
 
 		Cell::set_transfer_all(
 			true,
-			pamhd::mhd::Magnetic_Field(),
-			pamhd::mhd::HD1_State(),
-			pamhd::mhd::HD2_State()
+			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::mhd::HD2_State_Conservative()
 		);
 		grid.start_remote_neighbor_copy_updates();
 
@@ -722,14 +704,14 @@ int main(int argc, char* argv[])
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(
 			false,
-			pamhd::mhd::Magnetic_Field(),
-			pamhd::mhd::HD1_State(),
-			pamhd::mhd::HD2_State()
+			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::mhd::HD2_State_Conservative()
 		);
 
 
 		// transfer J for calculating additional contributions to B
-		Cell::set_transfer_all(true, pamhd::mhd::Electric_Current_Density());
+		Cell::set_transfer_all(true, pamhd::Electric_Current_Density());
 		grid.start_remote_neighbor_copy_updates();
 
 		// add contribution to change of B from resistivity
@@ -791,7 +773,7 @@ int main(int argc, char* argv[])
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(false, pamhd::mhd::Electric_Current_Density());
+		Cell::set_transfer_all(false, pamhd::Electric_Current_Density());
 
 
 		pamhd::mhd::apply_fluxes_N(
@@ -838,8 +820,8 @@ int main(int argc, char* argv[])
 
 			Cell::set_transfer_all(
 				true,
-				pamhd::mhd::Magnetic_Field(),
-				pamhd::mhd::Magnetic_Field_Divergence()
+				pamhd::Magnetic_Field(),
+				pamhd::Magnetic_Field_Divergence()
 			);
 
 			const auto div_before
@@ -851,9 +833,9 @@ int main(int argc, char* argv[])
 					Mag,
 					Mag_div,
 					[](Cell& cell_data)
-						-> pamhd::mhd::Scalar_Potential_Gradient::data_type&
+						-> pamhd::Scalar_Potential_Gradient::data_type&
 					{
-						return cell_data[pamhd::mhd::Scalar_Potential_Gradient()];
+						return cell_data[pamhd::Scalar_Potential_Gradient()];
 					},
 					options_div_B.poisson_iterations_max,
 					options_div_B.poisson_iterations_min,
@@ -863,10 +845,10 @@ int main(int argc, char* argv[])
 					0,
 					false
 				);
-			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field_Divergence());
+			Cell::set_transfer_all(false, pamhd::Magnetic_Field_Divergence());
 
 			grid.update_copies_of_remote_neighbors();
-			Cell::set_transfer_all(false, pamhd::mhd::Magnetic_Field());
+			Cell::set_transfer_all(false, pamhd::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
 					solve_cells,
@@ -976,16 +958,16 @@ int main(int argc, char* argv[])
 					options_sim.adiabatic_index,
 					options_sim.proton_mass,
 					options_sim.vacuum_permeability,
-					pamhd::mhd::HD1_State(),
-					pamhd::mhd::HD2_State(),
-					pamhd::mhd::Magnetic_Field(),
-					pamhd::mhd::Electric_Current_Density(),
+					pamhd::mhd::HD_State_Conservative(),
+					pamhd::mhd::HD2_State_Conservative(),
+					pamhd::Magnetic_Field(),
+					pamhd::Electric_Current_Density(),
 					pamhd::mhd::Solver_Info(),
-					pamhd::mhd::MPI_Rank(),
-					pamhd::mhd::Resistivity(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_X(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Y(),
-					pamhd::mhd::Bg_Magnetic_Field_Pos_Z()
+					pamhd::MPI_Rank(),
+					pamhd::Resistivity(),
+					pamhd::Bg_Magnetic_Field_Pos_X(),
+					pamhd::Bg_Magnetic_Field_Pos_Y(),
+					pamhd::Bg_Magnetic_Field_Pos_Z()
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): "

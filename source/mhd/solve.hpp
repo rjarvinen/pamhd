@@ -41,9 +41,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vector"
 
 #include "dccrg.hpp"
+#include "gensimcell.hpp"
 #include "prettyprint.hpp"
 
 #include "mhd/variables.hpp"
+#include "variables.hpp"
 
 
 namespace pamhd {
@@ -92,27 +94,17 @@ template <
 	const Solver_Info_Getter Sol_Info
 ) {
 	using std::get;
+	using std::to_string;
 
 	if (not std::isfinite(dt) or dt < 0) {
-		throw std::domain_error(
-			"Invalid time step: "
-			+ boost::lexical_cast<std::string>(dt)
-		);
+		throw std::domain_error("Invalid time step: " + to_string(dt));
 	}
 
-	// internal data type used by MHD solvers
-	using MHD = gensimcell::Cell<
-		gensimcell::Never_Transfer,
-		pamhd::mhd::Mass_Density,
-		pamhd::mhd::Momentum_Density,
-		pamhd::mhd::Total_Energy_Density,
-		pamhd::Magnetic_Field
-	>;
 	// shorthand for referring to variables of internal MHD data type
-	const Mass_Density mas_int{};
-	const Momentum_Density mom_int{};
-	const Total_Energy_Density nrj_int{};
-	const Magnetic_Field mag_int{};
+	const pamhd::mhd::Mass_Density mas_int{};
+	const pamhd::mhd::Momentum_Density mom_int{};
+	const pamhd::mhd::Total_Energy_Density nrj_int{};
+	const pamhd::Magnetic_Field mag_int{};
 
 	// maximum allowed next time step for cells of this process
 	double max_dt = std::numeric_limits<double>::max();
@@ -225,17 +217,15 @@ template <
 			if (not std::isnormal(shared_area) or shared_area < 0) {
 				throw std::domain_error(
 					"Invalid area between cells "
-					+ boost::lexical_cast<std::string>(cell_id)
-					+ " and "
-					+ boost::lexical_cast<std::string>(neighbor_id)
-					+ ": "
-					+ boost::lexical_cast<std::string>(shared_area)
+					+ to_string(cell_id) + " and "
+					+ to_string(neighbor_id) + ": "
+					+ to_string(shared_area)
 				);
 			}
 
-			// take into account direction of neighbor from cell
-			MHD_Conservative state_neg, state_pos;
+			detail::MHD state_neg, state_pos;
 			Magnetic_Field::data_type bg_face_b;
+			// take into account direction of neighbor from cell
 			if (neighbor_dir > 0) {
 				state_neg[mas_int] = Mas(*cell_data);
 				state_neg[mom_int] = get_rotated_vector(Mom(*cell_data), abs(neighbor_dir));
@@ -286,27 +276,41 @@ template <
 				}
 			}
 
-			MHD_Conservative flux;
+			detail::MHD flux;
 			double max_vel;
 			try {
+				#define SOLVER(name) \
+					name< \
+						pamhd::mhd::Mass_Density, \
+						pamhd::mhd::Momentum_Density, \
+						pamhd::mhd::Total_Energy_Density, \
+						pamhd::Magnetic_Field \
+					>( \
+						state_neg, \
+						state_pos, \
+						bg_face_b, \
+						shared_area, \
+						dt, \
+						adiabatic_index, \
+						vacuum_permeability \
+					)
 				switch (solver) {
 				case pamhd::mhd::Solver::rusanov:
-					std::tie(
-						flux,
-						max_vel
-					) = pamhd::mhd::get_flux_rusanov(
-						state_neg,
-						state_pos,
-						bg_face_b,
-						shared_area,
-						dt,
-						adiabatic_index,
-						vacuum_permeability
-					);
+					std::tie(flux, max_vel) = SOLVER(pamhd::mhd::get_flux_rusanov);
+					break;
+				case pamhd::mhd::Solver::hll_athena:
+					std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_hll);
+					break;
+				case pamhd::mhd::Solver::hlld_athena:
+					std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_hlld);
+					break;
+				case pamhd::mhd::Solver::roe_athena:
+					std::tie(flux, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_roe);
 					break;
 				default:
 					abort();
 				}
+				#undef SOLVER
 			} catch (const std::domain_error& error) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 					<< "Solution failed between cells " << cell_id

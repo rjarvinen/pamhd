@@ -211,7 +211,7 @@ template<
 	);
 
 	// magnetic field
-	constexpr pamhd::mhd::Magnetic_Field B{};
+	constexpr pamhd::Magnetic_Field B{};
 	for (const auto& cell: boundaries.get_value_boundary_cells(B)) {
 		auto* const cell_data = grid[cell];
 		if (cell_data == nullptr) {
@@ -639,12 +639,9 @@ template<
 			if (Mas(*cell_data) > 0 and pressure > 0) {
 				Nrj(*cell_data) = pamhd::mhd::get_total_energy_density(
 					Mas(*cell_data),
-					pamhd::mhd::get_velocity(
-						Mom(*cell_data),
-						Mas(*cell_data)
-					),
+					pamhd::mhd::get_velocity(Mom(*cell_data), Mas(*cell_data)),
 					pressure,
-					std::array<double, 3>{{0, 0, 0}},
+					Magnetic_Field::data_type{0, 0, 0},
 					adiabatic_index,
 					vacuum_permeability
 				);
@@ -687,12 +684,9 @@ template<
 		if (Mas(*target_data) > 0 and source_value > 0) {
 			Nrj(*target_data) = pamhd::mhd::get_total_energy_density(
 				Mas(*target_data),
-				pamhd::mhd::get_velocity(
-					Mom(*target_data),
-					Mas(*target_data)
-				),
+				pamhd::mhd::get_velocity(Mom(*target_data), Mas(*target_data)),
 				source_value,
-				std::array<double, 3>{{0, 0, 0}},
+				Magnetic_Field::data_type{0, 0, 0},
 				adiabatic_index,
 				vacuum_permeability
 			);
@@ -732,12 +726,9 @@ template<
 			if (Mas2(*cell_data) > 0 and pressure > 0) {
 				Nrj2(*cell_data) = pamhd::mhd::get_total_energy_density(
 					Mas2(*cell_data),
-					pamhd::mhd::get_velocity(
-						Mom2(*cell_data),
-						Mas2(*cell_data)
-					),
+					pamhd::mhd::get_velocity(Mom2(*cell_data), Mas2(*cell_data)),
 					pressure,
-					std::array<double, 3>{{0, 0, 0}},
+					Magnetic_Field::data_type{0, 0, 0},
 					adiabatic_index,
 					vacuum_permeability
 				);
@@ -780,12 +771,9 @@ template<
 		if (Mas2(*target_data) > 0 and source_value > 0) {
 			Nrj2(*target_data) = pamhd::mhd::get_total_energy_density(
 				Mas2(*target_data),
-				pamhd::mhd::get_velocity(
-					Mom2(*target_data),
-					Mas2(*target_data)
-				),
+				pamhd::mhd::get_velocity(Mom2(*target_data), Mas2(*target_data)),
 				source_value,
-				std::array<double, 3>{{0, 0, 0}},
+				Magnetic_Field::data_type{0, 0, 0},
 				adiabatic_index,
 				vacuum_permeability
 			);
@@ -795,7 +783,7 @@ template<
 	}
 
 	// magnetic field
-	constexpr pamhd::mhd::Magnetic_Field B{};
+	constexpr pamhd::Magnetic_Field B{};
 	for (
 		size_t i = 0;
 		i < boundaries.get_number_of_value_boundaries(B);
@@ -840,7 +828,7 @@ template<
 			abort();
 		}
 
-		pamhd::mhd::Magnetic_Field::data_type source_value{0, 0, 0};
+		pamhd::Magnetic_Field::data_type source_value{0, 0, 0};
 		for (size_t i = 1; i < item.size(); i++) {
 			auto* source_data = grid[item[i]];
 			if (source_data == nullptr) {

@@ -39,13 +39,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
+#include "background_magnetic_field.hpp"
 #include "boundaries/geometries.hpp"
 #include "boundaries/multivariable_boundaries.hpp"
 #include "boundaries/multivariable_initial_conditions.hpp"
 #include "divergence/options.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
-#include "mhd/background_magnetic_field.hpp"
 #include "mhd/boundaries.hpp"
 #include "mhd/common.hpp"
 #include "mhd/hll_athena.hpp"
@@ -285,7 +285,7 @@ int main(int argc, char* argv[])
 	> boundaries;
 	boundaries.set(document);
 
-	pamhd::mhd::Background_Magnetic_Field<
+	pamhd::Background_Magnetic_Field<
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);

@@ -43,6 +43,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "prettyprint.hpp"
 
 #include "mhd/variables.hpp"
+#include "mhd/N_rusanov.hpp"
+#include "mhd/N_hll_athena.hpp"
 
 
 namespace pamhd {
@@ -230,7 +232,7 @@ template <
 			// returns total plasma state with rotated vectors for solver
 			const auto get_total_state
 				= [&](Cell& cell_data) {
-					MHD_Conservative state;
+					detail::MHD state;
 					state[mas_int] = Mas.first(cell_data) + Mas.second(cell_data);
 					state[mom_int]
 						= get_rotated_vector(Mom.first(cell_data), abs(neighbor_dir))
@@ -241,7 +243,7 @@ template <
 				};
 
 			// take into account direction of neighbor from cell
-			MHD_Conservative state_neg, state_pos;
+			detail::MHD state_neg, state_pos;
 			Magnetic_Field::data_type bg_face_b;
 			if (neighbor_dir > 0) {
 				state_neg = get_total_state(*cell_data);
@@ -279,22 +281,35 @@ template <
 				}
 			}
 
-			MHD_Conservative flux_neg, flux_pos;
+			detail::MHD flux_neg, flux_pos;
 			double max_vel;
 			try {
-				std::tie(
-					flux_neg,
-					flux_pos,
-					max_vel
-				) = solver(
-					state_neg,
-					state_pos,
-					bg_face_b,
-					shared_area,
-					dt,
-					adiabatic_index,
-					vacuum_permeability
-				);
+				#define SOLVER(name) \
+					name< \
+						pamhd::mhd::Mass_Density, \
+						pamhd::mhd::Momentum_Density, \
+						pamhd::mhd::Total_Energy_Density, \
+						pamhd::Magnetic_Field \
+					>( \
+						state_neg, \
+						state_pos, \
+						bg_face_b, \
+						shared_area, \
+						dt, \
+						adiabatic_index, \
+						vacuum_permeability \
+					)
+				switch (solver) {
+				case pamhd::mhd::Solver::rusanov:
+					std::tie(flux_neg, flux_pos, max_vel) = SOLVER(pamhd::mhd::get_flux_N_rusanov);
+					break;
+				case pamhd::mhd::Solver::hll_athena:
+					std::tie(flux_neg, flux_pos, max_vel) = SOLVER(pamhd::mhd::athena::get_flux_N_hll);
+					break;
+				default:
+					abort();
+				}
+				#undef SOLVER
 			} catch (const std::domain_error& error) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 					<< "Solution failed between cells " << cell_id

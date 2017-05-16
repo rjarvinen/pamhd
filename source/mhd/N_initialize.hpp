@@ -196,7 +196,7 @@ template <
 				);
 		const auto magnetic_field
 			= initial_conditions.get_default_data(
-				pamhd::mhd::Magnetic_Field(),
+				pamhd::Magnetic_Field(),
 				time,
 				c[0], c[1], c[2],
 				r, lat, lon
@@ -212,7 +212,7 @@ template <
 				mass_density1,
 				velocity1,
 				pressure1,
-				std::array<double, 3>{{0, 0, 0}},
+				decltype(velocity1){0, 0, 0},
 				adiabatic_index,
 				vacuum_permeability
 			);
@@ -224,7 +224,7 @@ template <
 				mass_density2,
 				velocity2,
 				pressure2,
-				std::array<double, 3>{{0, 0, 0}},
+				decltype(velocity2){0, 0, 0},
 				adiabatic_index,
 				vacuum_permeability
 			);
@@ -432,9 +432,9 @@ template <
 			if (Mas1(*cell_data) > 0 and pressure > 0) {
 				Nrj1(*cell_data) = get_total_energy_density(
 					Mas1(*cell_data),
-					Mom1(*cell_data) / Mas1(*cell_data),
+					get_velocity(Mom1(*cell_data), Mas1(*cell_data)),
 					pressure,
-					std::array<double, 3>{{0, 0, 0}},
+					Magnetic_Field::data_type{0, 0, 0},
 					adiabatic_index,
 					vacuum_permeability
 				);
@@ -480,9 +480,9 @@ template <
 			if (Mas2(*cell_data) > 0 and pressure > 0) {
 				Nrj2(*cell_data) = get_total_energy_density(
 					Mas2(*cell_data),
-					Mom2(*cell_data) / Mas2(*cell_data),
+					get_velocity(Mom2(*cell_data), Mas2(*cell_data)),
 					pressure,
-					std::array<double, 3>{{0, 0, 0}},
+					Magnetic_Field::data_type{0, 0, 0},
 					adiabatic_index,
 					vacuum_permeability
 				);
@@ -495,10 +495,10 @@ template <
 	// magnetic field
 	for (
 		size_t i = 0;
-		i < initial_conditions.get_number_of_regions(pamhd::mhd::Magnetic_Field());
+		i < initial_conditions.get_number_of_regions(pamhd::Magnetic_Field());
 		i++
 	) {
-		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::mhd::Magnetic_Field(), i);
+		const auto& init_cond = initial_conditions.get_initial_condition(pamhd::Magnetic_Field(), i);
 		const auto& geometry_id = init_cond.get_geometry_id();
 		const auto& cells = geometries.get_cells(geometry_id);
 		for (const auto& cell: cells) {
@@ -509,7 +509,7 @@ template <
 				lon = atan2(c[1], c[0]);
 
 			const auto magnetic_field = initial_conditions.get_data(
-				pamhd::mhd::Magnetic_Field(),
+				pamhd::Magnetic_Field(),
 				geometry_id,
 				time,
 				c[0], c[1], c[2],

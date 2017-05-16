@@ -29,6 +29,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "tuple"
 
 #include "mhd/common.hpp"
+#include "mhd/variables.hpp"
 
 
 namespace pamhd {
@@ -49,12 +50,11 @@ template <
 	class Momentum_Density,
 	class Total_Energy_Density,
 	class Magnetic_Field,
-	class MHD,
 	class Vector,
 	class Scalar
-> std::tuple<MHD, MHD, Scalar> get_flux_N_hll(
-	MHD& state_neg,
-	MHD& state_pos,
+> std::tuple<detail::MHD, detail::MHD, Scalar> get_flux_N_hll(
+	detail::MHD& state_neg,
+	detail::MHD& state_pos,
 	const Vector& /*bg_face_magnetic_field*/,
 	const Scalar& area,
 	const Scalar& dt,
@@ -180,7 +180,7 @@ template <
 	}
 
 	if (not isnormal(bp - bm) or bp - bm < 0) {
-		MHD flux;
+		detail::MHD flux;
 
 		flux[Mas]    =
 		flux[Mom][0] =
@@ -195,7 +195,7 @@ template <
 	}
 
 
-	MHD flux_neg, flux_pos;
+	detail::MHD flux_neg, flux_pos;
 	std::tie(flux_neg, flux_pos) = N_get_flux<
 		Mass_Density,
 		Momentum_Density,
