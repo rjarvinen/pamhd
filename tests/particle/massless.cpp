@@ -53,11 +53,11 @@ Copy boundaries have no effect in this program and shouldn't be used in config f
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
+#include "background_magnetic_field.hpp"
 #include "boundaries/geometries.hpp"
 #include "boundaries/multivariable_boundaries.hpp"
 #include "boundaries/multivariable_initial_conditions.hpp"
 #include "grid_options.hpp"
-#include "mhd/background_magnetic_field.hpp"
 #include "mhd/initialize.hpp"
 #include "mhd/options.hpp"
 #include "mhd/variables.hpp"
@@ -82,26 +82,26 @@ using Cell = pamhd::particle::Cell_test_particle;
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 // background magnetic field not stored on cell faces in this program
-pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type zero_bg_b = {0, 0, 0};
+pamhd::Bg_Magnetic_Field_Pos_X::data_type zero_bg_b = {0, 0, 0};
 const auto Bg_B_Pos_X
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_X::data_type&{
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_X::data_type&{
 		return zero_bg_b;
 	};
 // reference to +Y face background magnetic field
 const auto Bg_B_Pos_Y
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Y::data_type&{
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Y::data_type&{
 		return zero_bg_b;
 	};
 // ref to +Z face bg B
 const auto Bg_B_Pos_Z
-	= [](Cell& cell_data)->typename pamhd::mhd::Bg_Magnetic_Field_Pos_Z::data_type&{
+	= [](Cell& cell_data)->typename pamhd::Bg_Magnetic_Field_Pos_Z::data_type&{
 		return zero_bg_b;
 	};
 
 // returns reference to magnetic field for propagating particles
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
-		return cell_data[pamhd::particle::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 // electric field for propagating particles
 const auto Ele
@@ -178,9 +178,9 @@ const auto Part_Des
 		return particle[pamhd::particle::Destination_Cell()];
 	};
 // unused
-pamhd::mhd::Magnetic_Field::data_type zero_mag_flux = {0, 0, 0};
+pamhd::Magnetic_Field::data_type zero_mag_flux = {0, 0, 0};
 const auto Mag_f
-	= [](Cell& cell_data)->typename pamhd::mhd::Magnetic_Field::data_type&{
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
 		return zero_mag_flux;
 	};
 
@@ -318,7 +318,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::Charge_Mass_Ratio,
 		pamhd::particle::Species_Mass,
 		pamhd::particle::Electric_Field,
-		pamhd::particle::Magnetic_Field
+		pamhd::Magnetic_Field
 	> initial_conditions;
 	initial_conditions.set(document);
 
@@ -332,12 +332,12 @@ int main(int argc, char* argv[])
 		pamhd::particle::Bdy_Charge_Mass_Ratio,
 		pamhd::particle::Bdy_Species_Mass,
 		pamhd::particle::Electric_Field,
-		pamhd::particle::Magnetic_Field
+		pamhd::Magnetic_Field
 	> boundaries;
 	boundaries.set(document);
 
-	pamhd::mhd::Background_Magnetic_Field<
-		pamhd::mhd::Magnetic_Field::data_type
+	pamhd::Background_Magnetic_Field<
+		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
 
@@ -394,7 +394,7 @@ int main(int argc, char* argv[])
 
 	// update owner process of cells for saving into file
 	for (auto& cell: grid.cells) {
-		(*cell.data)[pamhd::mhd::MPI_Rank()] = rank;
+		(*cell.data)[pamhd::MPI_Rank()] = rank;
 	}
 
 	// assign cells into boundary geometries
@@ -437,7 +437,7 @@ int main(int argc, char* argv[])
 	// set initial condition
 	std::mt19937_64 random_source;
 
-	pamhd::mhd::initialize_magnetic_field<pamhd::particle::Magnetic_Field>(
+	pamhd::mhd::initialize_magnetic_field<pamhd::Magnetic_Field>(
 		geometries,
 		initial_conditions,
 		background_B,
@@ -590,13 +590,13 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field()
+			pamhd::Magnetic_Field()
 		);
 		grid.update_copies_of_remote_neighbors();
 		Cell::set_transfer_all(
 			false,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field()
+			pamhd::Magnetic_Field()
 		);
 
 		// E is given directly to particle propagator
@@ -800,8 +800,8 @@ int main(int argc, char* argv[])
 			if (
 				not pamhd::particle::save<
 					pamhd::particle::Electric_Field,
-					pamhd::particle::Magnetic_Field,
-					pamhd::mhd::Electric_Current_Density,
+					pamhd::Magnetic_Field,
+					pamhd::Electric_Current_Density,
 					pamhd::particle::Nr_Particles_Internal,
 					pamhd::particle::Particles_Internal
 				>(
