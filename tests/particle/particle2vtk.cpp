@@ -1,7 +1,7 @@
 /*
 Program for converting particle output of PAMHD to vtk format.
 
-Copyright 2015, 2016 Ilja Honkonen
+Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -174,7 +174,7 @@ boost::optional<std::array<double, 4>> read_data(
 		Cell::set_transfer_all(
 			true,
 			Electric_Field(),
-			Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			Nr_Particles_Internal()
 		);
 		tie(
@@ -223,7 +223,7 @@ boost::optional<std::array<double, 4>> read_data(
 		Cell::set_transfer_all(
 			false,
 			Electric_Field(),
-			Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			Nr_Particles_Internal()
 		);
 		Cell::set_transfer_all(true, Particles_Internal());
@@ -324,7 +324,7 @@ void convert(
 
 	grid_file << "CELL_DATA " << cells.size() << "\n";
 
-	const Magnetic_Field Mag{};
+	const pamhd::Magnetic_Field Mag{};
 	grid_file << "VECTORS magnetic_field float\n";
 	for (const auto& cell: cells) {
 		const auto magnetic_field = simulation_data.at(cell)[Mag];
