@@ -152,13 +152,6 @@ struct Electric_Field {
 	static const std::string get_option_help() { return {"Cell-centered electric field"}; }
 };
 
-struct Magnetic_Field {
-	using data_type = Eigen::Vector3d;
-	static const std::string get_name() { return {"magnetic field"}; }
-	static const std::string get_option_name() { return {"magnetic-field"}; }
-	static const std::string get_option_help() { return {"Magnetic field used for propagating particles"}; }
-};
-
 // number of macroparticles in simulation cell in initial & boundary conditions
 struct Bdy_Nr_Particles_In_Cell {
 	using data_type = double;
@@ -252,27 +245,6 @@ using Accumulated_To_Cell
 using Accumulated_To_Cells = Accumulated_To_Cells_T<Accumulated_To_Cell>;
 
 
-struct Magnetic_Field_Divergence {
-	using data_type = double;
-	static const std::string get_name() { return {"magnetic field divergence"}; }
-	static const std::string get_option_name() { return {"magnetic-field-divergence"}; }
-	static const std::string get_option_help() { return {"Divergence of plasma magnetic field (T/m)"}; }
-};
-
-struct Scalar_Potential_Gradient {
-	using data_type = Eigen::Vector3d;
-	static const std::string get_name() { return {"scalar potential gradient"}; }
-	static const std::string get_option_name() { return {"scalar-potential-gradient"}; }
-	static const std::string get_option_help() { return {"Gradient of scalar potential from Poisson's equation"}; }
-};
-
-struct Electric_Current_Density {
-	using data_type = Eigen::Vector3d;
-	static const std::string get_name() { return {"current density"}; }
-	static const std::string get_option_name() { return {"current-density"}; }
-	static const std::string get_option_help() { return {"Density of electric current"}; }
-};
-
 struct Current_Minus_Velocity {
 	using data_type = Eigen::Vector3d;
 	static const std::string get_name() { return {"J-V"}; }
@@ -307,11 +279,11 @@ dccrg uses to save the file.
 */
 using Cell_test_particle = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
-	pamhd::mhd::Electric_Current_Density, // output compatible with regular model
+	pamhd::Electric_Current_Density, // output compatible with regular model
 	pamhd::particle::Solver_Info,
-	pamhd::mhd::MPI_Rank,
+	pamhd::MPI_Rank,
 	pamhd::particle::Electric_Field,
-	pamhd::particle::Magnetic_Field,
+	pamhd::Magnetic_Field,
 	pamhd::particle::Number_Of_Particles,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
@@ -332,22 +304,23 @@ See Cell_test_particle for info.
 */
 using Cell_hyb_particle = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
-	pamhd::mhd::MHD_State_Conservative,
-	pamhd::mhd::Electric_Current_Density,
+	pamhd::mhd::HD_State_Conservative,
+	pamhd::Electric_Current_Density,
 	pamhd::particle::Solver_Info,
-	pamhd::mhd::MPI_Rank,
-	pamhd::mhd::Resistivity,
+	pamhd::MPI_Rank,
+	pamhd::Resistivity,
 	pamhd::particle::Electric_Field,
-	pamhd::particle::Magnetic_Field,
+	pamhd::Magnetic_Field,
 	pamhd::particle::Number_Of_Particles,
-	pamhd::mhd::Bg_Magnetic_Field_Pos_X,
-	pamhd::mhd::Bg_Magnetic_Field_Pos_Y,
-	pamhd::mhd::Bg_Magnetic_Field_Pos_Z,
-	pamhd::mhd::Magnetic_Field_Resistive,
-	pamhd::mhd::Magnetic_Field_Temp,
-	pamhd::mhd::Magnetic_Field_Divergence,
-	pamhd::mhd::Scalar_Potential_Gradient,
-	pamhd::mhd::MHD_Flux_Conservative,
+	pamhd::Bg_Magnetic_Field_Pos_X,
+	pamhd::Bg_Magnetic_Field_Pos_Y,
+	pamhd::Bg_Magnetic_Field_Pos_Z,
+	pamhd::Magnetic_Field_Resistive,
+	pamhd::Magnetic_Field_Temp,
+	pamhd::Magnetic_Field_Divergence,
+	pamhd::Scalar_Potential_Gradient,
+	pamhd::mhd::HD_Flux_Conservative,
+	pamhd::Magnetic_Field_Flux,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
 	pamhd::particle::Bdy_Temperature,
