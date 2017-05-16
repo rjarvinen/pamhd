@@ -43,7 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mpi.h" // must be included before gensimcell
 #include "gensimcell.hpp"
 
-#include "mhd/background_magnetic_field.hpp"
+#include "background_magnetic_field.hpp"
 #include "particle/solve_dccrg.hpp"
 #include "particle/variables.hpp"
 
@@ -55,8 +55,8 @@ using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 // returns reference to magnetic field for propagating particles
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
-		return cell_data[pamhd::particle::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 // electric field for propagating particles
 const auto Ele
@@ -271,7 +271,7 @@ int main(int argc, char* argv[])
 	grid_y.update_copies_of_remote_neighbors();
 	grid_z.update_copies_of_remote_neighbors();
 
-	pamhd::mhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+	pamhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
 
 	// short hand notation for calling solvers
 	auto solve = [&bg_B](
@@ -341,7 +341,7 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid_x.start_remote_neighbor_copy_updates();
@@ -366,7 +366,7 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			false,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		Cell::set_transfer_all(

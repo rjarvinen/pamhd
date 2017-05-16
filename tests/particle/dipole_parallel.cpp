@@ -25,7 +25,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "utility"
 #include "vector"
 
-#include "mhd/background_magnetic_field.hpp"
 #include "boost/numeric/odeint.hpp"
 #include "dccrg.hpp"
 #include "dccrg_cartesian_geometry.hpp"
@@ -36,7 +35,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 
-#include "mhd/background_magnetic_field.hpp"
+#include "background_magnetic_field.hpp"
 #include "mhd/variables.hpp"
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
@@ -50,8 +49,8 @@ using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
 // returns reference to magnetic field for propagating particles
 const auto Mag
-	= [](Cell& cell_data)->typename pamhd::particle::Magnetic_Field::data_type&{
-		return cell_data[pamhd::particle::Magnetic_Field()];
+	= [](Cell& cell_data)->typename pamhd::Magnetic_Field::data_type&{
+		return cell_data[pamhd::Magnetic_Field()];
 	};
 // electric field for propagating particles
 const auto Ele
@@ -168,8 +167,7 @@ int main(int argc, char* argv[])
 		remote_cells = grid.get_remote_cells_on_process_boundary(),
 		cells = grid.get_cells();
 
-	// background magnetic field
-	pamhd::mhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+	pamhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
 
 	rapidjson::Document document;
 	document.Parse(
@@ -320,7 +318,7 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			true,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid.start_remote_neighbor_copy_updates();
@@ -362,7 +360,7 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			false,
 			pamhd::particle::Electric_Field(),
-			pamhd::particle::Magnetic_Field(),
+			pamhd::Magnetic_Field(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		Cell::set_transfer_all(
@@ -420,8 +418,8 @@ int main(int argc, char* argv[])
 			if (
 				not pamhd::particle::save<
 					pamhd::particle::Electric_Field,
-					pamhd::particle::Magnetic_Field,
-					pamhd::mhd::Electric_Current_Density,
+					pamhd::Magnetic_Field,
+					pamhd::Electric_Current_Density,
 					pamhd::particle::Nr_Particles_Internal,
 					pamhd::particle::Particles_Internal
 				>(
