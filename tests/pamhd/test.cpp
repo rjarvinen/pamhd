@@ -1483,17 +1483,25 @@ int main(int argc, char* argv[])
 				}
 
 				// keep pressure/temperature constant over div removal
-				for (const auto& cell: grid.cells) {
-					const auto
-						mag_nrj_diff = (
-							Mag(*cell.data).squaredNorm()
-							- Mag_tmp(*cell.data).squaredNorm()
+				for (const auto& cell: cells) {
+					auto* const cell_data = grid[cell];
+					if (cell_data == nullptr) {
+						std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+							"No data for cell " << cell
+							<< std::endl;
+						abort();
+					}
+
+					const auto mag_nrj_diff
+						= (
+							Mag(*cell_data).squaredNorm()
+							- Mag_tmp(*cell_data).squaredNorm()
 						) / (2 * options_sim.vacuum_permeability),
-						total_mass = Mas1(*cell.data) + Mas2(*cell.data),
-						mass_frac1 = Mas1(*cell.data) / total_mass,
-						mass_frac2 = Mas2(*cell.data) / total_mass;
-					Nrj1(*cell.data) += mass_frac1 * mag_nrj_diff;
-					Nrj2(*cell.data) += mass_frac2 * mag_nrj_diff;
+						total_mass = Mas1(*cell_data) + Mas2(*cell_data),
+						mass_frac1 = Mas1(*cell_data) / total_mass,
+						mass_frac2 = Mas2(*cell_data) / total_mass;
+					Nrj1(*cell_data) += mass_frac1 * mag_nrj_diff;
+					Nrj2(*cell_data) += mass_frac2 * mag_nrj_diff;
 				}
 			}
 		}

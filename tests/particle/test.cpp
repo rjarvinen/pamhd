@@ -1338,7 +1338,7 @@ int main(int argc, char* argv[])
 				}
 
 				// keep pressure/temperature constant over div removal
-				for (auto& cell: cells) {
+				for (const auto& cell: cells) {
 					auto* const cell_data = grid[cell];
 					if (cell_data == nullptr) {
 						std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
