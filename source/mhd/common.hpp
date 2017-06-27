@@ -322,6 +322,7 @@ template <
 			vacuum_permeability
 		);
 	if (pressure <= 0) {
+		// TODO: switch to scientific notation
 		throw std::domain_error(
 			std::string("Non-positive pressure given to ")
 			+ __func__
