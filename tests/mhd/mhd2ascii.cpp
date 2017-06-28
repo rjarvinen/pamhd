@@ -287,6 +287,7 @@ void convert(
 		"# momentum density\n"
 		"# thermal pressure\n"
 		"# x, y and z components of magnetic field\n"
+		"# x, y and z components of background magnetic field on +x face\n"
 		"# x, y and z components of electric current density\n#\n"
 		"# Physical constants:\n"
 		"# adiabatic index: " << adiabatic_index <<
@@ -330,6 +331,12 @@ void convert(
 			<< magnetic_field[0] << " "
 			<< magnetic_field[1] << " "
 			<< magnetic_field[2] << " ";
+
+		const auto& background_magnetic_field = simulation_data.at(cell_id)[pamhd::Bg_Magnetic_Field_Pos_X()];
+		ascii_file
+			<< background_magnetic_field[0] << " "
+			<< background_magnetic_field[1] << " "
+			<< background_magnetic_field[2] << " ";
 
 		const auto& current = simulation_data.at(cell_id)[pamhd::Electric_Current_Density()];
 		ascii_file
