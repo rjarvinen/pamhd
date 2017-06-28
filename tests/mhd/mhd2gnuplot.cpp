@@ -198,6 +198,7 @@ boost::optional<std::array<double, 4>> read_data(
 		pamhd::mhd::Solver_Info(),
 		pamhd::MPI_Rank(),
 		pamhd::Resistivity(),
+		pamhd::Magnetic_Field(),
 		pamhd::Bg_Magnetic_Field_Pos_X(),
 		pamhd::Bg_Magnetic_Field_Pos_Y(),
 		pamhd::Bg_Magnetic_Field_Pos_Z()
@@ -823,7 +824,7 @@ int plot_2d(
 	Scale vector lengths
 	*/
 
-	double max_v = 0, max_B = 0;
+	double max_v = 0, max_B = 0, max_B0 = 0;
 	for (size_t i = 0; i < cells.size(); i++) {
 		const auto& hd_data
 			= simulation_data.at(cells[i])[pamhd::mhd::HD_State_Conservative()];
@@ -845,6 +846,11 @@ int plot_2d(
 		if (max_B < B) {
 			max_B = B;
 		}
+
+		const double B0 = simulation_data.at(cells[i])[pamhd::Bg_Magnetic_Field_Pos_X()].norm();
+		if (max_B0 < B0) {
+			max_B0 = B0;
+		}
 	}
 	if (max_v <= 0) {
 		max_v = 1;
@@ -852,13 +858,17 @@ int plot_2d(
 	if (max_B <= 0) {
 		max_B = 1;
 	}
+	if (max_B0 <= 0) {
+		max_B0 = 1;
+	}
 
 	constexpr size_t vectors_per_screen = 1000;
 	const double
 		screen_length = geometry.get_end()[0] - geometry.get_start()[0],
 		vector_length = screen_length / sqrt(vectors_per_screen),
 		velocity_scaling = vector_length / max_v,
-		B_scaling = vector_length / max_B;
+		B_scaling = vector_length / max_B,
+		B0_scaling = 10 * vector_length / max_B0;
 
 	// velocity
 	gnuplot_file
@@ -921,6 +931,31 @@ int plot_2d(
 			<< cell_center[dimensions[1]] << " "
 			<< B_scaling * B[dimensions[0]] << " "
 			<< B_scaling * B[dimensions[1]] << "\n";
+	}
+	gnuplot_file << "\nend\n";
+
+	// background magnetic field on one face
+	gnuplot_file
+		<< "\nset output '"
+		<< output_file_name_prefix + "_B0." << output_file_name_suffix
+		<< "'\nset title 'Background magnetic field'\n"
+		   "plot '-' u 1:2:3:4 w vectors t ''\n";
+
+	for (size_t i = 0; i < cells.size(); i++) {
+		if (
+			cells.size() > vectors_per_screen
+			and i % (cells.size() / vectors_per_screen) != 0
+		) {
+			continue;
+		}
+
+		const auto& B0 = simulation_data.at(cells[i])[pamhd::Bg_Magnetic_Field_Pos_X()];
+		const auto cell_center = geometry.get_center(cells[i]);
+		gnuplot_file
+			<< cell_center[dimensions[0]] << " "
+			<< cell_center[dimensions[1]] << " "
+			<< B0_scaling * B0[dimensions[0]] << " "
+			<< B0_scaling * B0[dimensions[1]] << "\n";
 	}
 	gnuplot_file << "\nend\n";
 
