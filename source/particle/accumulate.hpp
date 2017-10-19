@@ -34,7 +34,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAMHD_PARTICLE_ACCUMULATE_HPP
 
 
+#include "cmath"
 #include "exception"
+
+#include "particle/common.hpp"
 
 
 namespace pamhd {
@@ -55,17 +58,6 @@ template<class Scalar, class Vector> Scalar get_accumulated_value(
 ) {
 	using std::max;
 	using std::min;
-
-	for (size_t dim = 0; dim < size_t(value_min.size()); dim++) {
-		if (value_min[dim] > value_max[dim]) {
-			throw std::out_of_range("Volume of given value ends before it starts");
-		}
-	}
-	for (size_t dim = 0; dim < size_t(cell_min.size()); dim++) {
-		if (cell_min[dim] > cell_max[dim]) {
-			throw std::out_of_range("Volume of given cell ends before it starts");
-		}
-	}
 
 	const Vector
 		interval_min{
