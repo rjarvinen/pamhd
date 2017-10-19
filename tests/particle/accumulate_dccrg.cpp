@@ -70,58 +70,12 @@ using Cell = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::particle::Particles_Internal,
 	Count,
+	pamhd::particle::Solver_Info,
 	// only following two are transferred between processes
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	Accumulated_To_Cells
 >;
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
-
-
-/*
-Creates evenly spaced particles in given cells.
-*/
-void create_particles(
-	const size_t values_per_cell,
-	const size_t dimension,
-	const std::vector<uint64_t>& cell_ids,
-	Grid& grid
-) {
-	for (const auto& cell_id: cell_ids) {
-		const auto
-			cell_min = grid.geometry.get_min(cell_id),
-			cell_length = grid.geometry.get_length(cell_id),
-			cell_center = grid.geometry.get_center(cell_id);
-
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		for (size_t i = 0; i < values_per_cell; i++) {
-			pamhd::particle::Particle_Internal new_particle;
-			new_particle[pamhd::particle::Velocity()][0] =
-			new_particle[pamhd::particle::Velocity()][1] =
-			new_particle[pamhd::particle::Velocity()][2] =
-			new_particle[pamhd::particle::Charge_Mass_Ratio()] = 0;
-
-			new_particle[pamhd::particle::Position()][0] = cell_center[0];
-			new_particle[pamhd::particle::Position()][1] = cell_center[1];
-			new_particle[pamhd::particle::Position()][2] = cell_center[2];
-
-			new_particle[pamhd::particle::Position()][dimension]
-				= cell_min[dimension]
-				+ (double(i) + 0.5) * cell_length[dimension] / values_per_cell;
-
-			// accumulate mass variable
-			new_particle[pamhd::particle::Mass()]
-				= f(new_particle[pamhd::particle::Position()])[dimension]
-				/ values_per_cell;
-
-			(*cell_data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
-		}
-	}
-}
 
 
 // returns a reference to data accumulated from particles in given cell
@@ -157,6 +111,11 @@ const auto accumulation_list_length_getter
 		return cell_data[pamhd::particle::Nr_Accumulated_To_Cells()];
 	};
 
+const auto solver_info_getter
+	= [](Cell& cell_data)->pamhd::particle::Solver_Info::data_type&{
+		return cell_data[pamhd::particle::Solver_Info()];
+	};
+
 const auto accumulate_from_remote_neighbors
 	= [](Grid& grid){
 		pamhd::particle::accumulate_from_remote_neighbors(
@@ -164,7 +123,8 @@ const auto accumulate_from_remote_neighbors
 			bulk_value_getter,
 			list_bulk_value_getter,
 			list_target_getter,
-			accumulation_list_getter
+			accumulation_list_getter,
+			solver_info_getter
 		);
 	};
 
@@ -176,6 +136,56 @@ const auto allocate_accumulation_lists
 			accumulation_list_length_getter
 		);
 	};
+
+
+/*
+Creates evenly spaced particles in given cells.
+*/
+void create_particles(
+	const size_t values_per_cell,
+	const size_t dimension,
+	const std::vector<uint64_t>& cell_ids,
+	Grid& grid
+) {
+	for (const auto& cell_id: cell_ids) {
+		const auto
+			cell_min = grid.geometry.get_min(cell_id),
+			cell_length = grid.geometry.get_length(cell_id),
+			cell_center = grid.geometry.get_center(cell_id);
+
+		auto* const cell_data = grid[cell_id];
+		if (cell_data == nullptr) {
+			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+
+		solver_info_getter(*cell_data) = 0;
+
+		for (size_t i = 0; i < values_per_cell; i++) {
+			pamhd::particle::Particle_Internal new_particle;
+			new_particle[pamhd::particle::Velocity()][0] =
+			new_particle[pamhd::particle::Velocity()][1] =
+			new_particle[pamhd::particle::Velocity()][2] =
+			new_particle[pamhd::particle::Charge_Mass_Ratio()] = 0;
+
+			new_particle[pamhd::particle::Position()][0] = cell_center[0];
+			new_particle[pamhd::particle::Position()][1] = cell_center[1];
+			new_particle[pamhd::particle::Position()][2] = cell_center[2];
+
+			new_particle[pamhd::particle::Position()][dimension]
+				= cell_min[dimension]
+				+ (double(i) + 0.5) * cell_length[dimension] / values_per_cell;
+
+			// accumulate mass variable
+			new_particle[pamhd::particle::Mass()]
+				= f(new_particle[pamhd::particle::Position()])[dimension]
+				/ values_per_cell;
+
+			(*cell_data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
+		}
+	}
+}
+
 
 // returns infinite norm between analytic results and that in given cells
 double get_norm(
@@ -394,7 +404,8 @@ int main(int argc, char* argv[])
 					list_bulk_value_getter,
 					list_target_getter,
 					accumulation_list_length_getter,
-					accumulation_list_getter
+					accumulation_list_getter,
+					solver_info_getter
 				);
 			};
 

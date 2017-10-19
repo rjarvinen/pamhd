@@ -71,6 +71,10 @@ const auto Nr_Ext
 	= [](Cell& cell_data)->typename pamhd::particle::Nr_Particles_External::data_type&{
 		return cell_data[pamhd::particle::Nr_Particles_External()];
 	};
+const auto Sol_Info
+	= [](Cell& cell_data)->typename pamhd::particle::Solver_Info::data_type&{
+		return cell_data[pamhd::particle::Solver_Info()];
+	};
 
 // given a particle these return references to particle's parameters
 const auto Part_Pos
@@ -311,7 +315,8 @@ int main(int argc, char* argv[])
 				Part_Vel,
 				Part_C2M,
 				Part_Mas,
-				Part_Des
+				Part_Des,
+	 			Sol_Info
 			)
 		);
 
@@ -343,7 +348,8 @@ int main(int argc, char* argv[])
 				Part_Vel,
 				Part_C2M,
 				Part_Mas,
-				Part_Des
+				Part_Des,
+	 			Sol_Info
 			)
 		);
 

@@ -66,6 +66,7 @@ using Cell = gensimcell::Cell<
 	gensimcell::Optional_Transfer,
 	pamhd::particle::Particles_Internal,
 	Mass_Density,
+	pamhd::particle::Solver_Info,
 	// only following two are transferred between processes
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	Accumulated_To_Cells
@@ -158,6 +159,11 @@ const auto accumulation_list_length_getter
 		return cell_data[pamhd::particle::Nr_Accumulated_To_Cells()];
 	};
 
+const auto solver_info_getter
+	= [](Cell& cell_data)->pamhd::particle::Solver_Info::data_type&{
+		return cell_data[pamhd::particle::Solver_Info()];
+	};
+
 const auto accumulate_from_remote_neighbors
 	= [](Grid& grid){
 		pamhd::particle::accumulate_from_remote_neighbors(
@@ -165,7 +171,8 @@ const auto accumulate_from_remote_neighbors
 			bulk_value_getter,
 			list_bulk_value_getter,
 			list_target_getter,
-			accumulation_list_getter
+			accumulation_list_getter,
+			solver_info_getter
 		);
 	};
 
@@ -306,6 +313,7 @@ int main(int argc, char* argv[])
 			auto* const cell_data = grid[cell_id];
 			if (cell_data == nullptr) {abort();}
 			bulk_value_getter(*cell_data) = 0;
+			solver_info_getter(*cell_data) = 0;
 		}
 		pamhd::particle::accumulate(
 			cell_ids,
@@ -327,7 +335,8 @@ int main(int argc, char* argv[])
 			list_bulk_value_getter,
 			list_target_getter,
 			accumulation_list_length_getter,
-			accumulation_list_getter
+			accumulation_list_getter,
+			solver_info_getter
 		);
 
 		Cell::set_transfer_all(true, pamhd::particle::Nr_Accumulated_To_Cells());
