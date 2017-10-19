@@ -232,14 +232,14 @@ template<
 			);
 		Bdy_C2M(*cell_data)
 			= initial_conditions.get_default_data(
-				pamhd::particle::Charge_Mass_Ratio(),
+				pamhd::particle::Bdy_Charge_Mass_Ratio(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
 		Bdy_SpM(*cell_data)
 			= initial_conditions.get_default_data(
-				pamhd::particle::Species_Mass(),
+				pamhd::particle::Bdy_Species_Mass(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
@@ -403,7 +403,7 @@ template<
 	}
 
 	// charge to mass ratio
-	constexpr pamhd::particle::Charge_Mass_Ratio C2M{};
+	constexpr pamhd::particle::Bdy_Charge_Mass_Ratio C2M{};
 	for (
 		size_t i = 0;
 		i < initial_conditions.get_number_of_regions(C2M);
@@ -441,7 +441,7 @@ template<
 	}
 
 	// species mass
-	constexpr pamhd::particle::Species_Mass SpM{};
+	constexpr pamhd::particle::Bdy_Species_Mass SpM{};
 	for (
 		size_t i = 0;
 		i < initial_conditions.get_number_of_regions(SpM);
