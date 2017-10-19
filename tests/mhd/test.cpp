@@ -286,6 +286,7 @@ int main(int argc, char* argv[])
 	boundaries.set(document);
 
 	pamhd::Background_Magnetic_Field<
+		double,
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
@@ -903,11 +904,11 @@ int main(int argc, char* argv[])
 					options_sim.proton_mass,
 					options_sim.vacuum_permeability,
 					pamhd::mhd::HD_State_Conservative(),
-					pamhd::Magnetic_Field(),
 					pamhd::Electric_Current_Density(),
 					pamhd::mhd::Solver_Info(),
 					pamhd::MPI_Rank(),
 					pamhd::Resistivity(),
+					pamhd::Magnetic_Field(),
 					pamhd::Bg_Magnetic_Field_Pos_X(),
 					pamhd::Bg_Magnetic_Field_Pos_Y(),
 					pamhd::Bg_Magnetic_Field_Pos_Z()
