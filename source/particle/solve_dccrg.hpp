@@ -168,7 +168,8 @@ template<
 	class Particle_Velocity_Getter,
 	class Particle_Charge_Mass_Ratio_Getter,
 	class Particle_Mass_Getter,
-	class Particle_Destination_Cell_Getter
+	class Particle_Destination_Cell_Getter,
+	class Solver_Info_Getter
 > double solve(
 	const double dt,
 	const std::vector<uint64_t>& cell_ids,
@@ -186,7 +187,8 @@ template<
 	const Particle_Velocity_Getter Part_Vel,
 	const Particle_Charge_Mass_Ratio_Getter Part_C2M,
 	const Particle_Mass_Getter Part_Mas,
-	const Particle_Destination_Cell_Getter Part_Des
+	const Particle_Destination_Cell_Getter Part_Des,
+	const Solver_Info_Getter Sol_Info
 ) {
 	namespace odeint = boost::numeric::odeint;
 	using std::isnan;
@@ -206,6 +208,18 @@ template<
 	double max_time_step = std::numeric_limits<double>::max();
 	for (const auto& cell_id: cell_ids) {
 
+		auto* const cell_data = grid[cell_id];
+		if (cell_data == nullptr) {
+			std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
+			abort();
+		}
+
+		if ((Sol_Info(*cell_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			Part_Int(*cell_data).clear();
+			Part_Ext(*cell_data).clear();
+			continue;
+		}
+
 		// get field data from neighborhood for interpolation
 		std::array<Eigen::Vector3d, 27> current_minus_velocities, magnetic_fields;
 
@@ -219,12 +233,6 @@ template<
 			std::cerr << __FILE__ << "(" << __LINE__ << "): "
 				<< "Unsupported neighborhood: " << neighbor_ids->size()
 				<< std::endl;
-			abort();
-		}
-
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
 			abort();
 		}
 
@@ -305,7 +313,7 @@ template<
 					1.0 / 32.0,
 					// only allow particles to propagate through half a
 					// cell in order to not break field interpolation
-					cell_length[0] / 2.0,
+					std::min(cell_length[0], std::min(cell_length[1], cell_length[2])) / 2.0,
 					Part_C2M(particle),
 					Part_Vel(particle),
 					E_centered,
@@ -326,7 +334,6 @@ template<
 			state_t state{{Part_Pos(particle), Part_Vel(particle)}};
 			stepper.do_step(propagator, state, 0.0, dt);
 			Part_Vel(Part_Int(*cell_data)[i]) = state[1];
-
 
 			// take into account periodic grid
 			const std::array<double, 3> real_pos
