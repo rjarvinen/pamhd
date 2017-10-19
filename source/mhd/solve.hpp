@@ -408,6 +408,18 @@ template <
 	using std::to_string;
 
 	for (auto& cell: grid.cells) {
+		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
+			Mas_f(*cell.data)    =
+			Mom_f(*cell.data)[0] =
+			Mom_f(*cell.data)[1] =
+			Mom_f(*cell.data)[2] =
+			Nrj_f(*cell.data)    =
+			Mag_f(*cell.data)[0] =
+			Mag_f(*cell.data)[1] =
+			Mag_f(*cell.data)[2] = 0;
+			continue;
+		}
+
 		const auto length = grid.geometry.get_length(cell.id);
 		const double inverse_volume = 1.0 / (length[0] * length[1] * length[2]);
 
@@ -418,9 +430,10 @@ template <
 				const auto c = grid.geometry.get_center(cell.id);
 				throw std::domain_error(
 					"New state in cell " + to_string(cell.id)
+					+ " of type " + to_string(Sol_Info(*cell.data))
 					+ " at (" + to_string(c[0]) + ", "
 					+ to_string(c[1]) + ", " + to_string(c[2])
-					+ ") has negative mass density: "
+					+ ") has non-positive mass density: "
 					+ std::to_string(Mas(*cell.data)) + " with flux "
 					+ std::to_string(Mas_f(*cell.data) * inverse_volume)
 				);
@@ -446,10 +459,6 @@ template <
 			Nrj(*cell.data) += Nrj_f(*cell.data) * inverse_volume;
 		}
 		Nrj_f(*cell.data) = 0;
-
-		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
-			continue;
-		}
 
 		const auto pressure = get_pressure(
 			Mas(*cell.data),
