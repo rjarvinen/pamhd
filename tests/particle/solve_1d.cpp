@@ -271,7 +271,7 @@ int main(int argc, char* argv[])
 	grid_y.update_copies_of_remote_neighbors();
 	grid_z.update_copies_of_remote_neighbors();
 
-	pamhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+	pamhd::Background_Magnetic_Field<double, Eigen::Vector3d> bg_B;
 
 	// short hand notation for calling solvers
 	auto solve = [&bg_B](
