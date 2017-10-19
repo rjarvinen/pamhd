@@ -322,17 +322,23 @@ int plot_1d(
 
 	for (const auto& cell_id: cells) {
 		auto& hd_data = simulation_data.at(cell_id)[pamhd::mhd::HD_State_Conservative()];
-		const double x = geometry.get_center(cell_id)[tube_dim];
-		gnuplot_file
-			<< x << " "
-			<< pamhd::mhd::get_pressure(
-				hd_data[pamhd::mhd::Mass_Density()],
-				hd_data[pamhd::mhd::Momentum_Density()],
-				hd_data[pamhd::mhd::Total_Energy_Density()],
-				simulation_data.at(cell_id)[pamhd::Magnetic_Field()],
-				adiabatic_index,
-				vacuum_permeability
-			) << "\n";
+		const double
+			x = geometry.get_center(cell_id)[tube_dim],
+			pressure = [&](){
+				try {
+					return pamhd::mhd::get_pressure(
+						hd_data[pamhd::mhd::Mass_Density()],
+						hd_data[pamhd::mhd::Momentum_Density()],
+						hd_data[pamhd::mhd::Total_Energy_Density()],
+						simulation_data.at(cell_id)[pamhd::Magnetic_Field()],
+						adiabatic_index,
+						vacuum_permeability
+					);
+				} catch (std::domain_error& e) {
+					return 0.0;
+				}
+			}();
+		gnuplot_file << x << " " << pressure << "\n";
 	}
 	gnuplot_file << "end\nreset\n";
 
@@ -684,14 +690,18 @@ int plot_2d(
 			"P",
 			"\n" + pressure_cmd + "\n",
 			[&](const pamhd::mhd::Cell& cell_data){
-				return pamhd::mhd::get_pressure(
-					cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Mass_Density()],
-					cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Momentum_Density()],
-					cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Total_Energy_Density()],
-					cell_data[pamhd::Magnetic_Field()],
-					adiabatic_index,
-					vacuum_permeability
-				);
+				try {
+					return pamhd::mhd::get_pressure(
+						cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Mass_Density()],
+						cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Momentum_Density()],
+						cell_data[pamhd::mhd::HD_State_Conservative()][pamhd::mhd::Total_Energy_Density()],
+						cell_data[pamhd::Magnetic_Field()],
+						adiabatic_index,
+						vacuum_permeability
+					);
+				} catch (std::domain_error& e) {
+					return 0.0;
+				}
 			}
 		);
 	}
