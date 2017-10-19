@@ -154,12 +154,30 @@ template <
 				vacuum_permeability,
 				Mas_getter, Mom_getter, Nrj_getter, Mag_getter
 			);
+	if (not isfinite(flux_neg[Mas])) {
+		throw std::domain_error(
+			"Invalid mass density flux_neg: "
+			+ to_string(flux_neg[Mas])
+		);
+	}
+	if (not isfinite(flux_pos[Mas])) {
+		throw std::domain_error(
+			"Invalid mass density flux_pos: "
+			+ to_string(flux_pos[Mas])
+		);
+	}
 
 	MHD flux
 		= (flux_neg + flux_pos) / 2
 		- (state_pos - state_neg) * (max_signal / 2);
 
 	flux *= area * dt;
+	if (not isfinite(flux[Mas])) {
+		throw std::domain_error(
+			"Invalid mass density flux: "
+			+ to_string(flux[Mas])
+		);
+	}
 
 	return std::make_tuple(flux, max_signal);
 }
