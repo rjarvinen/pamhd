@@ -260,11 +260,13 @@ tests/particle/massless.exe: \
 tests/particle/test.exe: \
   tests/particle/test.cpp \
   $(TEST_PARTICLE_COMMON_DEPS) \
+  source/background_magnetic_field.hpp \
   source/particle/solve_dccrg.hpp \
   source/particle/save.hpp \
   source/particle/initialize.hpp \
   source/particle/accumulate_dccrg.hpp \
   source/particle/accumulation_variables.hpp \
+  source/particle/options.hpp \
   source/mhd/boundaries.hpp \
   source/mhd/common.hpp \
   source/mhd/solve.hpp \
