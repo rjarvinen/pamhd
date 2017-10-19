@@ -211,7 +211,7 @@ const auto Part_Mom
 	};
 // copy of particle's velocity squared relative to pamhd::particle::Bulk_Velocity
 const auto Part_RV2
-	= [](Cell& cell_data, pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type{
+	= [](Cell& cell_data, pamhd::particle::Particle_Internal& particle)->double{
 		return
 			particle[pamhd::particle::Species_Mass()]
 			* particle[pamhd::particle::Mass()]
@@ -497,7 +497,14 @@ int main(int argc, char* argv[])
 	> initial_conditions_fields;
 	initial_conditions_fields.set(document);
 
-	// separate initial and (TODO) boundary conditions for each particle population
+	pamhd::boundaries::Multivariable_Boundaries<
+		uint64_t,
+		geometry_id_t,
+		pamhd::Magnetic_Field
+	> boundaries_fields;
+	boundaries_fields.set(document);
+
+	// separate initial and boundary conditions for each particle population
 	std::vector<
 		pamhd::boundaries::Multivariable_Initial_Conditions<
 			geometry_id_t,
@@ -505,8 +512,8 @@ int main(int argc, char* argv[])
 			pamhd::particle::Bdy_Temperature,
 			pamhd::particle::Bdy_Velocity,
 			pamhd::particle::Bdy_Nr_Particles_In_Cell,
-			pamhd::particle::Charge_Mass_Ratio,
-			pamhd::particle::Species_Mass
+			pamhd::particle::Bdy_Charge_Mass_Ratio,
+			pamhd::particle::Bdy_Species_Mass
 		>
 	> initial_conditions_particles;
 	for (size_t population_id = 0; population_id < 99; population_id++) {
@@ -531,7 +538,42 @@ int main(int argc, char* argv[])
 		initial_conditions_particles[old_size].set(obj_population);
 	}
 
+	std::vector<
+		pamhd::boundaries::Multivariable_Boundaries<
+			uint64_t,
+			geometry_id_t,
+			pamhd::particle::Bdy_Number_Density,
+			pamhd::particle::Bdy_Temperature,
+			pamhd::particle::Bdy_Velocity,
+			pamhd::particle::Bdy_Nr_Particles_In_Cell,
+			pamhd::particle::Bdy_Charge_Mass_Ratio,
+			pamhd::particle::Bdy_Species_Mass
+		>
+	> boundaries_particles;
+	for (size_t population_id = 0; population_id < 99; population_id++) {
+		const auto& obj_population_i
+			= document.FindMember(
+				(
+					"particle-population-"
+					+ boost::lexical_cast<std::string>(population_id)
+				).c_str()
+			);
+		if (obj_population_i == document.MemberEnd()) {
+			if (population_id == 0) {
+				continue; // allow population ids to start from 0 and 1
+			} else {
+				break;
+			}
+		}
+		const auto& obj_population = obj_population_i->value;
+
+		const auto old_size = boundaries_particles.size();
+		boundaries_particles.resize(old_size + 1);
+		boundaries_particles[old_size].set(obj_population);
+	}
+
 	pamhd::Background_Magnetic_Field<
+		double,
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
@@ -722,13 +764,13 @@ int main(int argc, char* argv[])
 		Res(*cell.data) = 0;
 	}
 
-	/* TODO pamhd::mhd::apply_magnetic_field_boundaries(
+	pamhd::mhd::apply_magnetic_field_boundaries(
 		grid,
-		boundaries,
+		boundaries_fields,
 		geometries,
 		simulation_time,
 		Mag
-	);*/
+	);
 
 	std::mt19937_64 random_source;
 
@@ -766,22 +808,50 @@ int main(int argc, char* argv[])
 		next_particle_id += nr_particles_created * grid.get_comm_size();
 	}
 
-	// TODO: apply boundaries
+	nr_particles_created
+		+= pamhd::particle::apply_boundaries<
+			pamhd::particle::Particle_Internal,
+			pamhd::particle::Mass,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Position,
+			pamhd::particle::Velocity,
+			pamhd::particle::Particle_ID,
+			pamhd::particle::Species_Mass
+		>(
+			geometries,
+			boundaries_particles,
+			simulation_time,
+			0,
+			cells,
+			grid,
+			random_source,
+			options_sim.boltzmann,
+			options_sim.vacuum_permeability,
+			next_particle_id,
+			grid.get_comm_size(),
+			true,
+			Sol_Info,
+			Part_Int,
+			Bdy_N,
+			Bdy_V,
+			Bdy_T,
+			Bdy_Nr_Par,
+			Bdy_SpM,
+			Bdy_C2M
+		);
+	next_particle_id += nr_particles_created * grid.get_comm_size();
 
 	if (rank == 0) {
 		cout << "done initializing particles and fields." << endl;
 	}
 
-
 	/*
-	TODO Classify cells into normal, boundary and dont_solve
+	Classify cells into normal, boundary and dont_solve
 	*/
-	/*pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
-		grid, boundaries, geometries, Sol_Info
-	);*/
-	for (const auto& cell: grid.cells) {
-		Sol_Info(*cell.data) = pamhd::particle::Solver_Info::normal;
-	}
+	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
+		grid, boundaries_particles, geometries, Sol_Info
+	);
+
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
 	for (const auto& cell: grid.cells) {
@@ -844,7 +914,8 @@ int main(int argc, char* argv[])
 			Accu_List_Getter,
 			pamhd::particle::Nr_Accumulated_To_Cells(),
 			pamhd::particle::Accumulated_To_Cells(),
-			pamhd::particle::Bulk_Velocity()
+			pamhd::particle::Bulk_Velocity(),
+			Sol_Info
 		);
 
 		// B required for E calculation
@@ -862,7 +933,8 @@ int main(int argc, char* argv[])
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
 			Part_Int,
-			Mas, Mom, Nrj, Mag
+			Mas, Mom, Nrj, Mag,
+			Sol_Info
 		);
 
 		// inner: J for E = (J - V) x B
@@ -915,7 +987,7 @@ int main(int argc, char* argv[])
 				= Bulk_Momentum_Getter(*cell_data)
 				/ Bulk_Mass_Getter(*cell_data);
 
-			J_m_V(*cell_data) = Cur(*cell_data) - Mom(*cell_data) / Mas(*cell_data);
+			J_m_V(*cell_data) = Cur(*cell_data) - pamhd::mhd::get_velocity(Mom(*cell_data), Mas(*cell_data));
 			// calculate electric field for output file
 			Ele(*cell_data) = J_m_V(*cell_data).cross(Mag(*cell_data));
 		}
@@ -932,7 +1004,7 @@ int main(int argc, char* argv[])
 				= Bulk_Momentum_Getter(*cell_data)
 				/ Bulk_Mass_Getter(*cell_data);
 
-			J_m_V(*cell_data) = Cur(*cell_data) - Mom(*cell_data) / Mas(*cell_data);
+			J_m_V(*cell_data) = Cur(*cell_data) - pamhd::mhd::get_velocity(Mom(*cell_data), Mas(*cell_data));
 			Ele(*cell_data) = J_m_V(*cell_data).cross(Mag(*cell_data));
 		}
 
@@ -973,7 +1045,8 @@ int main(int argc, char* argv[])
 				Part_Vel,\
 				Part_C2M,\
 				Part_Mas,\
-				Part_Des\
+				Part_Des,\
+				Sol_Info\
 			)
 
 		// outer cells
@@ -1233,10 +1306,7 @@ int main(int argc, char* argv[])
 		>(inner_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Particles_External()
-		);
+		Cell::set_transfer_all(false, pamhd::particle::Particles_External());
 
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
@@ -1358,179 +1428,50 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		/* TODO pamhd::mhd::apply_boundaries(
+		/*
+		Let copy boundaries use data from previous step
+		*/
+
+		pamhd::mhd::apply_magnetic_field_boundaries(
 			grid,
-			boundaries,
+			boundaries_fields,
 			geometries,
 			simulation_time,
-			Mas,
-			Mom,
-			Nrj,
-			Mag,
-			options_sim.proton_mass,
-			options_sim.adiabatic_index,
-			options_sim.vacuum_permeability
-		);*/
-
-
-		/* TODO particle boundaries
-		provide up-to-date data for copy boundaries
-		Cell::set_transfer_all(
-			true,
-			pamhd::mhd::MHD_State_Conservative(),
-			pamhd::particle::Cell_Type_Field(),
-			pamhd::particle::Cell_Type_Particle(),
-			pamhd::particle::Nr_Particles_External(),
-			pamhd::particle::Nr_Particles_Internal()
-		);
-		grid.update_copies_of_remote_neighbors();
-		Cell::set_transfer_all(
-			false,
-			pamhd::mhd::MHD_State_Conservative(),
-			pamhd::particle::Cell_Type_Field(),
-			pamhd::particle::Cell_Type_Particle(),
-			pamhd::particle::Nr_Particles_External(),
-			pamhd::particle::Nr_Particles_Internal()
+			Mag
 		);
 
-		update particle lists
-		pamhd::particle::resize_receiving_containers<
-			pamhd::particle::Nr_Particles_Internal,
-			pamhd::particle::Particles_Internal
-		>(remote_cells, grid);
-		pamhd::particle::resize_receiving_containers<
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_External
-		>(remote_cells, grid);
-		Cell::set_transfer_all(
-			true,
-			pamhd::particle::Particles_Internal(),
-			pamhd::particle::Particles_External()
-		);
-		grid.update_copies_of_remote_neighbors();
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Particles_Internal(),
-			pamhd::particle::Particles_External()
-		);
-
-		copy boundaries
-		for (const auto& cell_item: cell_data_pointers) {
-			const auto& cell_id = get<0>(cell_item);
-			if (cell_id == dccrg::error_cell) {
-				continue;
-			}
-
-			const auto& offset = get<2>(cell_item);
-			if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-				continue;
-			}
-
-			auto* const target_data = get<1>(cell_item);
-
-			if ((*target_data)[pamhd::particle::Cell_Type_Field()] == bdy_classifier_field.copy_boundary_cell) {
-				const auto& source_id = (*target_data)[pamhd::particle::Copy_Source_Field()];
-				auto* const source_data = grid[source_id];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for source cell: " << source_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-				Mag(*target_data) = Mag(*source_data);
-			}
-
-			if ((*target_data)[pamhd::particle::Cell_Type_Particle()] == bdy_classifier_particle.copy_boundary_cell) {
-				const auto& source_id = (*target_data)[pamhd::particle::Copy_Source_Particle()];
-				auto* const source_data = grid[source_id];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for source cell: " << source_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-
-				if ((*source_data)[pamhd::particle::Particles_External()].size() != 0) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						"Source cell has external particles: " << source_id
-						<< std::endl;
-					abort();
-				}
-
-				const auto& src_particles = (*source_data)[pamhd::particle::Particles_Internal()];
-				const auto src_nr_particles = src_particles.size();
-				const auto src_bulk_velocity
-					= pamhd::particle::get_bulk_velocity<
-						pamhd::particle::Mass,
-						pamhd::particle::Velocity,
-						pamhd::particle::Species_Mass
-					>(src_particles);
-				const auto src_temperature
-					= pamhd::particle::get_temperature<
-						pamhd::particle::Mass,
-						pamhd::particle::Velocity,
-						pamhd::particle::Species_Mass
-					>(src_particles, particle_temp_nrj_ratio);
-
-				double
-					src_charge_mass_ratio = 0,
-					src_species_mass = 0,
-					src_mass = 0;
-				for (const auto src_particle: src_particles) {
-					src_mass += src_particle[pamhd::particle::Mass()];
-					src_species_mass += src_particle[pamhd::particle::Species_Mass()];
-					src_charge_mass_ratio += src_particle[pamhd::particle::Charge_Mass_Ratio()];
-				}
-				src_species_mass /= src_nr_particles;
-				src_charge_mass_ratio /= src_nr_particles;
-
-				const auto
-					target_start = grid.geometry.get_min(cell_id),
-					target_end = grid.geometry.get_max(cell_id);
-
-				(*target_data)[pamhd::particle::Particles_Internal()]
-					= pamhd::particle::create_particles<
-						pamhd::particle::Particle_Internal,
-						pamhd::particle::Mass,
-						pamhd::particle::Charge_Mass_Ratio,
-						pamhd::particle::Position,
-						pamhd::particle::Velocity,
-						pamhd::particle::Particle_ID,
-						pamhd::particle::Species_Mass
-					>(
-						src_bulk_velocity,
-						Eigen::Vector3d{target_start[0], target_start[1], target_start[2]},
-						Eigen::Vector3d{target_end[0], target_end[1], target_end[2]},
-						Eigen::Vector3d{src_temperature, src_temperature, src_temperature},
-						src_nr_particles,
-						src_charge_mass_ratio,
-						src_mass,
-						src_species_mass,
-						particle_temp_nrj_ratio,
-						random_source,
-						next_particle_id,
-						grid.get_comm_size()
-					);
-				next_particle_id += src_nr_particles * grid.get_comm_size();
-
-				pamhd::particle::fill_mhd_fluid_values(
-					{cell_id},
-					grid,
-					adiabatic_index,
-					vacuum_permeability,
-					particle_temp_nrj_ratio,
-					Accu_Total_Nr_Part,
-					Bulk_Mass_Getter,
-					Bulk_Momentum_Getter,
-					Bulk_Relative_Velocity2_Getter,
-					Part_Int,
-					Mas, Mom, Nrj, Mag
-				);
-			}
-		}*/
-
+		nr_particles_created
+			+= pamhd::particle::apply_boundaries<
+				pamhd::particle::Particle_Internal,
+				pamhd::particle::Mass,
+				pamhd::particle::Charge_Mass_Ratio,
+				pamhd::particle::Position,
+				pamhd::particle::Velocity,
+				pamhd::particle::Particle_ID,
+				pamhd::particle::Species_Mass
+			>(
+				geometries,
+				boundaries_particles,
+				simulation_time,
+				simulated_steps,
+				cells,
+				grid,
+				random_source,
+				options_sim.boltzmann,
+				options_sim.vacuum_permeability,
+				next_particle_id,
+				grid.get_comm_size(),
+				true,
+				Sol_Info,
+				Part_Int,
+				Bdy_N,
+				Bdy_V,
+				Bdy_T,
+				Bdy_Nr_Par,
+				Bdy_SpM,
+				Bdy_C2M
+			);
+		next_particle_id += nr_particles_created * grid.get_comm_size();
 
 		/*
 		Save simulation to disk
@@ -1609,11 +1550,11 @@ int main(int argc, char* argv[])
 					options_sim.proton_mass,
 					options_sim.vacuum_permeability,
 					pamhd::mhd::HD_State_Conservative(),
-					pamhd::Magnetic_Field(),
 					pamhd::Electric_Current_Density(),
 					pamhd::particle::Solver_Info(),
 					pamhd::MPI_Rank(),
 					pamhd::Resistivity(),
+					pamhd::Magnetic_Field(),
 					pamhd::Bg_Magnetic_Field_Pos_X(),
 					pamhd::Bg_Magnetic_Field_Pos_Y(),
 					pamhd::Bg_Magnetic_Field_Pos_Z()
