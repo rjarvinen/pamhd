@@ -86,7 +86,7 @@ struct Options
 			throw std::invalid_argument(
 				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
 				+ "Invalid particle solver: " + solver
-				+ ", should be one of euler, midpoint."
+				+ ", should be one of euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
 			);
 		}
 	}
