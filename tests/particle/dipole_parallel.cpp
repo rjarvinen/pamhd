@@ -167,7 +167,7 @@ int main(int argc, char* argv[])
 		remote_cells = grid.get_remote_cells_on_process_boundary(),
 		cells = grid.get_cells();
 
-	pamhd::Background_Magnetic_Field<Eigen::Vector3d> bg_B;
+	pamhd::Background_Magnetic_Field<double, Eigen::Vector3d> bg_B;
 
 	rapidjson::Document document;
 	document.Parse(
