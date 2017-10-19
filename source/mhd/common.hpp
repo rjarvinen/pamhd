@@ -144,12 +144,20 @@ template <
 	const Total_Energy_Density_Getter Nrj,
 	const Magnetic_Field_Getter Mag
 ) {
+	using std::isnormal;
 	using std::to_string;
 
-	if (Mas(data) <= 0) {
+	if (not isnormal(Mas(data)) or Mas(data) <= 0) {
 		throw std::domain_error(
-			std::string("Non-positive mass density given to ")
+			std::string("Invalid mass density given to ")
 			+ __func__ + std::string(": ") + to_string(Mas(data))
+		);
+	}
+
+	if (not isfinite(Mom(data)[0])) {
+		throw std::domain_error(
+			std::string("Invalid momentum x density given to ")
+			+ __func__ + std::string(": ") + to_string(Mom(data)[0])
 		);
 	}
 
@@ -192,6 +200,12 @@ template <
 	Container flux;
 
 	Mas(flux) = Mom(data)[0];
+	if (not isfinite(Mas(flux))) {
+		throw std::domain_error(
+			"Invalid mass density flux: "
+			+ to_string(Mas(flux))
+		);
+	}
 
 	Mom(flux)
 		= Mom(data) * velocity[0]
