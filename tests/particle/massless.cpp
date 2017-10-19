@@ -292,7 +292,7 @@ int main(int argc, char* argv[])
 		particle_stepper = 4;
 	} else {
 		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-			<< "Unsupported solver: " << options_particle.solver
+			<< "Unsupported particle solver: " << options_particle.solver
 			<< ", should be one of: euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
 			<< std::endl;
 		abort();
@@ -322,21 +322,24 @@ int main(int argc, char* argv[])
 	> initial_conditions;
 	initial_conditions.set(document);
 
-	pamhd::boundaries::Multivariable_Boundaries<
-		uint64_t,
-		geometry_id_t,
-		pamhd::particle::Bdy_Number_Density,
-		pamhd::particle::Bdy_Temperature,
-		pamhd::particle::Bdy_Velocity,
-		pamhd::particle::Bdy_Nr_Particles_In_Cell,
-		pamhd::particle::Bdy_Charge_Mass_Ratio,
-		pamhd::particle::Bdy_Species_Mass,
-		pamhd::particle::Electric_Field,
-		pamhd::Magnetic_Field
-	> boundaries;
-	boundaries.set(document);
+	std::vector<
+		pamhd::boundaries::Multivariable_Boundaries<
+			uint64_t,
+			geometry_id_t,
+			pamhd::particle::Bdy_Number_Density,
+			pamhd::particle::Bdy_Temperature,
+			pamhd::particle::Bdy_Velocity,
+			pamhd::particle::Bdy_Nr_Particles_In_Cell,
+			pamhd::particle::Bdy_Charge_Mass_Ratio,
+			pamhd::particle::Bdy_Species_Mass,
+			pamhd::particle::Electric_Field,
+			pamhd::Magnetic_Field
+		>
+	> boundaries(1);
+	boundaries[0].set(document);
 
 	pamhd::Background_Magnetic_Field<
+		double,
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
@@ -620,7 +623,8 @@ int main(int argc, char* argv[])
 				Part_Vel,\
 				Part_C2M,\
 				Part_Mas,\
-				Part_Des\
+				Part_Des,\
+				Sol_Info\
 			)
 
 		switch (particle_stepper) {
