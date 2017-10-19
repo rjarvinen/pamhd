@@ -271,6 +271,36 @@ template <
 }
 
 
+/*
+Returns number of particles represented by given macroparticles.
+
+Doesn't count macroparticles with zero mass unless mass of all
+macroparticles == 0 in which case returns number of macroparticles.
+*/
+template <
+	class Mass_T,
+	class Species_Mass_T,
+	class Particle
+> typename Mass_T::data_type get_bulk_nr_particles(
+	const std::vector<Particle>& particles
+) {
+	typename Mass_T::data_type N{0};
+	if (particles.size() == 0) {
+		return N;
+	}
+
+	for (const auto& particle: particles) {
+		N += particle[Mass_T()] / particle[Species_Mass_T()];
+	}
+
+	if (N > 0) {
+		return N;
+	} else {
+		return particles.size();
+	}
+}
+
+
 /*!
 Returns average velocity of given particles.
 
