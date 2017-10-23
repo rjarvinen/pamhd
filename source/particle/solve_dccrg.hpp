@@ -44,6 +44,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common.hpp"
 #include "interpolate.hpp"
+#include "variables.hpp"
 
 
 namespace pamhd {
