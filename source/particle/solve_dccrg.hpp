@@ -238,20 +238,20 @@ template<
 		}
 
 		// put current cell's data into middle
-		current_minus_velocities[14] = JmV(*cell_data);
-		magnetic_fields[14] = Mag(*cell_data);
+		current_minus_velocities[13] = JmV(*cell_data);
+		magnetic_fields[13] = Mag(*cell_data);
 
 		for (size_t i = 0; i < neighbor_ids->size(); i++) {
 			const auto neighbor_id = (*neighbor_ids)[i];
 
 			// use same values in missing neighbors
 			if (neighbor_id == dccrg::error_cell) {
-				if (i <= 13) {
-					current_minus_velocities[i] = current_minus_velocities[14];
-					magnetic_fields[i] = magnetic_fields[14];
+				if (i < 13) {
+					current_minus_velocities[i] = current_minus_velocities[13];
+					magnetic_fields[i] = magnetic_fields[13];
 				} else {
-					current_minus_velocities[i + 1] = current_minus_velocities[14];
-					magnetic_fields[i + 1] = magnetic_fields[14];
+					current_minus_velocities[i + 1] = current_minus_velocities[13];
+					magnetic_fields[i + 1] = magnetic_fields[13];
 				}
 
 				continue;
@@ -263,7 +263,7 @@ template<
 				abort();
 			}
 
-			if (i <= 13) {
+			if (i < 13) {
 				current_minus_velocities[i] = JmV(*neighbor_data);
 				magnetic_fields[i] = Mag(*neighbor_data);
 			} else {
