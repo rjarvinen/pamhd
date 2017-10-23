@@ -1374,9 +1374,7 @@ template<
 				);
 			nr_particles_created += new_particles.size();
 
-			//if (bdy_i == 0) {
-				Par(*cell_data).clear();
-			//}
+			Par(*cell_data).clear(); // only do when bdy_i == 0?
 			Par(*cell_data).insert(Par(*cell_data).cend(), new_particles.cbegin(), new_particles.cend());
 
 			current_id_start += new_particles.size() * particle_id_increase;
