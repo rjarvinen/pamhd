@@ -315,8 +315,8 @@ int main(int argc, char* argv[])
 		pamhd::particle::Bdy_Temperature,
 		pamhd::particle::Bdy_Velocity,
 		pamhd::particle::Bdy_Nr_Particles_In_Cell,
-		pamhd::particle::Charge_Mass_Ratio,
-		pamhd::particle::Species_Mass,
+		pamhd::particle::Bdy_Charge_Mass_Ratio,
+		pamhd::particle::Bdy_Species_Mass,
 		pamhd::particle::Electric_Field,
 		pamhd::Magnetic_Field
 	> initial_conditions;
