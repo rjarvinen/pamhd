@@ -341,6 +341,11 @@ const auto Ele
 	= [](Cell& cell_data)->typename pamhd::particle::Electric_Field::data_type&{
 		return cell_data[pamhd::particle::Electric_Field()];
 	};
+// solver info variable for boundary logic
+const auto Sol_Info
+	= [](Cell& cell_data)->typename pamhd::particle::Solver_Info::data_type&{
+		return cell_data[pamhd::particle::Solver_Info()];
+	};
 
 
 // references to background magnetic fields
@@ -567,8 +572,8 @@ int main(int argc, char* argv[])
 			pamhd::particle::Bdy_Temperature,
 			pamhd::particle::Bdy_Velocity,
 			pamhd::particle::Bdy_Nr_Particles_In_Cell,
-			pamhd::particle::Charge_Mass_Ratio,
-			pamhd::particle::Species_Mass
+			pamhd::particle::Bdy_Charge_Mass_Ratio,
+			pamhd::particle::Bdy_Species_Mass
 		>
 	> initial_conditions_particles;
 	for (size_t population_id = 0; population_id < 99; population_id++) {
@@ -594,6 +599,7 @@ int main(int argc, char* argv[])
 	}
 
 	pamhd::Background_Magnetic_Field<
+		double,
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
@@ -833,7 +839,8 @@ int main(int argc, char* argv[])
 		Accu_List_Getter,
 		pamhd::particle::Nr_Accumulated_To_Cells(),
 		pamhd::particle::Accumulated_To_Cells(),
-		pamhd::particle::Bulk_Velocity()
+		pamhd::particle::Bulk_Velocity(),
+		Sol_Info
 	);
 
 	pamhd::particle::fill_mhd_fluid_values(
@@ -847,7 +854,8 @@ int main(int argc, char* argv[])
 		Bulk_Momentum_Getter,
 		Bulk_Relative_Velocity2_Getter,
 		Part_Int,
-		Mas2, Mom2, Nrj2, Mag
+		Mas2, Mom2, Nrj2, Mag,
+		Sol_Info
 	);
 
 	// magnetic field
@@ -966,7 +974,8 @@ int main(int argc, char* argv[])
 			Accu_List_Getter,
 			pamhd::particle::Nr_Accumulated_To_Cells(),
 			pamhd::particle::Accumulated_To_Cells(),
-			pamhd::particle::Bulk_Velocity()
+			pamhd::particle::Bulk_Velocity(),
+			Sol_Info
 		);
 
 		// B required for E calculation
@@ -984,7 +993,8 @@ int main(int argc, char* argv[])
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
 			Part_Int,
-			Mas2, Mom2, Nrj2, Mag
+			Mas2, Mom2, Nrj2, Mag,
+			Sol_Info
 		);
 
 		// inner: J for E = (J - V) x B
@@ -1100,7 +1110,8 @@ int main(int argc, char* argv[])
 				Part_Vel,\
 				Part_C2M,\
 				Part_Mas,\
-				Part_Des\
+				Part_Des,\
+				Sol_Info\
 			)
 
 		// outer cells
