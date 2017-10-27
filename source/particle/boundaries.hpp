@@ -835,8 +835,7 @@ where N is average number of particles in neighboring cells.
 Copied particles' id is changed.
 Particle bulk data is averaged from neighboring normal cells.
 
-Boundaries of first population overwrite existing particles,
-boundaries of subsequent populations add to particles.
+Boundaries of every population overwrite existing particles.
 */
 template<
 	class Particle,
@@ -946,14 +945,12 @@ template<
 				abort();
 			}
 
-			//if (bdy_i == 0) {
-				Par(*target_data).clear();
-			//}
+			Par(*target_data).clear(); // only do when bdy_i == 0?
 
 			// copy particles to random position in target cell
 			const auto
 				cell_min = grid.geometry.get_min(item[0]),
-				cell_max = grid.geometry.get_min(item[0]);
+				cell_max = grid.geometry.get_max(item[0]);
 			std::uniform_real_distribution<double>
 				pos_x_gen(cell_min[0], cell_max[0]),
 				pos_y_gen(cell_min[1], cell_max[1]),
