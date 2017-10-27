@@ -196,11 +196,11 @@ boost::optional<std::array<double, 4>> read_data(
 		true,
 		pamhd::mhd::HD_State_Conservative(),
 		pamhd::mhd::HD2_State_Conservative(),
-		pamhd::Magnetic_Field(),
 		pamhd::Electric_Current_Density(),
 		pamhd::mhd::Solver_Info(),
 		pamhd::MPI_Rank(),
 		pamhd::Resistivity(),
+		pamhd::Magnetic_Field(),
 		pamhd::Bg_Magnetic_Field_Pos_X(),
 		pamhd::Bg_Magnetic_Field_Pos_Y(),
 		pamhd::Bg_Magnetic_Field_Pos_Z()
