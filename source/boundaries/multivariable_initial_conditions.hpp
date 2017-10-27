@@ -1,7 +1,7 @@
 /*
 Class for handling all initial conditions of a simulation.
 
-Copyright 2016 Ilja Honkonen
+Copyright 2016, 2017 Ilja Honkonen
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,

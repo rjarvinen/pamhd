@@ -5,24 +5,16 @@ CXX = c++
 MPICXX = $(HOME)/bin/mpic++
 
 RUN =
-MPIRUN = mpirun -n 5
+MPIRUN = mpiexec -n 5
 
-BACKGROUND_B_CPPFLAGS = -I $(HOME)/libraries/background_B/source
+DCCRG_CPPFLAGS = -I $(HOME)/ohjelmat/dccrg
 
-CUBATURE_CPPFLAGS = -I $(HOME)/include
-CUBATURE_LDFLAGS = -L $(HOME)/lib
-CUBATURE_LIBS = -lpcubature
+EIGEN_CPPFLAGS = -I $(HOME)/ohjelmat/eigen-3.3.3
 
-DCCRG_CPPFLAGS = -I $(HOME)/libraries/dccrg
+GENSIMCELL_CPPFLAGS = -I $(HOME)/ohjelmat/gensimcell/source
 
-EIGEN_CPPFLAGS = -I $(HOME)/libraries/eigen
-
-EIGENLAB_CPPFLAGS = -I $(HOME)/libraries/EigenLab
-
-GENSIMCELL_CPPFLAGS = -I $(HOME)/libraries/gensimcell/source
-
-BOOST_CPPFLAGS = -I $(HOME)/include
-BOOST_LDFLAGS = -L $(HOME)/lib
+BOOST_CPPFLAGS = -I $(HOME)/ohjelmat/boost/1.63.0/gcc/6.3.1/openmpi/2.0.2/include
+BOOST_LDFLAGS = -L $(HOME)/ohjelmat/boost/1.63.0/gcc/6.3.1/openmpi/2.0.2/lib
 BOOST_LIBS = \
   -lboost_coroutine \
   -lboost_filesystem \
@@ -30,18 +22,14 @@ BOOST_LIBS = \
   -lboost_random \
   -lboost_program_options
 
-PHIPROF_CPPFLAGS = -I $(HOME)/libraries/phiprof
+PRETTYPRINT_CPPFLAGS = -I $(HOME)/ohjelmat/cxx-prettyprint
 
-PRETTYPRINT_CPPFLAGS = -I $(HOME)/libraries/cxx-prettyprint
-
-MUPARSERX_CPPFLAGS = -I $(HOME)/include
-MUPARSERX_LDFLAGS = -L $(HOME)/lib
+MUPARSERX_CPPFLAGS = -I $(HOME)/ohjelmat/muparserx-2017-03-15/gcc/6.3.1/include
+MUPARSERX_LDFLAGS = -L $(HOME)/ohjelmat/muparserx-2017-03-15/gcc/6.3.1/lib
 MUPARSERX_LIBS = -lmuparserx
 
-RAPIDJSON_CPPFLAGS = -I $(HOME)/libraries/rapidjson/include
+RAPIDJSON_CPPFLAGS = -I $(HOME)/ohjelmat/rapidjson/include
 
-VECTORCLASS_CPPFLAGS = -I $(HOME)/libraries/vectorclass
-
-ZOLTAN_CPPFLAGS = -I $(HOME)/include
-ZOLTAN_LDFLAGS = -L $(HOME)/lib
+ZOLTAN_CPPFLAGS = -I $(HOME)/ohjelmat/zoltan/3.83/gcc/6.3.1/openmpi/2.0.2/include
+ZOLTAN_LDFLAGS = -L $(HOME)/ohjelmat/zoltan/3.83/gcc/6.3.1/openmpi/2.0.2/lib
 ZOLTAN_LIBS = -lzoltan
