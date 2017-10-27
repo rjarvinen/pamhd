@@ -22,22 +22,26 @@ Combination of ../particle/test.cpp and ../mhd/two_test.cpp where
 particles represent one of the fluids.
 */
 
+
 #include "array"
 #include "cmath"
 #include "cstdlib"
 #include "fstream"
 #include "iostream"
+#include "limits"
 #include "random"
+#include "streambuf"
 #include "string"
+#include "vector"
 
 #include "boost/filesystem.hpp"
 #include "boost/lexical_cast.hpp"
 #include "boost/numeric/odeint.hpp"
 #include "dccrg.hpp"
 #include "dccrg_cartesian_geometry.hpp"
-#include "Eigen/Core" // must be included before gensimcell
+#include "Eigen/Core" // must be included before gensimcell.hpp
 #include "Eigen/Geometry"
-#include "mpi.h" // must be included before gensimcell
+#include "mpi.h" // must be included before gensimcell.hpp
 #include "gensimcell.hpp"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
@@ -49,6 +53,7 @@ particles represent one of the fluids.
 #include "divergence/options.hpp"
 #include "divergence/remove.hpp"
 #include "grid_options.hpp"
+#include "mhd/boundaries.hpp"
 #include "mhd/common.hpp"
 #include "mhd/options.hpp"
 #include "mhd/save.hpp"
@@ -90,9 +95,7 @@ using Cell = gensimcell::Cell<
 	pamhd::particle::Solver_Info,
 	pamhd::MPI_Rank,
 	pamhd::Resistivity,
-	pamhd::particle::Electric_Field,
 	pamhd::Magnetic_Field,
-	pamhd::particle::Number_Of_Particles,
 	pamhd::Bg_Magnetic_Field_Pos_X,
 	pamhd::Bg_Magnetic_Field_Pos_Y,
 	pamhd::Bg_Magnetic_Field_Pos_Z,
@@ -100,9 +103,8 @@ using Cell = gensimcell::Cell<
 	pamhd::Magnetic_Field_Temp,
 	pamhd::Magnetic_Field_Divergence,
 	pamhd::Scalar_Potential_Gradient,
-	pamhd::mhd::HD_Flux_Conservative,
-	pamhd::mhd::HD2_Flux_Conservative,
-	pamhd::Magnetic_Field_Flux,
+	pamhd::particle::Electric_Field,
+	pamhd::particle::Number_Of_Particles,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
 	pamhd::particle::Bdy_Temperature,
@@ -119,8 +121,13 @@ using Cell = gensimcell::Cell<
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	pamhd::particle::Particles_Internal,
 	pamhd::particle::Particles_External,
-	pamhd::particle::Accumulated_To_Cells
+	pamhd::particle::Accumulated_To_Cells,
+	pamhd::mhd::HD_Flux_Conservative,
+	pamhd::mhd::HD2_Flux_Conservative,
+	pamhd::Magnetic_Field_Flux
 >;
+
+
 // simulation data, see doi:10.1016/j.cpc.2012.12.017 or arxiv.org/abs/1212.3496
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
@@ -327,6 +334,7 @@ const auto Mag_res
 	= [](Cell& cell_data)->typename pamhd::Magnetic_Field_Resistive::data_type&{
 		return cell_data[pamhd::Magnetic_Field_Resistive()];
 	};
+// curl of magnetic field
 const auto Cur
 	= [](Cell& cell_data)->typename pamhd::Electric_Current_Density::data_type&{
 		return cell_data[pamhd::Electric_Current_Density()];
@@ -425,7 +433,11 @@ const auto Nrj2_f
 
 int main(int argc, char* argv[])
 {
+	using std::asin;
+	using std::atan2;
+	using std::get;
 	using std::min;
+	using std::sqrt;
 
 	/*
 	Initialize MPI
@@ -539,7 +551,6 @@ int main(int argc, char* argv[])
 		}
 	}();
 
-
 	using geometry_id_t = unsigned int;
 
 	pamhd::boundaries::Geometries<
@@ -551,7 +562,7 @@ int main(int argc, char* argv[])
 	geometries.set(document);
 
 	/*
-	Initial and (TODO) boundary conditions for fluid 1 and magnetic field
+	Initial and boundary conditions for fluid 1 and magnetic field
 	*/
 	pamhd::boundaries::Multivariable_Initial_Conditions<
 		geometry_id_t,
@@ -562,8 +573,18 @@ int main(int argc, char* argv[])
 	> initial_conditions_fluid;
 	initial_conditions_fluid.set(document);
 
+	pamhd::boundaries::Multivariable_Boundaries<
+		uint64_t,
+		geometry_id_t,
+		pamhd::mhd::Number_Density,
+		pamhd::mhd::Velocity,
+		pamhd::mhd::Pressure,
+		pamhd::Magnetic_Field
+	> boundaries_fluid;
+	boundaries_fluid.set(document);
+
 	/*
-	Initial and (TODO) boundary conditions for fluid 2 represented by particles
+	Initial and boundary conditions for particles (fluid 2)
 	*/
 	std::vector<
 		pamhd::boundaries::Multivariable_Initial_Conditions<
@@ -598,12 +619,45 @@ int main(int argc, char* argv[])
 		initial_conditions_particles[old_size].set(obj_population);
 	}
 
+	std::vector<
+		pamhd::boundaries::Multivariable_Boundaries<
+			uint64_t,
+			geometry_id_t,
+			pamhd::particle::Bdy_Number_Density,
+			pamhd::particle::Bdy_Temperature,
+			pamhd::particle::Bdy_Velocity,
+			pamhd::particle::Bdy_Nr_Particles_In_Cell,
+			pamhd::particle::Bdy_Charge_Mass_Ratio,
+			pamhd::particle::Bdy_Species_Mass
+		>
+	> boundaries_particles;
+	for (size_t population_id = 0; population_id < 99; population_id++) {
+		const auto& obj_population_i
+			= document.FindMember(
+				(
+					"particle-population-"
+					+ boost::lexical_cast<std::string>(population_id)
+				).c_str()
+			);
+		if (obj_population_i == document.MemberEnd()) {
+			if (population_id == 0) {
+				continue; // allow population ids to start from 0 and 1
+			} else {
+				break;
+			}
+		}
+		const auto& obj_population = obj_population_i->value;
+
+		const auto old_size = boundaries_particles.size();
+		boundaries_particles.resize(old_size + 1);
+		boundaries_particles[old_size].set(obj_population);
+	}
+
 	pamhd::Background_Magnetic_Field<
 		double,
 		pamhd::Magnetic_Field::data_type
 	> background_B;
 	background_B.set(document);
-
 
 	const auto mhd_solver
 		= [&options_mhd, &background_B, &rank](){
@@ -658,12 +712,9 @@ int main(int argc, char* argv[])
 	*/
 	Grid grid;
 
-	pamhd::grid::Options grid_options;
-	grid_options.set(document);
-
 	const unsigned int neighborhood_size = 1;
-	const auto& number_of_cells = grid_options.get_number_of_cells();
-	const auto& periodic = grid_options.get_periodic();
+	const auto& number_of_cells = options_grid.get_number_of_cells();
+	const auto& periodic = options_grid.get_periodic();
 	if (not grid.initialize(
 		number_of_cells,
 		comm,
@@ -683,7 +734,7 @@ int main(int argc, char* argv[])
 	// set grid geometry
 	const std::array<double, 3>
 		simulation_volume
-			= grid_options.get_volume(),
+			= options_grid.get_volume(),
 		cell_volume{
 			simulation_volume[0] / number_of_cells[0],
 			simulation_volume[1] / number_of_cells[1],
@@ -691,7 +742,7 @@ int main(int argc, char* argv[])
 		};
 
 	dccrg::Cartesian_Geometry::Parameters geom_params;
-	geom_params.start = grid_options.get_start();
+	geom_params.start = options_grid.get_start();
 	geom_params.level_0_cell_length = cell_volume;
 
 	if (not grid.set_geometry(geom_params)) {
@@ -752,11 +803,6 @@ int main(int argc, char* argv[])
 		cout << "Initializing simulation... " << endl;
 	}
 
-	// resistivity
-	for (auto& cell: grid.cells) {
-		Res(*cell.data) = 0;
-	}
-
 	// zero B before initializing fluids to get correct total energy
 	for (auto& cell: grid.cells) {
 		Mag(*cell.data) = {0, 0, 0};
@@ -814,8 +860,41 @@ int main(int argc, char* argv[])
 		next_particle_id += nr_particles_created * grid.get_comm_size();
 	}
 
+	nr_particles_created
+		+= pamhd::particle::apply_boundaries<
+			pamhd::particle::Particle_Internal,
+			pamhd::particle::Mass,
+			pamhd::particle::Charge_Mass_Ratio,
+			pamhd::particle::Position,
+			pamhd::particle::Velocity,
+			pamhd::particle::Particle_ID,
+			pamhd::particle::Species_Mass
+		>(
+			geometries,
+			boundaries_particles,
+			simulation_time,
+			0,
+			cells,
+			grid,
+			random_source,
+			options_sim.boltzmann,
+			options_sim.vacuum_permeability,
+			next_particle_id,
+			grid.get_comm_size(),
+			true,
+			Sol_Info,
+			Part_Int,
+			Bdy_N,
+			Bdy_V,
+			Bdy_T,
+			Bdy_Nr_Par,
+			Bdy_SpM,
+			Bdy_C2M
+		);
+	next_particle_id += nr_particles_created * grid.get_comm_size();
+
 	// fluid 2 from particles
-	accumulate_mhd_data(
+	pamhd::particle::accumulate_mhd_data(
 		inner_cells,
 		outer_cells,
 		grid,
@@ -885,7 +964,20 @@ int main(int argc, char* argv[])
 		pamhd::Bg_Magnetic_Field_Pos_Z()
 	);
 
-	// add magnetic field contribution to total energy densities
+	// initialize resistivity
+	for (auto& cell: grid.cells) {
+		Res(*cell.data) = 0;
+	}
+
+	pamhd::mhd::apply_magnetic_field_boundaries(
+		grid,
+		boundaries_fluid,
+		geometries,
+		simulation_time,
+		Mag
+	);
+
+	// add magnetic field contribution to fluids' total energy densities
 	for (const auto& cell: grid.cells) {
 		const auto
 			total_mass = Mas1(*cell.data) + Mas2(*cell.data),
@@ -895,16 +987,17 @@ int main(int argc, char* argv[])
 		Nrj2(*cell.data) += mass_frac2 * 0.5 * Mag(*cell.data).squaredNorm() / options_sim.vacuum_permeability;
 	}
 
+	if (rank == 0) {
+		cout << "done." << endl;
+	}
 
 	/*
-	TODO Classify cells into normal, boundary and dont_solve
+	Classify cells into normal, boundary and dont_solve
 	*/
-	/*pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
-		grid, boundaries, geometries, Sol_Info_P
-	);*/
-	for (const auto& cell: grid.cells) {
-		Sol_Info_P(*cell.data) = pamhd::particle::Solver_Info::normal;
-	}
+	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
+		grid, boundaries_particles, geometries, Sol_Info_P
+	);
+
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
 	for (const auto& cell: grid.cells) {
@@ -916,13 +1009,6 @@ int main(int argc, char* argv[])
 			solve_cells.push_back(cell.id);
 		}
 	}
-
-	// TODO: apply boundaries
-
-	if (rank == 0) {
-		cout << "done." << endl;
-	}
-
 
 	size_t simulated_steps = 0;
 	while (simulation_time < time_end) {
@@ -1517,19 +1603,61 @@ int main(int argc, char* argv[])
 			}
 		}
 
-				/*pamhd::particle::fill_mhd_fluid_values(
-					{cell_id},
-					grid,
-					options_sim.adiabatic_index,
-					options_sim.vacuum_permeability,
-					options_sim.boltzmann,
-					Nr_Particles,
-					Bulk_Mass_Getter,
-					Bulk_Momentum_Getter,
-					Bulk_Relative_Velocity2_Getter,
-					Part_Int,
-					Mas2, Mom2, Nrj2, Mag
-				);*/
+		/*
+		Let copy boundaries use data from previous step
+		*/
+
+		pamhd::mhd::apply_magnetic_field_boundaries(
+			grid,
+			boundaries_fluid,
+			geometries,
+			simulation_time,
+			Mag
+		);
+		pamhd::mhd::apply_fluid_boundaries(
+			grid,
+			boundaries_fluid,
+			geometries,
+			simulation_time,
+			Mas1, Mom1, Nrj1, Mag,
+			options_sim.proton_mass,
+			options_sim.adiabatic_index,
+			options_sim.vacuum_permeability
+		);
+
+		nr_particles_created
+			+= pamhd::particle::apply_boundaries<
+				pamhd::particle::Particle_Internal,
+				pamhd::particle::Mass,
+				pamhd::particle::Charge_Mass_Ratio,
+				pamhd::particle::Position,
+				pamhd::particle::Velocity,
+				pamhd::particle::Particle_ID,
+				pamhd::particle::Species_Mass
+			>(
+				geometries,
+				boundaries_particles,
+				simulation_time,
+				simulated_steps,
+				cells,
+				grid,
+				random_source,
+				options_sim.boltzmann,
+				options_sim.vacuum_permeability,
+				next_particle_id,
+				grid.get_comm_size(),
+				true,
+				Sol_Info,
+				Part_Int,
+				Bdy_N,
+				Bdy_V,
+				Bdy_T,
+				Bdy_Nr_Par,
+				Bdy_SpM,
+				Bdy_C2M
+			);
+		next_particle_id += nr_particles_created * grid.get_comm_size();
+
 
 			// add magnetic nrj to fluid boundary cells
 			/*if ((*cell_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.value_boundary_cell) {
@@ -1541,28 +1669,6 @@ int main(int argc, char* argv[])
 				Nrj1(*cell_data) += mass_frac * 0.5 * Mag(*cell_data).squaredNorm() / options_sim.vacuum_permeability;
 			}*/
 
-		// update particle lists
-		/*pamhd::particle::resize_receiving_containers<
-			pamhd::particle::Nr_Particles_Internal,
-			pamhd::particle::Particles_Internal
-		>(remote_cells, grid);
-		pamhd::particle::resize_receiving_containers<
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_External
-		>(remote_cells, grid);
-		Cell::set_transfer_all(
-			true,
-			pamhd::particle::Particles_Internal(),
-			pamhd::particle::Particles_External()
-		);
-		grid.update_copies_of_remote_neighbors();
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Particles_Internal(),
-			pamhd::particle::Particles_External()
-		);*/
-
-		// TODO copy boundaries
 
 		/*
 		Save simulation to disk
@@ -1637,10 +1743,11 @@ int main(int argc, char* argv[])
 					options_sim.vacuum_permeability,
 					pamhd::mhd::HD_State_Conservative(),
 					pamhd::mhd::HD2_State_Conservative(),
-					pamhd::Magnetic_Field(),
 					pamhd::Electric_Current_Density(),
+					pamhd::particle::Solver_Info(),
 					pamhd::MPI_Rank(),
 					pamhd::Resistivity(),
+					pamhd::Magnetic_Field(),
 					pamhd::Bg_Magnetic_Field_Pos_X(),
 					pamhd::Bg_Magnetic_Field_Pos_Y(),
 					pamhd::Bg_Magnetic_Field_Pos_Z()

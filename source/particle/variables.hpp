@@ -282,8 +282,8 @@ using Cell_test_particle = gensimcell::Cell<
 	pamhd::Electric_Current_Density, // output compatible with regular model
 	pamhd::particle::Solver_Info,
 	pamhd::MPI_Rank,
-	pamhd::particle::Electric_Field,
 	pamhd::Magnetic_Field,
+	pamhd::particle::Electric_Field,
 	pamhd::particle::Number_Of_Particles,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
@@ -309,9 +309,7 @@ using Cell_hyb_particle = gensimcell::Cell<
 	pamhd::particle::Solver_Info,
 	pamhd::MPI_Rank,
 	pamhd::Resistivity,
-	pamhd::particle::Electric_Field,
 	pamhd::Magnetic_Field,
-	pamhd::particle::Number_Of_Particles,
 	pamhd::Bg_Magnetic_Field_Pos_X,
 	pamhd::Bg_Magnetic_Field_Pos_Y,
 	pamhd::Bg_Magnetic_Field_Pos_Z,
@@ -319,8 +317,8 @@ using Cell_hyb_particle = gensimcell::Cell<
 	pamhd::Magnetic_Field_Temp,
 	pamhd::Magnetic_Field_Divergence,
 	pamhd::Scalar_Potential_Gradient,
-	pamhd::mhd::HD_Flux_Conservative,
-	pamhd::Magnetic_Field_Flux,
+	pamhd::particle::Electric_Field,
+	pamhd::particle::Number_Of_Particles,
 	pamhd::particle::Bdy_Number_Density,
 	pamhd::particle::Bdy_Velocity,
 	pamhd::particle::Bdy_Temperature,
@@ -337,7 +335,9 @@ using Cell_hyb_particle = gensimcell::Cell<
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	pamhd::particle::Particles_Internal,
 	pamhd::particle::Particles_External,
-	pamhd::particle::Accumulated_To_Cells
+	pamhd::particle::Accumulated_To_Cells,
+	pamhd::mhd::HD_Flux_Conservative,
+	pamhd::Magnetic_Field_Flux
 >;
 
 }} // namespaces

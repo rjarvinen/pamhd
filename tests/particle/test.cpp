@@ -772,6 +772,7 @@ int main(int argc, char* argv[])
 		Mag
 	);
 
+	// particles
 	std::mt19937_64 random_source;
 
 	unsigned long long int nr_particles_created = 0;
