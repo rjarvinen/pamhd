@@ -4,3 +4,5 @@ Add more test problems:
 
 Investigate why bicgstab solver in Eigen doesn't work in large grids
 in 1 and 2 dimensions when solving Poisson's equation.
+
+Switch from pressure to temperature in MHD config files.
