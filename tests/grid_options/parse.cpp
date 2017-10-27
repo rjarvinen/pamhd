@@ -40,7 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 int main()
 {
 	const char json1[] = "{"
-		"\"grid_options\": {"
+		"\"grid-options\": {"
 			"\"periodic\": \"{false, true, false}\","
 			"\"cells\": \"{1+1, 2+2, 3+3}\","
 			"\"volume\": \"{4+4 + cells[2], 5+5, 6+6 + cells[0]}\","
