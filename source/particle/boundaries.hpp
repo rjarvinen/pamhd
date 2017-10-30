@@ -832,7 +832,7 @@ Applies particle boundary logic.
 
 Copy boundaries copy N random particles from neighboring normal cells
 where N is average number of particles in neighboring cells.
-Copied particles' id is changed.
+Copied particles' id is changed and position randomized.
 Particle bulk data is averaged from neighboring normal cells.
 
 Boundaries of every population overwrite existing particles.
