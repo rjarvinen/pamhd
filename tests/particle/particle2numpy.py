@@ -153,9 +153,9 @@ def load(file_name, bulk_data, particle_data):
 				count = 1
 			)[0]
 			if cell_id in bulk_data:
-				bulk_data[cell_id].append((temp_bulk_data[1], temp_bulk_data[2]))
+				bulk_data[cell_id].append((temp_bulk_data[2], temp_bulk_data[1]))
 			else:
-				bulk_data[cell_id] = [(temp_bulk_data[1], temp_bulk_data[2])]
+				bulk_data[cell_id] = [(temp_bulk_data[2], temp_bulk_data[1])]
 
 		if particle_data == None:
 			continue
