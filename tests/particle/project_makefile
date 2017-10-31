@@ -261,6 +261,9 @@ tests/particle/test.exe: \
   tests/particle/test.cpp \
   $(TEST_PARTICLE_COMMON_DEPS) \
   source/background_magnetic_field.hpp \
+  source/boundaries/geometries.hpp \
+  source/boundaries/multivariable_boundaries.hpp \
+  source/boundaries/multivariable_initial_conditions.hpp \
   source/particle/solve_dccrg.hpp \
   source/particle/save.hpp \
   source/particle/initialize.hpp \
