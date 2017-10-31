@@ -192,6 +192,7 @@ boost::optional<std::array<double, 4>> read_data(
 			true,
 			Electric_Field(),
 			pamhd::Magnetic_Field(),
+			pamhd::Electric_Current_Density(),
 			Nr_Particles_Internal()
 		);
 		tie(
@@ -241,6 +242,7 @@ boost::optional<std::array<double, 4>> read_data(
 			false,
 			Electric_Field(),
 			pamhd::Magnetic_Field(),
+			pamhd::Electric_Current_Density(),
 			Nr_Particles_Internal()
 		);
 		Cell_test_particle::set_transfer_all(true, Particles_Internal());
