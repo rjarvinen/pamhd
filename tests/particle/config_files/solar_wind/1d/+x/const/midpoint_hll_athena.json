@@ -37,19 +37,19 @@
 	],
 	"particle-population-1": {
 		"nr-particles": {
-			"default": 10,
-			"ccopy-boundaries": [{"geometry-id": 0}],
+			"default": 20,
+			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
 				{
 					"geometry-id": 1,
 					"time-stamps": [0],
-					"values": [10]
+					"values": [20]
 				}
 			]
 		},
 		"species-mass": {
 			"default": 1.672621898e-27,
-			"ccopy-boundaries": [{"geometry-id": 0}],
+			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
 				{
 					"geometry-id": 1,
@@ -60,7 +60,7 @@
 		},
 		"charge-mass-ratio": {
 			"default": 95788332,
-			"ccopy-boundaries": [{"geometry-id": 0}],
+			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
 				{
 					"geometry-id": 1,
@@ -71,7 +71,7 @@
 		},
 		"number-density": {
 			"default": 5e6,
-			"ccopy-boundaries": [{"geometry-id": 0}],
+			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
 				{
 					"geometry-id": 1,
@@ -81,7 +81,6 @@
 			]
 		},
 		"velocity": {
-			"comment": "velocity anti-sunward increases towards solar wind boundary",
 			"default": [-3e5, 0, 0],
 			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
@@ -94,7 +93,7 @@
 		},
 		"temperature": {
 			"default": 1e5,
-			"ccopy-boundaries": [{"geometry-id": 0}],
+			"copy-boundaries": [{"geometry-id": 0}],
 			"value-boundaries": [
 				{
 					"geometry-id": 1,
@@ -106,7 +105,7 @@
 	},
 	"magnetic-field": {
 		"default": [0, 0, 1e-9],
-		"ccopy-boundaries": [{"geometry-id": 0}],
+		"copy-boundaries": [{"geometry-id": 0}],
 		"value-boundaries": [
 			{
 				"geometry-id": 1,
