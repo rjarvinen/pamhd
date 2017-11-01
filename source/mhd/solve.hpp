@@ -316,7 +316,7 @@ template <
 					<< "Solution failed between cells " << cell_id
 					<< " and " << neighbor_id
 					<< " of boundary type " << Sol_Info(*cell_data)
-					<< " and " << Sol_Info(*cell_data)
+					<< " and " << Sol_Info(*neighbor_data)
 					<< " at " << grid.geometry.get_center(cell_id)
 					<< " and " << grid.geometry.get_center(neighbor_id)
 					<< " in direction " << neighbor_dir
