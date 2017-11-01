@@ -1,0 +1,116 @@
+{
+	"comment1": "20% density oscillation at 10 mHz",
+	"output-directory": "results/solar_wind/1d/+x/density_10mHz_20%/midpoint_roe_athena",
+	"time-start": 0,
+	"time-length": 1000,
+	"minimum-pressure": 0,
+	"resistivity": "0",
+	"solver-particle": "midpoint",
+	"solver-mhd": "roe-athena",
+	"load-balancer": "RANDOM",
+	"save-particle-n": 100,
+	"save-mhd-n": 100,
+	"adiabatic-index": 1.6666666666666667,
+	"vacuum-permeability": 1.2566370614359173e-06,
+	"proton-mass": 1.6726217770000001e-27,
+	"particle-temp-nrj-ratio": 1.38064852e-23,
+	"remove-div-B-n": -1,
+	"time-step-factor": 0.5,
+	"poisson-norm-stop": 1e-10,
+	"poisson-norm-increase-max": 10,
+	"grid-options": {
+		"periodic": "{false, true, true}",
+		"cells": "{50 + 2, 1, 1}",
+		"volume": "{6.371e8 * (1 + 2 / (cells[0] - 2)), 6.371e8, 6.371e8}",
+		"start": "{-6.371e8 / (cells[0] - 2), 0, 0}"
+	},
+	"geometries": [
+		{"box": {
+			"start": [-99e99, -99e99, -99e99],
+			"end": [-1, 99e99, 99e99]
+		}},
+		{"box": {
+			"start": [6.37101e8, -99e99, -99e99],
+			"end": [99e99, 99e99, 99e99]
+		}}
+	],
+	"particle-population-1": {
+		"nr-particles": {
+			"default": 100,
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": [100]
+				}
+			]
+		},
+		"species-mass": {
+			"default": 1.672621898e-27,
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": [1.672621898e-27]
+				}
+			]
+		},
+		"charge-mass-ratio": {
+			"default": 95788332,
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": [95788332]
+				}
+			]
+		},
+		"number-density": {
+			"default": 5e6,
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": ["5e6 * (1 + 0.2 * sin(0.01*pi*t))"]
+				}
+			]
+		},
+		"velocity": {
+			"default": [-6e5, 0, 0],
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": [[-6e5, 0, 0]]
+				}
+			]
+		},
+		"temperature": {
+			"default": 116300,
+			"copy-boundaries": [{"geometry-id": 0}],
+			"value-boundaries": [
+				{
+					"geometry-id": 1,
+					"time-stamps": [0],
+					"values": ["116300 / (1 + 0.2 * sin(0.01*pi*t))"]
+				}
+			]
+		}
+	},
+	"magnetic-field": {
+		"default": [0, 0, -5e-9],
+		"copy-boundaries": [{"geometry-id": 0}],
+		"value-boundaries": [
+			{
+				"geometry-id": 1,
+				"time-stamps": [0],
+				"values": [[0, 0, -5e-9]]
+			}
+		]
+	}
+}
