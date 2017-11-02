@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 '''
-Converts realtime ACE data from NOAA to format suitable for MHD test program of PAMHD.
+Converts realtime ACE data from NOAA to format suitable for particle test program of PAMHD.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
 All rights reserved.
@@ -99,13 +99,7 @@ def get_plasma_data():
 			mag_i += 1
 		elif mag_data[mag_i][0] > swepam_data[swepam_i][0]:
 			swepam_i += 1
-
 	return merged_data
-
-
-def get_pressure(number_density, temperature):
-	particle_temp_nrj_ratio = 1.3806488e-23
-	return number_density * temperature * particle_temp_nrj_ratio
 
 
 if __name__ == '__main__':
@@ -162,84 +156,101 @@ if __name__ == '__main__':
 	time_stamps_str = '\t\t\t"time-stamps": ['
 	density_str = '\t\t\t"values": ['
 	velocity_str = '\t\t\t"values": ['
-	pressure_str = '\t\t\t"values": ['
-	mag_str = '\t\t\t"values": ['
+	temperature_str = '\t\t\t"values": ['
+	mag_str = '\t\t"values": ['
 	for item in plasma_data:
 		time = (item[0] - time_start).total_seconds()
-		#time = time.days * 60*60*24 + time.seconds
 		time_stamps_str += str(time) + ', '
 		density_str += str(item[4]) + ', '
 		velocity_str += '[' + str(item[5]) + ', 0, 0], '
-		pressure_str += str(get_pressure(item[4], item[6])) + ', '
+		temperature_str += str(item[6]) + ', '
 		mag_str += '[' + str(item[1]) + ', ' + str(item[2]) + ', ' + str(item[3]) + '], '
 	time_stamps_str = time_stamps_str[:-2] + '],\n'
 	density_str = density_str[:-2] + ']\n'
 	velocity_str = velocity_str[:-2] + ']\n'
-	pressure_str = pressure_str[:-2] + ']\n'
+	temperature_str = temperature_str[:-2] + ']\n'
 	mag_str = mag_str[:-2] + ']\n'
 
-	config_file = None
 	if args.config == '':
-		config_file = open('config-' + time_start.isoformat() + '.json', 'w')
+		config_file_name = 'config-' + time_start.isoformat() + '.json'
 	else:
-		config_file = open(args.config, 'w')
+		config_file_name = args.config
 
-	if args.model_output == '':
-		config_file.write('{\n"output-directory": "' + time_start.isoformat().replace(':', ''))
-	else:
-		config_file.write('{\n"output-directory": "' + args.model_output)
+	with open(config_file_name, 'w') as config_file:
+		if args.model_output == '':
+			config_file.write('{\n"output-directory": "' + time_start.isoformat().replace(':', ''))
+		else:
+			config_file.write('{\n"output-directory": "' + args.model_output)
 
-	config_file.write(
-		'",\n"solver-mhd": "roe-athena",\n'
-		+ '"time-start": 0,\n'
-		+ '"time-length": ' + str(args.duration)
-		+ ',\n"load-balancer": "RCB",\n'
-		+ '"save-mhd-n": 60,\n'
-		+ '"remove-div-B-n": -1,\n'
-		+ '"resistivity": "0",\n"minimum-pressure": 0,\n'
-		+ '"adiabatic-index": 1.6666666666666667,\n'
-		+ '"vacuum-permeability": 1.2566370614359173e-06,\n'
-		+ '"proton-mass": 1.6726217770000001e-27,\n'
-		+ '"time-step-factor": 0.5,\n'
-		+ '"poisson-norm-stop": 1e-10,\n'
-		+ '"poisson-norm-increase-max": 10,\n'
-		+ '"grid-options": {\n'
-		+ '\t"periodic": "{false, false, false}",\n'
-		+ '\t"cells": "{100 + 2, 1, 1}",\n'
-		+ '\t"volume": "{1e9 * (1 + 2 / (cells[0] - 2)), 1e9, 1e9}",\n'
-		+ '\t"start": "{-1 * 1e9 / (cells[0] - 2), -volume[1]/2, -volume[2]/2}"\n'
-		+ '},\n'
-		+ '"geometries": [\n'
-		+ '\t{"box": {\n'
-		+ '\t\t"start": [-99e99, -99e99, -99e99],\n'
-		+ '\t\t"end": [0, 99e99, 99e99]\n'
-		+ '\t}},\n'
-		+ '\t{"box": {\n'
-		+ '\t\t"start": [1e9, -99e99, -99e99],\n'
-		+ '\t\t"end": [99e99, 99e99, 99e99]\n'
-		+ '\t}}\n],\n'
-		+ '"number-density": {\n'
-		+ '\t"default": ' + str(plasma_data[0][4]) + ',\n'
-		+ '\t"copy-boundaries": [{"geometry-id": 0}],\n'
-		+ '\t"value-boundaries": [\n\t\t{\n\t\t\t"geometry-id": 1,\n'
-		+ time_stamps_str + density_str
-		+ '\t\t}\n\t]\n},\n'
-		+ '"velocity": {\n'
-		+ '\t"default": [' + str(plasma_data[0][5]) + ', 0, 0],\n'
-		+ '\t"copy-boundaries": [{"geometry-id": 0}],\n'
-		+ '\t"value-boundaries": [\n\t\t{\n\t\t\t"geometry-id": 1,\n'
-		+ time_stamps_str + velocity_str
-		+ '\t\t}\n\t]\n},\n'
-		+ '"pressure": {\n'
-		+ '\t"default": ' + str(get_pressure(item[4], item[6])) + ',\n'
-		+ '\t"copy-boundaries": [{"geometry-id": 0}],\n'
-		+ '\t"value-boundaries": [\n\t\t{\n\t\t\t"geometry-id": 1,\n'
-		+ time_stamps_str + pressure_str
-		+ '\t\t}\n\t]\n},\n'
-		+ '"magnetic-field": {\n'
-		+ '\t"default": [' + str(plasma_data[0][1]) + ', ' + str(plasma_data[0][2]) + ', ' + str(plasma_data[0][3]) + '],\n'
-		+ '\t"copy-boundaries": [{"geometry-id": 0}],\n'
-		+ '\t"value-boundaries": [\n\t\t{\n\t\t\t"geometry-id": 1,\n'
-		+ time_stamps_str + mag_str
-		+ '\t\t}\n\t]\n}}\n'
-	)
+		config_file.write(
+			'",\n"solver-mhd": "roe-athena",\n"solver-particle": "midpoint",\n'
+			+ '"time-start": 0,\n'
+			+ '"time-length": ' + str(args.duration)
+			+ ',\n"load-balancer": "RCB",\n'
+			+ '"save-mhd-n": 60,\n"save-particle-n": 60,\n'
+			+ '"remove-div-B-n": -1,\n'
+			+ '"resistivity": "0",\n"minimum-pressure": 0,\n'
+			+ '"adiabatic-index": 1.6666666666666667,\n'
+			+ '"vacuum-permeability": 1.2566370614359173e-06,\n'
+			+ '"proton-mass": 1.6726217770000001e-27,\n'
+			+ '"particle-temp-nrj-ratio": 1.38064852e-23,\n'
+			+ '"time-step-factor": 0.5,\n'
+			+ '"poisson-norm-stop": 1e-10,\n'
+			+ '"poisson-norm-increase-max": 10,\n'
+			+ '"grid-options": {\n'
+			+ '\t"periodic": "{false, true, true}",\n'
+			+ '\t"cells": "{100 + 2, 1, 1}",\n'
+			+ '\t"volume": "{1e9 * (1 + 2 / (cells[0] - 2)), 1e9, 1e9}",\n'
+			+ '\t"start": "{-1 * 1e9 / (cells[0] - 2), -volume[1]/2, -volume[2]/2}"\n'
+			+ '},\n'
+			+ '"geometries": [\n'
+			+ '\t{"box": {\n'
+			+ '\t\t"start": [-99e99, -99e99, -99e99],\n'
+			+ '\t\t"end": [-1, 99e99, 99e99]\n'
+			+ '\t}},\n'
+			+ '\t{"box": {\n'
+			+ '\t\t"start": [1000000001, -99e99, -99e99],\n'
+			+ '\t\t"end": [99e99, 99e99, 99e99]\n'
+			+ '\t}}\n],\n'
+			+ '"particle-population-1": {\n'
+			+ '\t"nr-particles": {\n'
+			+ '\t\t"default": 50,\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ '\t\t\t"time-stamps": [0],\n\t\t\t"values": [50]\n\t\t}]\n\t},\n'
+			+ '\t"species-mass": {\n'
+			+ '\t\t"default": 1.672621898e-27,\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ '\t\t\t"time-stamps": [0],\n\t\t\t"values": [1.672621898e-27]\n\t\t}]\n\t},\n'
+			+ '\t"charge-mass-ratio": {\n'
+			+ '\t\t"default": 95788332,\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ '\t\t\t"time-stamps": [0],\n\t\t\t"values": [95788332]\n\t\t}]\n\t},\n'
+			+ '\t"number-density": {\n'
+			+ '\t\t"default": ' + str(plasma_data[0][4]) + ',\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ time_stamps_str + density_str
+			+ '\t\t}]\n\t},\n'
+			+ '\t"velocity": {\n'
+			+ '\t\t"default": [' + str(plasma_data[0][5]) + ', 0, 0],\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ time_stamps_str + velocity_str
+			+ '\t\t}]\n\t},\n'
+			+ '\t"temperature": {\n'
+			+ '\t\t"default": ' + str(item[6]) + ',\n'
+			+ '\t\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t\t"value-boundaries": [{\n\t\t\t"geometry-id": 1,\n'
+			+ time_stamps_str + temperature_str
+			+ '\t\t}]\n\t}\n'
+			+ '},\n'
+			+ '"magnetic-field": {\n'
+			+ '\t"default": [' + str(plasma_data[0][1]) + ', ' + str(plasma_data[0][2]) + ', ' + str(plasma_data[0][3]) + '],\n'
+			+ '\t"copy-boundaries": [{"geometry-id": 0}],\n'
+			+ '\t"value-boundaries": [{\n\t\t"geometry-id": 1,\n'
+			+ time_stamps_str + mag_str
+			+ '\t}]\n}}\n'
+		)
