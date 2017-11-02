@@ -849,6 +849,9 @@ int main(int argc, char* argv[])
 	/*
 	Classify cells into normal, boundary and dont_solve
 	*/
+	pamhd::mhd::set_solver_info_magnetic<pamhd::particle::Solver_Info>(
+		grid, boundaries_fields, geometries, Sol_Info
+	);
 	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
 		grid, boundaries_particles, geometries, Sol_Info
 	);

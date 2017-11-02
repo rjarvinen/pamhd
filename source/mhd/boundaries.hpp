@@ -52,6 +52,66 @@ namespace pamhd {
 namespace mhd {
 
 
+// as set_solver_info() below but for magnetic field only
+// TODO: remove magnetic field from set_solver_info()
+template<
+	class Solver_Info,
+	class Cell_Data,
+	class Geometry,
+	class Boundaries,
+	class Boundary_Geometries,
+	class Solver_Info_Getter
+> void set_solver_info_magnetic(
+	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Boundaries& boundaries,
+	const Boundary_Geometries& geometries,
+	const Solver_Info_Getter& Sol_Info
+) {
+	Cell::set_transfer_all(true, pamhd::mhd::Solver_Info());
+	boundaries.classify(grid, geometries, Sol_Info);
+
+	for (const auto& cell: grid.cells) {
+		Sol_Info(*cell.data) = 0;
+	}
+
+	// magnetic field
+	constexpr pamhd::Magnetic_Field B{};
+	for (const auto& cell: boundaries.get_value_boundary_cells(B)) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::magnetic_field_bdy;
+	}
+	for (const auto& item: boundaries.get_copy_boundary_cells(B)) {
+		auto* const cell_data = grid[item[0]];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::magnetic_field_bdy;
+	}
+	const std::set<uint64_t> dont_solve_mag(
+		boundaries.get_dont_solve_cells(B).cbegin(),
+		boundaries.get_dont_solve_cells(B).cend()
+	);
+
+	// don't solve cells in which no variable is solved
+	for (auto& cell: dont_solve_mag) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		Sol_Info(*cell_data) |= Solver_Info::dont_solve;
+	}
+
+	grid.update_copies_of_remote_neighbors();
+	Cell::set_transfer_all(false, pamhd::mhd::Solver_Info());
+}
+
+
 /*!
 Prepares boundary information needed for MHD solver about each simulation cell.
 */
