@@ -319,10 +319,10 @@ template <
 ) {
 	using std::to_string;
 
-	if (mass_density <= 0) {
+	if (not isnormal(mass_density) or mass_density < 0) {
 		throw std::domain_error(
-			std::string("Non-positive mass density given to ")
-			+ __func__ + std::string(": ") + to_string(mass_density)
+			std::string("Invalid mass density in state_pos: ") + __func__ + ": "
+			+ to_string(mass_density)
 		);
 	}
 
@@ -335,8 +335,7 @@ template <
 			adiabatic_index,
 			vacuum_permeability
 		);
-	if (pressure <= 0) {
-		// TODO: switch to scientific notation
+	if (not isnormal(pressure) or pressure < 0) {
 		throw std::domain_error(
 			std::string("Non-positive pressure given to ")
 			+ __func__
@@ -374,7 +373,7 @@ template <
 	using std::sqrt;
 	using std::to_string;
 
-	if (mass_density <= 0) {
+	if (not isnormal(mass_density) or mass_density < 0) {
 		throw std::domain_error(
 			std::string("Non-positive mass density given to ")
 			+ __func__ + std::string(": ") + to_string(mass_density)
@@ -409,10 +408,18 @@ template <
 	const Scalar& adiabatic_index,
 	const Scalar& vacuum_permeability
 ) {
+	using std::isfinite;
 	using std::pow;
 	using std::sqrt;
+	using std::to_string;
 
 	const auto mag_tot = mag + bg_mag;
+	if (not isfinite(mag_tot[0])) {
+		throw std::domain_error(
+			"Invalid total magnetic field x: "
+			+ to_string(mag_tot[0])
+		);
+	}
 
 	const auto
 		mag_mag = sqrt(
@@ -429,7 +436,7 @@ template <
 			vacuum_permeability
 		);
 
-	if (mag_mag == 0) {
+	if (mag_mag <= 0) {
 		return sound;
 	}
 
@@ -441,16 +448,29 @@ template <
 		),
 		speeds_squared = sound2 + alfven2;
 
-	return
-		sqrt(
-			0.5 * (
-				speeds_squared
-				+ sqrt(
-					pow(speeds_squared, 2)
-					- 4 * sound2 * alfven2 * pow(mag_tot[0] / mag_mag, 2)
-				)
-			)
+	if (not isnormal(speeds_squared) or speeds_squared < 0) {
+		throw std::domain_error(
+			std::string("Invalid squared speeds in ") + __func__ + ": "
+			+ to_string(speeds_squared)
 		);
+	}
+
+	const auto to_sqrt
+		= sound2*sound2
+		+ alfven2*alfven2
+		+ 2*sound2*alfven2
+			* (1 - 2 * pow(mag_tot[0] / mag_mag, 2));
+
+	if (not isnormal(to_sqrt) or to_sqrt < 0) {
+		throw std::domain_error(
+			std::string("Invalid to_sqrt in ") + __func__ + ": "
+			+ to_string(to_sqrt) + " with s2: " + to_string(sound2)
+			+ ", a2: " + to_string(alfven2)
+			+ ", B[0]/B: " + to_string(mag_tot[0] / mag_mag)
+		);
+	}
+
+	return sqrt(0.5 * (speeds_squared + sqrt(to_sqrt)));
 }
 
 
