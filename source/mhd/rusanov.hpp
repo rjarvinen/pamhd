@@ -120,6 +120,19 @@ template <
 			std::abs(state_pos[Mom][0] / state_pos[Mas]) + max_fast_ms
 		);
 
+	if (not isfinite(max_fast_ms)) {
+		throw std::domain_error(
+			"Invalid maximum fast magnetosonic speed: "
+			+ to_string(max_fast_ms)
+		);
+	}
+	if (not isfinite(max_signal)) {
+		throw std::domain_error(
+			"Invalid maximum signal speed: "
+			+ to_string(max_signal)
+		);
+	}
+
 	const auto Mas_getter
 		= [](MHD& state) -> typename Mass_Density::data_type& {
 			return state[Mass_Density()];
