@@ -128,7 +128,7 @@ public:
 						this->data_end,
 						this->current_minus_velocity
 					);
-					return J_m_V_at_pos.cross(B_at_pos);
+					return J_m_V_at_pos.cross(B_at_pos + this->bg_B);
 				} else {
 					return interpolate(
 						state[0],
