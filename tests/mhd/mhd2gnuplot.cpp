@@ -769,6 +769,60 @@ int plot_2d(
 		);
 	}
 
+	// total magnetic field
+	if (magnetic_field_cmd != "") {
+		write_gnuplot_cmd_current(
+			"Bx_tot",
+			"\n" + magnetic_field_cmd + " 1\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Magnetic_Field()][0] + cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][0];
+			}
+		);
+
+		write_gnuplot_cmd_current(
+			"By_tot",
+			"\n" + magnetic_field_cmd + " 2\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Magnetic_Field()][1] + cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][1];
+			}
+		);
+
+		write_gnuplot_cmd_current(
+			"Bz_tot",
+			"\n" + magnetic_field_cmd + " 3\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Magnetic_Field()][2] + cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][2];
+			}
+		);
+	}
+
+	// background magnetic field
+	if (magnetic_field_cmd != "") {
+		write_gnuplot_cmd_current(
+			"Bx_bg",
+			"\n" + magnetic_field_cmd + " 1\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][0];
+			}
+		);
+
+		write_gnuplot_cmd_current(
+			"By_bg",
+			"\n" + magnetic_field_cmd + " 2\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][1];
+			}
+		);
+
+		write_gnuplot_cmd_current(
+			"Bz_bg",
+			"\n" + magnetic_field_cmd + " 3\"\n",
+			[](const pamhd::mhd::Cell& cell_data){
+				return cell_data[pamhd::Bg_Magnetic_Field_Pos_X()][2];
+			}
+		);
+	}
+
 	// current density
 	if (current_density_cmd != "") {
 		write_gnuplot_cmd_current(
