@@ -82,51 +82,11 @@ double f(const double x)
 
 int main()
 {
-	double value = 0;
 	Vector3d
 		value_min(0, 0, 0),
 		value_max(0, 0, 0),
 		cell_min(0, 0, 0),
 		cell_max(0, 0, 0);
-
-	// test error reporting
-	try {
-		value_min = Vector3d(0, 0, 1);
-		value_max = Vector3d(1, 1, 0);
-		cell_min = Vector3d(0, 0, 0);
-		cell_max = Vector3d(1, 1, 1);
-		get_accumulated_value(
-			value,
-			value_min,
-			value_max,
-			cell_min,
-			cell_max
-		);
-
-		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
-			<< "Invalid value volume not caught."
-			<< std::endl;
-		abort();
-	} catch(std::out_of_range e) {}
-
-	try {
-		value_min = Vector3d(0, 0, 0);
-		value_max = Vector3d(1, 1, 1);
-		cell_min = Vector3d(0, 1, 0);
-		cell_max = Vector3d(1, 0, 1);
-		get_accumulated_value(
-			value,
-			value_min,
-			value_max,
-			cell_min,
-			cell_max
-		);
-
-		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
-			<< "Invalid cell volume not caught."
-			<< std::endl;
-		abort();
-	} catch(std::out_of_range e) {}
 
 	// test vector accumulation
 	const auto vec_accu
