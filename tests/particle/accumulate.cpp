@@ -30,6 +30,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "array"
 #include "cmath"
 #include "cstdlib"
 #include "exception"
@@ -37,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "utility"
 #include "vector"
 
-#include "Eigen/Core"
+#include "Eigen/Core" // must be included before accumulate.hpp
 
 #include "particle/accumulate.hpp"
 
@@ -82,11 +83,91 @@ double f(const double x)
 
 int main()
 {
+	double value = 0;
 	Vector3d
 		value_min(0, 0, 0),
 		value_max(0, 0, 0),
 		cell_min(0, 0, 0),
 		cell_max(0, 0, 0);
+
+	// test error detection
+	try {
+		value_min = Vector3d(0, 0, 1);
+		value_max = Vector3d(1, 1, 0);
+		cell_min = Vector3d(0, 0, 0);
+		cell_max = Vector3d(1, 1, 1);
+		get_accumulated_value(
+			value,
+			value_min,
+			value_max,
+			cell_min,
+			cell_max
+		);
+
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Invalid value volume not caught."
+			<< std::endl;
+		abort();
+	} catch(std::out_of_range e) {}
+
+	try {
+		value_min = Vector3d(0, 0, 0);
+		value_max = Vector3d(1, 1, 1);
+		cell_min = Vector3d(0, 1, 0);
+		cell_max = Vector3d(1, 0, 1);
+		get_accumulated_value(
+			value,
+			value_min,
+			value_max,
+			cell_min,
+			cell_max
+		);
+
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Invalid cell volume not caught."
+			<< std::endl;
+		abort();
+	} catch(std::out_of_range e) {}
+
+	// test regular accumulation
+	const auto accu1
+		= get_accumulated_value(
+			1.0,
+			Vector3d{-1, -1, -1},
+			Vector3d{ 1,  1,  1},
+			Vector3d{ 0,  0,  0},
+			Vector3d{ 2,  2,  2}
+		);
+	if (fabs(accu1 - 1.0/8.0) > 1e-10) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Difference for accumulated value too large from correct."
+			<< std::endl;
+		abort();
+	}
+
+	// test weighted accumulation
+	const auto accu2
+		= get_accumulated_value_weighted(
+			-3.0,
+			2.0,
+			Vector3d{-1, -1, -1},
+			Vector3d{ 1,  1,  1},
+			Vector3d{ 0,  0,  0},
+			Vector3d{ 2,  2,  2}
+		) + get_accumulated_value_weighted(
+			10.0,
+			1.0,
+			Vector3d{ 0,  1,  1},
+			Vector3d{ 2,  3,  3},
+			Vector3d{ 0,  0,  0},
+			Vector3d{ 2,  2,  2}
+		);
+	if (fabs(accu2 - 14) > 1e-10) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Difference for accumulated value too large from correct."
+			<< std::endl;
+		abort();
+	}
 
 	// test vector accumulation
 	const auto vec_accu
@@ -101,6 +182,30 @@ int main()
 		fabs(vec_accu[0] - 1) > 1e-10
 		or fabs(vec_accu[1] - 2) > 1e-10
 		or fabs(vec_accu[2] - 3) > 1e-10
+	) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Difference for accumulated vector too large from correct."
+			<< std::endl;
+		abort();
+	}
+
+	const auto vec_accu3
+		= get_accumulated_value(
+			std::array<double, 2>{20, 30},
+			std::array<double, 3>{0, 0, 0},
+			std::array<double, 3>{1, 1, 1},
+			std::array<double, 3>{0, 0, 0},
+			std::array<double, 3>{1, 1, 1}
+		);
+	if (vec_accu3.size() != 2) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Wrong number of dimensions in accumulated array."
+			<< std::endl;
+		abort();
+	}
+	if (
+		fabs(vec_accu3[0] - 20) > 1e-10
+		or fabs(vec_accu3[1] - 30) > 1e-10
 	) {
 		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
 			<< "Difference for accumulated vector too large from correct."

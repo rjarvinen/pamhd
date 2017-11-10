@@ -34,8 +34,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAMHD_PARTICLE_ACCUMULATE_HPP
 
 
+#include "array"
 #include "cmath"
 #include "exception"
+#include "string"
 
 #include "particle/common.hpp"
 
@@ -44,13 +46,7 @@ namespace pamhd {
 namespace particle {
 
 
-/*!
-Returns portion of value spanning value_min/max that is within cell_min/max.
-
-value is assumed to have a constant value within its volume.
-*/
-template<class Scalar, class Vector> Scalar get_accumulated_value(
-	const Scalar& value,
+template<class Vector> double get_intersection_volume(
 	const Vector& value_min,
 	const Vector& value_max,
 	const Vector& cell_min,
@@ -58,6 +54,26 @@ template<class Scalar, class Vector> Scalar get_accumulated_value(
 ) {
 	using std::max;
 	using std::min;
+	using std::to_string;
+
+	for (size_t dim = 0; dim < size_t(value_min.size()); dim++) {
+		if (value_min[dim] > value_max[dim]) {
+			throw std::out_of_range(
+				"Volume of given value ends before it starts: "
+				+ to_string(value_min[dim]) + " > " + to_string(value_max[dim])
+				+ " in dimension (+1) " + to_string(dim)
+			);
+		}
+	}
+	for (size_t dim = 0; dim < size_t(cell_min.size()); dim++) {
+		if (cell_min[dim] > cell_max[dim]) {
+			throw std::out_of_range(
+				"Volume of given cell ends before it starts"
+				+ to_string(cell_min[dim]) + " > " + to_string(cell_max[dim])
+				+ " in dimension (+1) " + to_string(dim)
+			);
+		}
+	}
 
 	const Vector
 		interval_min{
@@ -85,16 +101,137 @@ template<class Scalar, class Vector> Scalar get_accumulated_value(
 			)
 		};
 
+	return intersection[0] * intersection[1] * intersection[2];
+}
+
+
+/*!
+Returns portion of value spanning value_min/max that is within cell_min/max.
+
+value is assumed to have a constant value within its volume.
+*/
+template<class Vector> double get_accumulated_value(
+	const double& value,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
 	const auto
 		value_vol
 			= (value_max[0] - value_min[0])
 			* (value_max[1] - value_min[1])
 			* (value_max[2] - value_min[2]),
-		intersection_vol = intersection[0] * intersection[1] * intersection[2];
+		intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
 
 	return value * intersection_vol / value_vol;
+} catch (...) {
+	throw;
 }
 
+/*! Same as double version but accumulates separately all items of std::array */
+template<class T, std::size_t N, class Vector> std::array<T, N> get_accumulated_value(
+	const std::array<T, N>& value,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
+	const auto
+		value_vol
+			= (value_max[0] - value_min[0])
+			* (value_max[1] - value_min[1])
+			* (value_max[2] - value_min[2]),
+		intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
+
+	std::array<T, N> ret_val;
+	for (size_t i = 0; i < N; i++) {
+		ret_val[i] = value[i] * intersection_vol / value_vol;
+	}
+	return ret_val;
+} catch (...) {
+	throw;
+}
+
+
+/*!
+Returns portion of value spanning value_min/max that is within cell_min/max.
+
+value is assumed to have a constant value within its volume.
+*/
+template<class Vector> double get_accumulated_value_weighted(
+	const double& value,
+	const double& weight,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
+	const auto intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
+	return value * weight * intersection_vol;
+} catch (...) {
+	throw;
+}
+
+/*! Same as double version but accumulates separately all items of std::array */
+template<class T, std::size_t N, class Vector> std::array<T, N> get_accumulated_value_weighted(
+	const std::array<T, N>& value,
+	const double& weight,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
+	const auto intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
+	std::array<T, N> ret_val;
+	for (size_t i = 0; i < N; i++) {
+		ret_val[i] = value[i] * weight * intersection_vol;
+	}
+	return ret_val;
+} catch (...) {
+	throw;
+}
+
+
+#ifdef EIGEN_WORLD_VERSION
+
+/*! Same as double version but accumulates separately all items of Eigen::Vector3d */
+template<class Vector> Eigen::Vector3d get_accumulated_value(
+	const Eigen::Vector3d& value,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
+	const auto
+		value_vol
+			= (value_max[0] - value_min[0])
+			* (value_max[1] - value_min[1])
+			* (value_max[2] - value_min[2]),
+		intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
+
+	return value * intersection_vol / value_vol;
+} catch (...) {
+	throw;
+}
+
+/*! Same as double version but accumulates separately all items of Eigen::Vector3d */
+template<class Vector> Eigen::Vector3d get_accumulated_value_weighted(
+	const Eigen::Vector3d& value,
+	const double& weight,
+	const Vector& value_min,
+	const Vector& value_max,
+	const Vector& cell_min,
+	const Vector& cell_max
+) try {
+	const auto intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
+	const Eigen::Vector3d ret_val = value * weight * intersection_vol;
+	return ret_val;
+} catch (...) {
+	throw;
+}
+
+#endif
 
 }} // namespaces
 
