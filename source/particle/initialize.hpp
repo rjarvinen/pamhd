@@ -520,6 +520,7 @@ template<
 				particle_id_increase
 			);
 		nr_particles_created += new_particles.size();
+		current_id_start += new_particles.size() * particle_id_increase;
 
 		if (replace) {
 			Par(*cell_data) = std::move(new_particles);
@@ -530,8 +531,6 @@ template<
 				new_particles.end()
 			);
 		}
-
-		current_id_start += new_particles.size() * particle_id_increase;
 	}
 
 	if (verbose && grid.get_rank() == 0) {
