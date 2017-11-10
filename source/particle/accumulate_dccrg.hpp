@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "iostream"
+#include "utility"
 #include "vector"
 
 #include "dccrg.hpp"
@@ -51,15 +52,143 @@ namespace pamhd {
 namespace particle {
 
 
+/*! Assumes geometry API is compatible with cartesian dccrg geometry */
+template<class Geometry> std::tuple<
+	Eigen::Vector3d,
+	Eigen::Vector3d,
+	Eigen::Vector3d,
+	Eigen::Vector3d
+> get_cell_geometry(
+	const uint64_t cell_id,
+	const Geometry& geometry
+) {
+	const auto
+		cell_min_tmp = geometry.get_min(cell_id),
+		cell_max_tmp = geometry.get_max(cell_id),
+		cell_length_tmp = geometry.get_length(cell_id),
+		cell_center_tmp = geometry.get_center(cell_id);
+	const Eigen::Vector3d
+		cell_min{cell_min_tmp[0], cell_min_tmp[1], cell_min_tmp[2]},
+		cell_max{cell_max_tmp[0], cell_max_tmp[1], cell_max_tmp[2]},
+		cell_length{cell_length_tmp[0], cell_length_tmp[1], cell_length_tmp[2]},
+		cell_center{cell_center_tmp[0], cell_center_tmp[1], cell_center_tmp[2]};
+	return std::make_tuple(cell_min, cell_max, cell_length, cell_center);
+}
+
+
+template<class Cell> std::tuple<
+	std::vector<bool>,
+	std::vector<uint64_t>,
+	std::vector<Cell*>,
+	std::vector<Eigen::Vector3d>,
+	std::vector<Eigen::Vector3d>
+> cache_neighbor_data(
+	const uint64_t cell_id,
+	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+) {
+	std::vector<bool> is_locals;
+	std::vector<uint64_t> neighbor_ids;
+	std::vector<Cell*> neighbor_datas;
+	std::vector<Eigen::Vector3d> neighbor_mins, neighbor_maxs;
+
+	Eigen::Vector3d cell_min, cell_max, cell_length, cell_center;
+	std::tie(cell_min, cell_max, cell_length, cell_center) = get_cell_geometry(cell_id, grid.geometry);
+
+	for (const auto& x_offset: {-1, 0, 1}) {
+	for (const auto& y_offset: {-1, 0, 1}) {
+	for (const auto& z_offset: {-1, 0, 1}) {
+		const auto neighbors
+			= grid.get_neighbors_of_at_offset(cell_id, x_offset, y_offset, z_offset);
+		if (
+			neighbors.size() == 0
+			and (x_offset != 0 or y_offset != 0 or z_offset != 0)
+		) {
+			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+
+		for (const auto& neighbor_id: neighbors) {
+			if (neighbor_id == dccrg::error_cell) {
+				continue;
+			}
+
+			if (
+				grid.get_refinement_level(neighbor_id) != grid.get_refinement_level(cell_id)
+			) {
+				std::cerr << __FILE__ << "(" << __LINE__ << ") "
+					<< "Different cell refinement levels not supported"
+					<< std::endl;
+				abort();
+			}
+
+			neighbor_ids.emplace_back(neighbor_id);
+
+			auto* const neighbor_data = grid[neighbor_id];
+			if (neighbor_data == nullptr) {
+				std::cerr << __FILE__ << "(" << __LINE__ << "): "
+					<< "No data for neighbor " << neighbor_id
+					<< " of cell " << cell_id
+					<< std::endl;
+				abort();
+			}
+			neighbor_datas.emplace_back(neighbor_data);
+
+			if (grid.is_local(neighbor_id)) {
+				is_locals.push_back(true);
+			} else {
+				is_locals.push_back(false);
+			}
+
+			Eigen::Vector3d neighbor_min, neighbor_max, neighbor_length, neighbor_center;
+			std::tie(neighbor_min, neighbor_max, neighbor_length, neighbor_center)
+				= get_cell_geometry(neighbor_id, grid.geometry);
+
+			// handle periodic grid geometry
+			if (x_offset < 0 and neighbor_center[0] > cell_min[0]) {
+				neighbor_max[0] = cell_min[0];
+				neighbor_min[0] = cell_min[0] - neighbor_length[0];
+			} else if (x_offset > 0 and neighbor_center[0] < cell_max[0]) {
+				neighbor_min[0] = cell_max[0];
+				neighbor_max[0] = cell_max[0] + neighbor_length[0];
+			}
+
+			if (y_offset < 0 and neighbor_center[1] > cell_min[1]) {
+				neighbor_max[1] = cell_min[1];
+				neighbor_min[1] = cell_min[1] - neighbor_length[1];
+			} else if (y_offset > 0 and neighbor_center[1] < cell_max[1]) {
+				neighbor_min[1] = cell_max[1];
+				neighbor_max[1] = cell_max[1] + neighbor_length[1];
+			}
+
+			if (z_offset < 0 and neighbor_center[2] > cell_min[2]) {
+				neighbor_max[2] = cell_min[2];
+				neighbor_min[2] = cell_min[2] - neighbor_length[2];
+			} else if (z_offset > 0 and neighbor_center[2] < cell_max[2]) {
+				neighbor_min[2] = cell_max[2];
+				neighbor_max[2] = cell_max[2] + neighbor_length[2];
+			}
+
+			neighbor_mins.push_back(neighbor_min);
+			neighbor_maxs.push_back(neighbor_max);
+		}
+	}}}
+
+	return std::make_tuple(is_locals, neighbor_ids, neighbor_datas, neighbor_mins, neighbor_maxs);
+}
+
+
 /*!
 Accumulates particle data in given cells to those cells and their neighbors.
 
-Accumulated data from particles in the same cell is not zeroed before accumulating.
+Accumulated data from particles in the same cell is not zeroed before accumulating
+unless clear_at_start == true;
 
 Accumulated data is written to local cells directly, accumulated data to
 remote neighbors is stored in local cells' accumulation list.
 
 Updates the number of remote accumulated values.
+
+Particle data to/from dont_solve cells isn't accumulated.
 */
 template<
 	class Particles_Getter,
@@ -98,117 +227,24 @@ template<
 			continue;
 		}
 
-		const auto
-			cell_min_tmp = grid.geometry.get_min(cell_id),
-			cell_max_tmp = grid.geometry.get_max(cell_id),
-			cell_length_tmp = grid.geometry.get_length(cell_id),
-			cell_center_tmp = grid.geometry.get_center(cell_id);
-		const Eigen::Vector3d
-			cell_min{cell_min_tmp[0], cell_min_tmp[1], cell_min_tmp[2]},
-			cell_max{cell_max_tmp[0], cell_max_tmp[1], cell_max_tmp[2]},
-			cell_length{cell_length_tmp[0], cell_length_tmp[1], cell_length_tmp[2]},
-			cell_center{cell_center_tmp[0], cell_center_tmp[1], cell_center_tmp[2]};
+		Eigen::Vector3d cell_min, cell_max, cell_length, cell_center;
+		std::tie(cell_min, cell_max, cell_length, cell_center) = get_cell_geometry(cell_id, grid.geometry);
 
 		if (clear_at_start) {
 			Accu_List(*cell_data).clear();
 		}
 
-		// cache required neighbor data
 		std::vector<bool> is_locals;
 		std::vector<uint64_t> neighbor_ids;
-		std::vector<decltype(grid[cell_id])> neighbor_datas;
+		std::vector<Cell*> neighbor_datas;
 		std::vector<Eigen::Vector3d> neighbor_mins, neighbor_maxs;
-
-		for (const auto& x_offset: {-1, 0, 1}) {
-		for (const auto& y_offset: {-1, 0, 1}) {
-		for (const auto& z_offset: {-1, 0, 1}) {
-			const auto neighbors
-				= grid.get_neighbors_of_at_offset(cell_id, x_offset, y_offset, z_offset);
-			if (
-				neighbors.size() == 0
-				and (x_offset != 0 or y_offset != 0 or z_offset != 0)
-			) {
-				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
-			for (const auto& neighbor_id: neighbors) {
-				if (neighbor_id == dccrg::error_cell) {
-					continue;
-				}
-
-				if (
-					grid.get_refinement_level(neighbor_id) != grid.get_refinement_level(cell_id)
-				) {
-					std::cerr << __FILE__ << "(" << __LINE__ << ") "
-						<< "Different cell refinement levels not supported"
-						<< std::endl;
-					abort();
-				}
-
-				neighbor_ids.emplace_back(neighbor_id);
-
-				auto* const neighbor_data = grid[neighbor_id];
-				if (neighbor_data == nullptr) {
-					std::cerr << __FILE__ << "(" << __LINE__ << "): "
-						<< "No data for neighbor " << neighbor_id
-						<< " of cell " << cell_id
-						<< std::endl;
-					abort();
-				}
-				neighbor_datas.emplace_back(neighbor_data);
-
-				if (grid.is_local(neighbor_id)) {
-					is_locals.push_back(true);
-				} else {
-					is_locals.push_back(false);
-				}
-
-				const auto
-					neighbor_center = grid.geometry.get_center(neighbor_id),
-					neighbor_length = grid.geometry.get_length(neighbor_id);
-
-				Eigen::Vector3d
-					neighbor_min{
-						neighbor_center[0] - neighbor_length[0] / 2,
-						neighbor_center[1] - neighbor_length[1] / 2,
-						neighbor_center[2] - neighbor_length[2] / 2
-					},
-					neighbor_max{
-						neighbor_center[0] + neighbor_length[0] / 2,
-						neighbor_center[1] + neighbor_length[1] / 2,
-						neighbor_center[2] + neighbor_length[2] / 2
-					};
-
-				// handle periodic grid geometry
-				if (x_offset < 0 and neighbor_center[0] > cell_min[0]) {
-					neighbor_max[0] = cell_min[0];
-					neighbor_min[0] = cell_min[0] - neighbor_length[0];
-				} else if (x_offset > 0 and neighbor_center[0] < cell_max[0]) {
-					neighbor_min[0] = cell_max[0];
-					neighbor_max[0] = cell_max[0] + neighbor_length[0];
-				}
-
-				if (y_offset < 0 and neighbor_center[1] > cell_min[1]) {
-					neighbor_max[1] = cell_min[1];
-					neighbor_min[1] = cell_min[1] - neighbor_length[1];
-				} else if (y_offset > 0 and neighbor_center[1] < cell_max[1]) {
-					neighbor_min[1] = cell_max[1];
-					neighbor_max[1] = cell_max[1] + neighbor_length[1];
-				}
-
-				if (z_offset < 0 and neighbor_center[2] > cell_min[2]) {
-					neighbor_max[2] = cell_min[2];
-					neighbor_min[2] = cell_min[2] - neighbor_length[2];
-				} else if (z_offset > 0 and neighbor_center[2] < cell_max[2]) {
-					neighbor_min[2] = cell_max[2];
-					neighbor_max[2] = cell_max[2] + neighbor_length[2];
-				}
-
-				neighbor_mins.push_back(neighbor_min);
-				neighbor_maxs.push_back(neighbor_max);
-			}
-		}}}
+		std::tie(
+			is_locals,
+			neighbor_ids,
+			neighbor_datas,
+			neighbor_mins,
+			neighbor_maxs
+		) = cache_neighbor_data(cell_id, grid);
 
 		for (auto& particle: Part(*cell_data)) {
 			auto& position = Part_Pos(particle);
@@ -248,6 +284,11 @@ template<
 					continue;
 				}
 
+				// don't accumulate into dont_solve cells
+				if ((Sol_Info(*(neighbor_datas[i])) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+					continue;
+				}
+
 				const auto accumulated_value
 					= get_accumulated_value(
 						Part_Val(*(neighbor_datas[i]), particle),
@@ -259,9 +300,7 @@ template<
 
 				// same as for current cell above
 				if (is_locals[i]) {
-					if ((Sol_Info(*(neighbor_datas[i])) & pamhd::particle::Solver_Info::dont_solve) == 0) {
-						Bulk_Val(*(neighbor_datas[i])) += accumulated_value;
-					}
+					Bulk_Val(*(neighbor_datas[i])) += accumulated_value;
 				// accumulate values to a list in current cell
 				} else {
 					// use this index in the list
