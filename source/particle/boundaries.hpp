@@ -1370,11 +1370,9 @@ template<
 					particle_id_increase
 				);
 			nr_particles_created += new_particles.size();
-
-			Par(*cell_data).clear(); // only do when bdy_i == 0?
-			Par(*cell_data).insert(Par(*cell_data).cend(), new_particles.cbegin(), new_particles.cend());
-
 			current_id_start += new_particles.size() * particle_id_increase;
+
+			Par(*cell_data) = std::move(new_particles);
 		}
 	}
 
