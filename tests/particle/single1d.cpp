@@ -36,8 +36,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ios"
 #include "iostream"
 #include "random"
+#include "string"
 
-#include "boost/lexical_cast.hpp"
 #include "boost/numeric/odeint.hpp"
 #include "boost/program_options.hpp"
 #include "Eigen/Core"
@@ -185,6 +185,7 @@ int main(int argc, char* argv[])
 	using std::pow;
 	using std::sin;
 	using std::sqrt;
+	using std::to_string;
 
 	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
 		std::cerr << "Couldn't initialize MPI." << std::endl;
@@ -430,7 +431,7 @@ int main(int argc, char* argv[])
 	} else {
 		particles = 1;
 	}
-	outfile_name += "_" + boost::lexical_cast<std::string>(rank);
+	outfile_name += "_" + to_string(rank);
 
 	std::ofstream outfile(outfile_name, std::ios::app | std::ios::ate);
 	if (not outfile.good()) {

@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cmath"
 #include "limits"
+#include "string"
 #include "tuple"
 #include "vector"
 
@@ -96,11 +97,12 @@ template <
 	const Solver_Info_Getter Sol_Info
 ) {
 	using std::get;
+	using std::to_string;
 
 	if (not std::isfinite(dt) or dt < 0) {
 		throw std::domain_error(
 			"Invalid time step: "
-			+ boost::lexical_cast<std::string>(dt)
+			+ to_string(dt)
 		);
 	}
 
@@ -221,11 +223,11 @@ template <
 			if (not std::isnormal(shared_area) or shared_area < 0) {
 				throw std::domain_error(
 					"Invalid area between cells "
-					+ boost::lexical_cast<std::string>(cell_id)
+					+ to_string(cell_id)
 					+ " and "
-					+ boost::lexical_cast<std::string>(neighbor_id)
+					+ to_string(neighbor_id)
 					+ ": "
-					+ boost::lexical_cast<std::string>(shared_area)
+					+ to_string(shared_area)
 				);
 			}
 

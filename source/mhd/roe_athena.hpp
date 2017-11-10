@@ -28,6 +28,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "cmath"
 #include "exception"
 #include "limits"
+#include "string"
 #include "tuple"
 #include "utility"
 
@@ -576,6 +577,8 @@ template <
 	const Scalar& adiabatic_index,
 	const Scalar& vacuum_permeability
 ) {
+	using std::to_string;
+
 	const Vector bg_face_magnetic_field{0, 0, 0};
 
 	// shorthand notation for simulation variables
@@ -617,7 +620,7 @@ template <
 			std::string("Non-positive mass density on negative side given to ")
 			+ __func__
 			+ std::string(": ")
-			+ boost::lexical_cast<std::string>(state_neg[Mas])
+			+ to_string(state_neg[Mas])
 		);
 	}
 	if (state_pos[Mas] <= 0) {
@@ -625,7 +628,7 @@ template <
 			std::string("Non-positive mass density on positive side given to ")
 			+ __func__
 			+ std::string(": ")
-			+ boost::lexical_cast<std::string>(state_pos[Mas])
+			+ to_string(state_pos[Mas])
 		);
 	}
 
@@ -643,11 +646,11 @@ template <
 			std::string("Non-positive pressure on negative side given to ")
 			+ __func__
 			+ std::string(": ")
-			+ boost::lexical_cast<std::string>(pressure_neg)
+			+ to_string(pressure_neg)
 			+ " with adiabatic index "
-			+ boost::lexical_cast<std::string>(adiabatic_index)
+			+ to_string(adiabatic_index)
 			+ " and vacuum permeability "
-			+ boost::lexical_cast<std::string>(vacuum_permeability)
+			+ to_string(vacuum_permeability)
 		);
 	}
 
@@ -665,11 +668,11 @@ template <
 			std::string("Non-positive pressure on positive side given to ")
 			+ __func__
 			+ std::string(": ")
-			+ boost::lexical_cast<std::string>(pressure_pos)
+			+ to_string(pressure_pos)
 			+ " with adiabatic index "
-			+ boost::lexical_cast<std::string>(adiabatic_index)
+			+ to_string(adiabatic_index)
 			+ " and vacuum permeability "
-			+ boost::lexical_cast<std::string>(vacuum_permeability)
+			+ to_string(vacuum_permeability)
 		);
 	}
 

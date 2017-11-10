@@ -41,7 +41,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "unordered_map"
 #include "vector"
 
-#include "boost/lexical_cast.hpp"
 #include "boost/optional.hpp"
 #include "boost/program_options.hpp"
 #include "dccrg_cartesian_geometry.hpp"
@@ -333,6 +332,8 @@ int plot(
 
 int main(int argc, char* argv[])
 {
+	using std::to_string;
+
 	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
 		cerr << "Coudln't initialize MPI." << endl;
 		abort();
@@ -746,29 +747,29 @@ int main(int argc, char* argv[])
 
 	std::string vertical_variable_min, vertical_variable_max;
 	if (vertical_variable == "r") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(r_mag_start);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(r_mag_end);
+		vertical_variable_min += "_" + to_string(r_mag_start);
+		vertical_variable_max += "_" + to_string(r_mag_end);
 	} else if (vertical_variable == "rx") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(r_start[0]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(r_end[0]);
+		vertical_variable_min += "_" + to_string(r_start[0]);
+		vertical_variable_max += "_" + to_string(r_end[0]);
 	} else if (vertical_variable == "ry") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(r_start[1]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(r_end[1]);
+		vertical_variable_min += "_" + to_string(r_start[1]);
+		vertical_variable_max += "_" + to_string(r_end[1]);
 	} else if (vertical_variable == "rz") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(r_start[2]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(r_end[2]);
+		vertical_variable_min += "_" + to_string(r_start[2]);
+		vertical_variable_max += "_" + to_string(r_end[2]);
 	} else if (vertical_variable == "v") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(v_mag_start);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(v_mag_end);
+		vertical_variable_min += "_" + to_string(v_mag_start);
+		vertical_variable_max += "_" + to_string(v_mag_end);
 	} else if (vertical_variable == "vx") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(v_start[0]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(v_end[0]);
+		vertical_variable_min += "_" + to_string(v_start[0]);
+		vertical_variable_max += "_" + to_string(v_end[0]);
 	} else if (vertical_variable == "vy") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(v_start[1]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(v_end[1]);
+		vertical_variable_min += "_" + to_string(v_start[1]);
+		vertical_variable_max += "_" + to_string(v_end[1]);
 	} else if (vertical_variable == "vz") {
-		vertical_variable_min += "_" + boost::lexical_cast<std::string>(v_start[2]);
-		vertical_variable_max += "_" + boost::lexical_cast<std::string>(v_end[2]);
+		vertical_variable_min += "_" + to_string(v_start[2]);
+		vertical_variable_max += "_" + to_string(v_end[2]);
 	}
 
 	plot(

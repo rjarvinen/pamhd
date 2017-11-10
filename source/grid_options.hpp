@@ -37,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "array"
 #include "cstdint"
 #include "stdexcept"
+#include "string"
 
 #include "mpParser.h"
 #include "rapidjson/document.h"

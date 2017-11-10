@@ -40,7 +40,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "unordered_map"
 #include "vector"
 
-#include "boost/lexical_cast.hpp"
 #include "boost/optional.hpp"
 #include "boost/program_options.hpp"
 #include "dccrg_cartesian_geometry.hpp"
@@ -311,10 +310,10 @@ int plot_1d(
 		<< "\nset output '"
 		<< output_file_name_prefix + "_mas.png"
 		<< "'\nset xlabel 'Dimension "
-		<< boost::lexical_cast<std::string>(tube_dim + 1)
+		<< to_string(tube_dim + 1)
 		<< "'\nset xrange ["
-		<< boost::lexical_cast<std::string>(tube_start)
-		<< " : " << boost::lexical_cast<std::string>(tube_end)
+		<< to_string(tube_start)
+		<< " : " << to_string(tube_end)
 		<< "]\n" << density_cmd
 		<< "\nplot "
 		     "'-' using 1:2 with line linewidth 2 title 'total', "
@@ -349,10 +348,10 @@ int plot_1d(
 		<< "\nset output '"
 		<< output_file_name_prefix + "_pre.png"
 		<< "'\nset xlabel 'Dimension "
-		<< boost::lexical_cast<std::string>(tube_dim + 1)
+		<< to_string(tube_dim + 1)
 		<< "'\nset xrange ["
-		<< boost::lexical_cast<std::string>(tube_start)
-		<< " : " << boost::lexical_cast<std::string>(tube_end)
+		<< to_string(tube_start)
+		<< " : " << to_string(tube_end)
 		<< "]\n" << pressure_cmd
 		<< "\nplot "
 		     "'-' using 1:2 with line linewidth 2 title 'total', "
@@ -672,10 +671,10 @@ int plot_1d(
 		<< "\nset output '"
 		<< output_file_name_prefix + "_R.png"
 		<< "'\nset xlabel 'Dimension "
-		<< boost::lexical_cast<std::string>(tube_dim + 1)
+		<< to_string(tube_dim + 1)
 		<< "'\nset xrange ["
-		<< boost::lexical_cast<std::string>(tube_start)
-		<< " : " << boost::lexical_cast<std::string>(tube_end)
+		<< to_string(tube_start)
+		<< " : " << to_string(tube_end)
 		<< "]\nset ylabel \"Resistivity\" textcolor lt 1\n"
 		   "set y2label \"MPI rank\" textcolor lt 3"
 		   "\nunset key\n"
@@ -741,15 +740,15 @@ void write_gnuplot_cmd_2d(
 		<< output_file_name_prefix + "_"
 		<< var_name << "." << output_file_name_suffix
 		<< "'\nset ylabel 'Dimension "
-		<< boost::lexical_cast<std::string>(dimensions[1] + 1)
+		<< to_string(dimensions[1] + 1)
 		<< "'\nset xlabel 'Dimension "
-		<< boost::lexical_cast<std::string>(dimensions[0] + 1)
+		<< to_string(dimensions[0] + 1)
 		<< "'\nset xrange["
-		<< boost::lexical_cast<std::string>(grid_start1) << " : "
-		<< boost::lexical_cast<std::string>(grid_start1 + grid_length1) << "]"
+		<< to_string(grid_start1) << " : "
+		<< to_string(grid_start1 + grid_length1) << "]"
 		<< "\nset yrange["
-		<< boost::lexical_cast<std::string>(grid_start2) << " : "
-		<< boost::lexical_cast<std::string>(grid_start2 + grid_length2) << "]\n"
+		<< to_string(grid_start2) << " : "
+		<< to_string(grid_start2 + grid_length2) << "]\n"
 		<< var_cmd
 		<< "\nplot '-' using ($1 / "
 		<< grid_size1 << " * " << grid_length1 << " + "

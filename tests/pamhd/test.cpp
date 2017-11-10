@@ -35,7 +35,6 @@ particles represent one of the fluids.
 #include "vector"
 
 #include "boost/filesystem.hpp"
-#include "boost/lexical_cast.hpp"
 #include "boost/numeric/odeint.hpp"
 #include "dccrg.hpp"
 #include "dccrg_cartesian_geometry.hpp"
@@ -602,7 +601,7 @@ int main(int argc, char* argv[])
 			= document.FindMember(
 				(
 					"particle-population-"
-					+ boost::lexical_cast<std::string>(population_id)
+					+ to_string(population_id)
 				).c_str()
 			);
 		if (obj_population_i == document.MemberEnd()) {
@@ -636,7 +635,7 @@ int main(int argc, char* argv[])
 			= document.FindMember(
 				(
 					"particle-population-"
-					+ boost::lexical_cast<std::string>(population_id)
+					+ to_string(population_id)
 				).c_str()
 			);
 		if (obj_population_i == document.MemberEnd()) {

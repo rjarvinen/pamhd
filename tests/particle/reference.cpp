@@ -45,7 +45,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string"
 #include "type_traits"
 
-#include "boost/lexical_cast.hpp"
 #include "boost/program_options.hpp"
 #include "Eigen/Geometry" 
 #include "gensimcell.hpp"
@@ -772,7 +771,7 @@ void plot_particles_bulk(
 			"set format x '%.1e'\n"
 			"set format y '%.5e'\n"
 			"set xtics "
-		<< boost::lexical_cast<string>((get_grid_end() - get_grid_start()) / 5)
+		<< to_string((get_grid_end() - get_grid_start()) / 5)
 		<< "\n";
 
 	// E
@@ -927,9 +926,9 @@ template<
 		file_name_prefix(
 			"particle" + separator
 			+ Horizontal_Variable::get_name() + "_"
-			+ boost::lexical_cast<std::string>(index_of_horizontal) + "_"
+			+ to_string(index_of_horizontal) + "_"
 			+ Vertical_Variable::get_name() + "_"
-			+ boost::lexical_cast<std::string>(index_of_vertical) + "_"
+			+ to_string(index_of_vertical) + "_"
 			+ time_string.str()
 			+ "."
 		),
@@ -945,24 +944,24 @@ template<
 		<< "'\nset format x '%.1e'\n"
 		<< "set format y '%.1e'"
 		<< "\nset xlabel '" << Horizontal_Variable::get_name() + " "
-		<< boost::lexical_cast<std::string>(index_of_horizontal)
+		<< to_string(index_of_horizontal)
 		<< "'\nset ylabel '" << Vertical_Variable::get_name() + " "
-		<< boost::lexical_cast<std::string>(index_of_vertical)
+		<< to_string(index_of_vertical)
 		<< "'\nset cblabel 'Number of particles'\nx0 = "
-		<< boost::lexical_cast<std::string>(horiz_min)
+		<< to_string(horiz_min)
 		<< "\nset xtics "
-		<< boost::lexical_cast<string>((horiz_max - horiz_min) / 6)
+		<< to_string((horiz_max - horiz_min) / 6)
 		<< "\nset ytics "
-		<< boost::lexical_cast<string>((vert_max - vert_min) / 6)
-		<< "\nxincr = " << boost::lexical_cast<std::string>(horiz_bin_size)
-		<< "\nyincr = " << boost::lexical_cast<std::string>(vert_bin_size)
-		<< "\ny0 = " << boost::lexical_cast<std::string>(vert_min)
+		<< to_string((vert_max - vert_min) / 6)
+		<< "\nxincr = " << to_string(horiz_bin_size)
+		<< "\nyincr = " << to_string(vert_bin_size)
+		<< "\ny0 = " << to_string(vert_min)
 		<< "\nset xrange ["
-		<< boost::lexical_cast<std::string>(horiz_min - horiz_bin_size / 2)
-		<< " : " << boost::lexical_cast<std::string>(horiz_max - horiz_bin_size / 2)
+		<< to_string(horiz_min - horiz_bin_size / 2)
+		<< " : " << to_string(horiz_max - horiz_bin_size / 2)
 		<< "]\nset yrange ["
-		<< boost::lexical_cast<std::string>(vert_min - vert_bin_size / 2)
-		<< " : " << boost::lexical_cast<std::string>(vert_max - vert_bin_size / 2)
+		<< to_string(vert_min - vert_bin_size / 2)
+		<< " : " << to_string(vert_max - vert_bin_size / 2)
 		<< "]\nplot '-' u ($1*xincr + x0):($2*yincr + y0):3 matrix with image title ''\n";
 
 	for (const auto& row: binned) {
