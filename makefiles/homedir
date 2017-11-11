@@ -2,34 +2,37 @@
 # into your home directory according to the instructions at
 # https://github.com/nasailja/pamhd/wiki/Install
 CXX = c++
-MPICXX = $(HOME)/bin/mpic++
+MPICXX = mpic++
 
 RUN =
 MPIRUN = mpiexec -n 5
 
-DCCRG_CPPFLAGS = -I $(HOME)/ohjelmat/dccrg
+DCCRG_CPPFLAGS = -I submodules/dccrg
 
-EIGEN_CPPFLAGS = -I $(HOME)/ohjelmat/eigen-3.3.3
+EIGEN_CPPFLAGS = -I submodules/eigen
 
-GENSIMCELL_CPPFLAGS = -I $(HOME)/ohjelmat/gensimcell/source
+GENSIMCELL_CPPFLAGS = -I submodules/gensimcell/source
 
-BOOST_CPPFLAGS = -I $(HOME)/ohjelmat/boost/1.63.0/gcc/6.3.1/openmpi/2.0.2/include
-BOOST_LDFLAGS = -L $(HOME)/ohjelmat/boost/1.63.0/gcc/6.3.1/openmpi/2.0.2/lib
+BOOST_CPPFLAGS = -I $(HOME)/include
+BOOST_LDFLAGS = -L $(HOME)/lib
 BOOST_LIBS = \
   -lboost_coroutine \
+  -lboost_chrono \
+  -lboost_context \
+  -lboost_thread \
   -lboost_filesystem \
   -lboost_system \
   -lboost_random \
   -lboost_program_options
 
-PRETTYPRINT_CPPFLAGS = -I $(HOME)/ohjelmat/cxx-prettyprint
+PRETTYPRINT_CPPFLAGS = -I submodules/cxx-prettyprint
 
-MUPARSERX_CPPFLAGS = -I $(HOME)/ohjelmat/muparserx-2017-03-15/gcc/6.3.1/include
-MUPARSERX_LDFLAGS = -L $(HOME)/ohjelmat/muparserx-2017-03-15/gcc/6.3.1/lib
+MUPARSERX_CPPFLAGS = -I $(HOME)/include
+MUPARSERX_LDFLAGS = -L $(HOME)/lib
 MUPARSERX_LIBS = -lmuparserx
 
-RAPIDJSON_CPPFLAGS = -I $(HOME)/ohjelmat/rapidjson/include
+RAPIDJSON_CPPFLAGS = -I submodules/rapidjson/include
 
-ZOLTAN_CPPFLAGS = -I $(HOME)/ohjelmat/zoltan/3.83/gcc/6.3.1/openmpi/2.0.2/include
-ZOLTAN_LDFLAGS = -L $(HOME)/ohjelmat/zoltan/3.83/gcc/6.3.1/openmpi/2.0.2/lib
+ZOLTAN_CPPFLAGS = -I $(HOME)/include
+ZOLTAN_LDFLAGS = -L $(HOME)/lib
 ZOLTAN_LIBS = -lzoltan
