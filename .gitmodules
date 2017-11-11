@@ -10,3 +10,6 @@
 [submodule "submodules/rapidjson"]
 	path = submodules/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
+[submodule "submodules/eigen"]
+	path = submodules/eigen
+	url = https://github.com/iljah/eigen.git
