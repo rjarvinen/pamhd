@@ -231,6 +231,20 @@ int main(int argc, char* argv[])
 				solve_cells.push_back(cell);
 			}
 		}
+		uint64_t solve_cells_local = solve_cells.size(), solve_cells_global = 0;
+		if (
+			MPI_Allreduce(
+				&solve_cells_local,
+				&solve_cells_global,
+				1,
+				MPI_UINT64_T,
+				MPI_SUM,
+				comm
+			) != MPI_SUCCESS
+		) {
+			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
 
 		pamhd::divergence::get_divergence(
 			solve_cells,
@@ -248,7 +262,7 @@ int main(int argc, char* argv[])
 		if (norm > old_norm) {
 			if (grid.get_rank() == 0) {
 				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": Norm with " << solve_cells.size()
+					<< ": Norm with " << solve_cells_global
 					<< " cells " << norm
 					<< " is larger than with " << old_nr_of_cells
 					<< " cells " << old_norm
@@ -260,13 +274,13 @@ int main(int argc, char* argv[])
 		if (old_nr_of_cells > 0) {
 			const double order_of_accuracy
 				= -log(norm / old_norm)
-				/ log(double(solve_cells.size()) / old_nr_of_cells);
+				/ log(double(solve_cells_global) / old_nr_of_cells);
 
 			if (order_of_accuracy < 0.4) {
 				if (grid.get_rank() == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy from "
-						<< old_nr_of_cells << " to " << solve_cells.size()
+						<< old_nr_of_cells << " to " << solve_cells_global
 						<< " is too low: " << order_of_accuracy
 						<< std::endl;
 				}
@@ -274,7 +288,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		old_nr_of_cells = solve_cells.size();
+		old_nr_of_cells = solve_cells_global;
 		old_norm = norm;
 	}
 

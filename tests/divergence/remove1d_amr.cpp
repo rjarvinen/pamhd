@@ -208,9 +208,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		std::array<std::vector<uint64_t>, 3>
-			solve_cells,
-			boundary_cells;
+		std::array<std::vector<uint64_t>, 3> solve_cells, boundary_cells;
 		for (size_t dim = 0; dim < 3; dim++) {
 			for (const auto& cell: grids[dim].get_cells()) {
 				const auto center = grids[dim].geometry.get_center(cell);
@@ -230,6 +228,22 @@ int main(int argc, char* argv[])
 				vec[dim] = function(center[dim]);
 			}
 			grids[dim].update_copies_of_remote_neighbors();
+		}
+		std::array<uint64_t, 3>
+			solve_cells_local{solve_cells[0].size(), solve_cells[1].size(), solve_cells[2].size()},
+			solve_cells_global{0, 0, 0};
+		if (
+			MPI_Allreduce(
+				solve_cells_local.data(),
+				solve_cells_global.data(),
+				3,
+				MPI_UINT64_T,
+				MPI_SUM,
+				comm
+			) != MPI_SUCCESS
+		) {
+			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
 		}
 
 		auto Vector_Getter = [](Cell& cell_data) -> Vector_Field::data_type& {
@@ -266,7 +280,7 @@ int main(int argc, char* argv[])
 				if (grids[dim].get_rank() == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< " dim " << dim
-						<< ": max norm with " << solve_cells[dim].size()
+						<< ": max norm with " << solve_cells_global[dim]
 						<< " cells " << norms[dim]
 						<< " is larger than with " << old_nr_of_cells
 						<< " cells " << old_norms[dim]
@@ -280,14 +294,14 @@ int main(int argc, char* argv[])
 			if (old_nr_of_cells > 0) {
 				const double order_of_accuracy
 					= -log(norms[dim] / old_norms[dim])
-					/ log(double(solve_cells[dim].size()) / old_nr_of_cells);
+					/ log(double(solve_cells_global[dim]) / old_nr_of_cells);
 
 				if (old_nr_of_cells > 1000 and order_of_accuracy < 1) {
 					if (grids[dim].get_rank() == 0) {
 						std::cerr << __FILE__ << ":" << __LINE__
 							<< " dim " << dim
 							<< ": order of accuracy from "
-							<< old_nr_of_cells << " to " << solve_cells[dim].size()
+							<< old_nr_of_cells << " to " << solve_cells_global[dim]
 							<< " is too low: " << order_of_accuracy
 							<< std::endl;
 					}
@@ -296,7 +310,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		old_nr_of_cells = solve_cells[0].size();
+		old_nr_of_cells = solve_cells_global[0];
 		old_norms = norms;
 	}
 
