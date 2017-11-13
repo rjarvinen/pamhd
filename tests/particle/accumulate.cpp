@@ -146,15 +146,16 @@ int main()
 	}
 
 	// test weighted accumulation
-	const auto accu2
-		= get_accumulated_value_weighted(
+	const auto
+		accu21 = get_accumulated_value_weighted(
 			-3.0,
 			2.0,
 			Vector3d{-1, -1, -1},
 			Vector3d{ 1,  1,  1},
 			Vector3d{ 0,  0,  0},
 			Vector3d{ 2,  2,  2}
-		) + get_accumulated_value_weighted(
+		),
+		accu22 = get_accumulated_value_weighted(
 			10.0,
 			1.0,
 			Vector3d{ 0,  1,  1},
@@ -162,9 +163,15 @@ int main()
 			Vector3d{ 0,  0,  0},
 			Vector3d{ 2,  2,  2}
 		);
-	if (fabs(accu2 - 14) > 1e-10) {
+	if (fabs(accu21.first + accu22.first - 14) > 1e-10) {
 		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
 			<< "Difference for accumulated value too large from correct."
+			<< std::endl;
+		abort();
+	}
+	if (fabs(accu21.second + accu22.second - 4) > 1e-10) {
+		std::cerr <<  __FILE__ << " (" << __LINE__ << "): "
+			<< "Difference for total weights too large from correct."
 			<< std::endl;
 		abort();
 	}

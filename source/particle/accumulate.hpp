@@ -155,11 +155,11 @@ template<class T, std::size_t N, class Vector> std::array<T, N> get_accumulated_
 
 
 /*!
-Returns portion of value spanning value_min/max that is within cell_min/max.
+Returns value multiplied by weight and common volume between value_min,max and cell_min,max.
 
 value is assumed to have a constant value within its volume.
 */
-template<class Vector> double get_accumulated_value_weighted(
+template<class Vector> std::pair<double, double> get_accumulated_value_weighted(
 	const double& value,
 	const double& weight,
 	const Vector& value_min,
@@ -168,13 +168,20 @@ template<class Vector> double get_accumulated_value_weighted(
 	const Vector& cell_max
 ) try {
 	const auto intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
-	return value * weight * intersection_vol;
+	return std::make_pair(value * weight * intersection_vol, weight * intersection_vol);
 } catch (...) {
 	throw;
 }
 
 /*! Same as double version but accumulates separately all items of std::array */
-template<class T, std::size_t N, class Vector> std::array<T, N> get_accumulated_value_weighted(
+template<
+	class T,
+	std::size_t N,
+	class Vector
+> std::pair<
+	std::array<T, N>,
+	double
+> get_accumulated_value_weighted(
 	const std::array<T, N>& value,
 	const double& weight,
 	const Vector& value_min,
@@ -187,7 +194,7 @@ template<class T, std::size_t N, class Vector> std::array<T, N> get_accumulated_
 	for (size_t i = 0; i < N; i++) {
 		ret_val[i] = value[i] * weight * intersection_vol;
 	}
-	return ret_val;
+	return std::make_pair(ret_val, weight * intersection_vol);
 } catch (...) {
 	throw;
 }
@@ -216,7 +223,7 @@ template<class Vector> Eigen::Vector3d get_accumulated_value(
 }
 
 /*! Same as double version but accumulates separately all items of Eigen::Vector3d */
-template<class Vector> Eigen::Vector3d get_accumulated_value_weighted(
+template<class Vector> std::pair<Eigen::Vector3d, double> get_accumulated_value_weighted(
 	const Eigen::Vector3d& value,
 	const double& weight,
 	const Vector& value_min,
@@ -226,7 +233,7 @@ template<class Vector> Eigen::Vector3d get_accumulated_value_weighted(
 ) try {
 	const auto intersection_vol = get_intersection_volume(value_min, value_max, cell_min, cell_max);
 	const Eigen::Vector3d ret_val = value * weight * intersection_vol;
-	return ret_val;
+	return std::make_pair(ret_val, weight * intersection_vol);
 } catch (...) {
 	throw;
 }
