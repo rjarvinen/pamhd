@@ -344,6 +344,173 @@ template<
 
 
 /*!
+Same as accumulate() but uses get_accumulated_value_weighted() instead of
+get_accumulated_value() and also records the total weight from all particles.
+*/
+template<
+	class Particles_Getter,
+	class Particle_Position_Getter,
+	class Particle_Value_Getter,
+	class Particle_Weight_Getter,
+	class Bulk_Value_Getter,
+	class Bulk_Value_In_List_Getter,
+	class Target_In_List_Getter,
+	class Accumulation_List_Length_Getter,
+	class Accumulation_List_Getter,
+	class Solver_Info_Getter,
+	class Cell
+> void accumulate_weighted(
+	const std::vector<uint64_t>& cell_ids,
+	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	Particles_Getter Part,
+	Particle_Position_Getter Part_Pos,
+	Particle_Value_Getter Part_Val,
+	Particle_Weight_Getter Part_Wei,
+	Bulk_Value_Getter Bulk_Val,
+	Bulk_Value_In_List_Getter List_Bulk_Val,
+	Target_In_List_Getter List_Target,
+	Accumulation_List_Length_Getter List_Len,
+	Accumulation_List_Getter Accu_List,
+	Solver_Info_Getter Sol_Info,
+	const bool clear_at_start = true
+) {
+	for (const auto& cell_id: cell_ids) {
+		auto* const cell_data = grid[cell_id];
+		if (cell_data == nullptr) {
+			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+
+		if ((Sol_Info(*cell_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			Bulk_Val(*cell_data) = {};
+			continue;
+		}
+
+		Eigen::Vector3d cell_min, cell_max, cell_length, cell_center;
+		std::tie(cell_min, cell_max, cell_length, cell_center) = get_cell_geometry(cell_id, grid.geometry);
+
+		if (clear_at_start) {
+			Accu_List(*cell_data).clear();
+		}
+
+		std::vector<bool> is_locals;
+		std::vector<uint64_t> neighbor_ids;
+		std::vector<Cell*> neighbor_datas;
+		std::vector<Eigen::Vector3d> neighbor_mins, neighbor_maxs;
+		std::tie(
+			is_locals,
+			neighbor_ids,
+			neighbor_datas,
+			neighbor_mins,
+			neighbor_maxs
+		) = cache_neighbor_data(cell_id, grid);
+
+		for (auto& particle: Part(*cell_data)) {
+			auto& position = Part_Pos(particle);
+			const Eigen::Vector3d
+				value_box_min{
+					position[0] - cell_length[0] / 2,
+					position[1] - cell_length[1] / 2,
+					position[2] - cell_length[2] / 2
+				},
+				value_box_max{
+					position[0] + cell_length[0] / 2,
+					position[1] + cell_length[1] / 2,
+					position[2] + cell_length[2] / 2
+				};
+
+			// accumulate to current cell
+			const auto accu_to_cell
+				= get_accumulated_value_weighted(
+					Part_Val(*cell_data, particle),
+					Part_Wei(particle),
+					value_box_min,
+					value_box_max,
+					cell_min,
+					cell_max
+				);
+			Bulk_Val(*cell_data).first += accu_to_cell.first;
+			// final weight of this particle's data in this cell
+			Bulk_Val(*cell_data).second += accu_to_cell.second;
+
+			// accumulate to neighbors
+			for (size_t i = 0; i < is_locals.size(); i++) {
+
+				if (
+					value_box_min[0] > neighbor_maxs[i][0]
+					or value_box_min[1] > neighbor_maxs[i][1]
+					or value_box_min[2] > neighbor_maxs[i][2]
+					or value_box_max[0] < neighbor_mins[i][0]
+					or value_box_max[1] < neighbor_mins[i][1]
+					or value_box_max[2] < neighbor_mins[i][2]
+				) {
+					continue;
+				}
+
+				// don't accumulate into dont_solve cells
+				if ((Sol_Info(*(neighbor_datas[i])) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+					continue;
+				}
+
+				const auto accumulated_value
+					= get_accumulated_value_weighted(
+						Part_Val(*(neighbor_datas[i]), particle),
+						Part_Wei(particle),
+						value_box_min,
+						value_box_max,
+						neighbor_mins[i],
+						neighbor_maxs[i]
+					);
+
+				// same as for current cell above
+				if (is_locals[i]) {
+					Bulk_Val(*(neighbor_datas[i])).first += accumulated_value.first;
+					Bulk_Val(*(neighbor_datas[i])).second += accumulated_value.second;
+				// accumulate values to a list in current cell
+				} else {
+					// use this index in the list
+					size_t accumulation_index = 0;
+
+					// find the index of target neighbor
+					const auto neighbor_id = neighbor_ids[i];
+					auto iter
+						= std::find_if(
+							Accu_List(*cell_data).begin(),
+							Accu_List(*cell_data).end(),
+							[&neighbor_id, &List_Target](
+								const decltype(*Accu_List(*cell_data).begin()) candidate_item
+							) {
+								if (List_Target(candidate_item) == neighbor_id) {
+									return true;
+								} else {
+									return false;
+								}
+							}
+						);
+
+					// found
+					if (iter != Accu_List(*cell_data).end()) {
+						List_Bulk_Val(*iter).first += accumulated_value.first;
+						List_Bulk_Val(*iter).second += accumulated_value.second;
+					// create the item
+					} else {
+						const auto old_size = Accu_List(*cell_data).size();
+						Accu_List(*cell_data).resize(old_size + 1);
+						auto& new_item = Accu_List(*cell_data)[old_size];
+						List_Target(new_item) = neighbor_id;
+						List_Bulk_Val(new_item).first = accumulated_value.first;
+						List_Bulk_Val(new_item).second = accumulated_value.second;
+					}
+				}
+			}
+		}
+
+		List_Len(*cell_data) = Accu_List(*cell_data).size();
+	}
+}
+
+
+/*!
 Allocates memory for lists of accumulated particle data in copies of remote neighbors of local cells.
 */
 template<
@@ -412,6 +579,49 @@ template<
 	}
 }
 
+template<
+	class Grid,
+	class Bulk_Value_Getter,
+	class Value_In_List_Getter,
+	class Target_In_List_Getter,
+	class Accumulation_List_Getter,
+	class Solver_Info_Getter
+> void accumulate_weighted_from_remote_neighbors(
+	Grid& grid,
+	Bulk_Value_Getter Bulk_Val,
+	Value_In_List_Getter Value_In_List,
+	Target_In_List_Getter Target_In_List,
+	Accumulation_List_Getter Accu_List,
+	Solver_Info_Getter Sol_Info
+) {
+	for (const auto& remote_cell_id: grid.get_remote_cells_on_process_boundary()) {
+		auto* const source_data = grid[remote_cell_id];
+		if (source_data == nullptr) {
+			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+
+		if ((Sol_Info(*source_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			continue;
+		}
+
+		for (auto& item: Accu_List(*source_data)) {
+			if (not grid.is_local(Target_In_List(item))) {
+				continue;
+			}
+
+			auto* const target_data = grid[Target_In_List(item)];
+			if (target_data == nullptr) {
+				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
+				abort();
+			}
+
+			Bulk_Val(*target_data).first += Value_In_List(item).first;
+			Bulk_Val(*target_data).second += Value_In_List(item).second;
+		}
+	}
+}
+
 
 template<
 	class Cell,
@@ -419,9 +629,10 @@ template<
 	class Particle_Position_Getter,
 	class Particle_Mass_Getter,
 	class Particle_Species_Mass_Getter,
-	class Particle_Momentum_Getter,
+	class Particle_Velocity_Getter,
 	class Particle_Relative_Velocity2_Getter,
 	class Number_Of_Particles_Getter,
+	class Particle_Weight_Getter,
 	class Bulk_Mass_Getter,
 	class Bulk_Momentum_Getter,
 	class Bulk_Relative_Velocity2_Getter,
@@ -445,16 +656,17 @@ template<
 	Particle_Position_Getter Particle_Position,
 	Particle_Mass_Getter Particle_Mass,
 	Particle_Species_Mass_Getter Particle_Species_Mass,
-	Particle_Momentum_Getter Particle_Momentum,
+	Particle_Velocity_Getter Particle_Velocity,
 	Particle_Relative_Velocity2_Getter Particle_Relative_Velocity2,
 	Number_Of_Particles_Getter Number_Of_Particles,
+	Particle_Weight_Getter Particle_Weight,
 	Bulk_Mass_Getter Bulk_Mass,
 	Bulk_Momentum_Getter Bulk_Momentum,
 	Bulk_Relative_Velocity2_Getter Bulk_Relative_Velocity2,
 	Bulk_Velocity_Getter Bulk_Velocity,
 	Number_Of_Particles_In_List_Getter Accu_List_Number_Of_Particles,
 	Bulk_Mass_In_List_Getter Accu_List_Bulk_Mass,
-	Bulk_Momentum_In_List_Getter Accu_List_Bulk_Momentum,
+	Bulk_Momentum_In_List_Getter Accu_List_Bulk_Velocity,
 	Bulk_Relative_Velocity2_In_List_Getter Accu_List_Bulk_Relative_Velocity2,
 	Target_In_List_Getter Accu_List_Target,
 	Accumulation_List_Length_Getter Accu_List_Length,
@@ -475,6 +687,8 @@ template<
 		}
 		Bulk_Mass(*cell_data) = 0;
 		Bulk_Momentum(*cell_data) = {0, 0, 0};
+		Bulk_Velocity(*cell_data).first = {0, 0, 0};
+		Bulk_Velocity(*cell_data).second = 0;
 	}
 
 	accumulate(
@@ -490,14 +704,15 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate(
+	accumulate_weighted(
 		outer_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
-		Particle_Momentum,
-		Bulk_Momentum,
-		Accu_List_Bulk_Momentum,
+		Particle_Velocity,
+		Particle_Weight,
+		Bulk_Velocity,
+		Accu_List_Bulk_Velocity,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
@@ -522,14 +737,15 @@ template<
 		Sol_Info,
 		false
 	);
-	accumulate(
+	accumulate_weighted(
 		inner_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
-		Particle_Momentum,
-		Bulk_Momentum,
-		Accu_List_Bulk_Momentum,
+		Particle_Velocity,
+		Particle_Weight,
+		Bulk_Velocity,
+		Accu_List_Bulk_Velocity,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
@@ -560,10 +776,10 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate_from_remote_neighbors(
+	accumulate_weighted_from_remote_neighbors(
 		grid,
-		Bulk_Momentum,
-		Accu_List_Bulk_Momentum,
+		Bulk_Velocity,
+		Accu_List_Bulk_Velocity,
 		Accu_List_Target,
 		Accu_List,
 		Sol_Info
@@ -572,22 +788,23 @@ template<
 	grid.wait_remote_neighbor_copy_update_sends();
 	Cell::set_transfer_all(false, accu_list_var);
 
-	/*
-	Accumulate particle data required for pressure
-	*/
-
-	// needs remote neighbors' bulk velocity
-	for (const auto& cell: outer_cell_ids) {
+	// scale velocities relative to total weights
+	for (const auto& cell: cell_ids) {
 		auto* const cell_data = grid[cell];
 		if (cell_data == nullptr) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Velocity2(*cell_data) = 0;
-		Bulk_Velocity(*cell_data) = pamhd::mhd::get_velocity(Bulk_Momentum(*cell_data), Bulk_Mass(*cell_data));
+		Bulk_Velocity(*cell_data).first /= Bulk_Velocity(*cell_data).second;
+		Bulk_Momentum(*cell_data) = Bulk_Velocity(*cell_data).first * Bulk_Mass(*cell_data);
 	}
 
+
+	/*
+	Accumulate particle data required for pressure
+	*/
+
+	// needs remote neighbors' bulk velocity
 	Cell::set_transfer_all(true, bulk_vel_var);
 	grid.start_remote_neighbor_copy_updates();
 
@@ -597,9 +814,19 @@ template<
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Velocity2(*cell_data) = 0;
-		Bulk_Velocity(*cell_data) = pamhd::mhd::get_velocity(Bulk_Momentum(*cell_data), Bulk_Mass(*cell_data));
+		Number_Of_Particles(*cell_data)            =
+		Bulk_Relative_Velocity2(*cell_data).first  =
+		Bulk_Relative_Velocity2(*cell_data).second = 0;
+	}
+	for (const auto& cell: outer_cell_ids) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+		Number_Of_Particles(*cell_data)            =
+		Bulk_Relative_Velocity2(*cell_data).first  =
+		Bulk_Relative_Velocity2(*cell_data).second = 0;
 	}
 
 	grid.wait_remote_neighbor_copy_update_receives();
@@ -611,10 +838,12 @@ template<
 			&Particle_Species_Mass
 		](
 			Cell& cell,
+			// TODO:switch to auto in c++17
 			decltype(*Particles(*(grid[0])).begin())& particle
 		) ->double {
 			return Particle_Mass(cell, particle) / Particle_Species_Mass(cell, particle);
 		};
+	// TODO: merge with bulk mass accumulation
 	accumulate(
 		outer_cell_ids,
 		grid,
@@ -628,12 +857,13 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate(
+	accumulate_weighted(
 		outer_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
 		Particle_Relative_Velocity2,
+		Particle_Weight,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
 		Accu_List_Target,
@@ -664,12 +894,13 @@ template<
 		Sol_Info,
 		false
 	);
-	accumulate(
+	accumulate_weighted(
 		inner_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
 		Particle_Relative_Velocity2,
+		Particle_Weight,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
 		Accu_List_Target,
@@ -702,7 +933,7 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate_from_remote_neighbors(
+	accumulate_weighted_from_remote_neighbors(
 		grid,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
@@ -713,6 +944,16 @@ template<
 
 	grid.wait_remote_neighbor_copy_update_sends();
 	Cell::set_transfer_all(false, accu_list_var);
+
+	// scale velocities relative to total weights
+	for (const auto& cell: cell_ids) {
+		auto* const cell_data = grid[cell];
+		if (cell_data == nullptr) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+			abort();
+		}
+		Bulk_Relative_Velocity2(*cell_data).first /= Bulk_Relative_Velocity2(*cell_data).second;
+	}
 }
 
 
@@ -784,7 +1025,7 @@ template<
 			} else {
 				return
 					Number_Of_Particles(*cell_data)
-					* Particle_Bulk_Relative_Velocity2(*cell_data)
+					* Particle_Bulk_Relative_Velocity2(*cell_data).first
 					/ Particle_Bulk_Mass(*cell_data)
 					/ 3 / volume;
 			}

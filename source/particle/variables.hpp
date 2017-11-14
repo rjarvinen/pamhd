@@ -211,11 +211,12 @@ struct Bulk_Momentum {
 	using data_type = Eigen::Vector3d;
 	static const std::string get_name() { return {"bulk momentum"}; }
 	static const std::string get_option_name() { return {"bulk-momentum"}; }
-	static const std::string get_option_help() { return {"Accumulated mometum of particles"}; }
+	static const std::string get_option_help() { return {"bulk mass * bulk velocity"}; }
 };
 
 struct Bulk_Velocity {
-	using data_type = Eigen::Vector3d;
+	//! second value used for tracking total weight of particles in cell
+	using data_type = std::pair<Eigen::Vector3d, double>; // TODO: another cell type?
 	static const std::string get_name() { return {"bulk velocity"}; }
 	static const std::string get_option_name() { return {"bulk-velocity"}; }
 	static const std::string get_option_help() { return {"Accumulated velocity of particles"}; }
@@ -229,7 +230,8 @@ struct Number_Of_Particles {
 };
 
 struct Bulk_Relative_Velocity2 {
-	using data_type = double;
+	//! second value used for tracking total weight of particles in cell
+	using data_type = std::pair<double, double>;
 	static const std::string get_name() { return {"bulk relative velocity2"}; }
 	static const std::string get_option_name() { return {"bulk-relative-velocity2"}; }
 	static const std::string get_option_help() { return {"Accumulated square of particle velocity relative to bulk velocity"}; }
@@ -239,7 +241,7 @@ using Accumulated_To_Cell
 	= Accumulated_To_Cell_T<
 		Number_Of_Particles,
 		Bulk_Mass,
-		Bulk_Momentum,
+		Bulk_Velocity,
 		Bulk_Relative_Velocity2
 	>;
 using Accumulated_To_Cells = Accumulated_To_Cells_T<Accumulated_To_Cell>;
