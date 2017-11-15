@@ -9,6 +9,7 @@ TESTS_PARTICLE_EXECUTABLES = \
   tests/particle/velocity.exe \
   tests/particle/temperature.exe \
   tests/particle/accumulate.exe \
+  tests/particle/pressure_accumulation.exe \
   tests/particle/solve_1d.exe \
   tests/particle/solve_1d_periodic.exe \
   tests/particle/solve_2d.exe \
@@ -165,6 +166,12 @@ tests/particle/accumulate.exe: \
   $(TEST_PARTICLE_COMMON_DEPS) \
   source/particle/accumulate.hpp
 	@printf "CXX $<\n" && $(CXX) $(TEST_PARTICLE_COMMON_COMPILE)
+
+tests/particle/pressure_accumulation.exe: \
+  tests/particle/pressure_accumulation.cpp \
+  $(TEST_PARTICLE_COMMON_DEPS) \
+  source/particle/accumulate.hpp
+	@printf "MPICXX $<\n" && $(MPICXX) $(TEST_PARTICLE_COMMON_COMPILE)
 
 tests/particle/reference.exe: \
   tests/particle/reference.cpp \

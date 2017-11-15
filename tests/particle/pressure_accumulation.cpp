@@ -1,0 +1,204 @@
+/*
+Tests bulk pressure accumulation from particles in PAMHD.
+
+Copyright 2017 Ilja Honkonen
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+
+* Neither the names of the copyright holders nor the names of their contributors
+  may be used to endorse or promote products derived from this software
+  without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include "cmath"
+#include "cstdlib"
+#include "iostream"
+#include "random"
+
+#include "Eigen/Core"
+#include "Eigen/Geometry"
+
+#include "particle/accumulate.hpp"
+#include "particle/common.hpp"
+#include "particle/variables.hpp"
+
+
+using namespace std;
+using namespace Eigen;
+using namespace pamhd::particle;
+
+
+bool test_accumulation(
+	const size_t nr_particles,
+	const Vector3d particle_min,
+	const Vector3d particle_max,
+	const Vector3d cell_min,
+	const Vector3d cell_max,
+	const double particle_temp_nrj_ratio,
+	const Vector3d bulk_velocity,
+	const Vector3d temperature,
+	const double total_mass,
+	const double species_mass,
+	const size_t seed
+) {
+	using std::fabs;
+	using std::min;
+	using std::pow;
+	using std::sqrt;
+
+	std::mt19937 random_source;
+	random_source.seed(seed);
+
+	const auto particles
+		= create_particles<
+			Particle_Internal,
+			Mass,
+			Charge_Mass_Ratio,
+			Position,
+			Velocity,
+			Particle_ID,
+			Species_Mass
+		>(
+			bulk_velocity,
+			particle_min,
+			particle_max,
+			temperature,
+			nr_particles,
+			12.3,
+			total_mass,
+			species_mass,
+			particle_temp_nrj_ratio,
+			random_source
+		);
+
+	const double
+		volume
+			= (cell_max[0] - cell_min[0])
+			* (cell_max[1] - cell_min[1])
+			* (cell_max[2] - cell_min[2]);
+
+	const double volume_fraction
+		= get_intersection_volume(particle_min, particle_max, cell_min, cell_max) / volume;
+	// number of particles
+	const double ref_nr_real = volume_fraction * total_mass / species_mass;
+	double accu_nr_real = 0;
+	for (const auto& part: particles) {
+		accu_nr_real
+			+= get_accumulated_value(
+				part[Mass()] / part[Species_Mass()],
+				particle_min, particle_max,
+				cell_min, cell_max
+			);
+	}
+	if (abs(accu_nr_real - ref_nr_real) / abs(ref_nr_real) > 1e-2) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+			<< accu_nr_real << " " << ref_nr_real
+			<< std::endl;
+		return false;
+	}
+
+	// bulk velocity
+	std::pair<Vector3d, double> accu_vel{{0, 0, 0}, 0};
+	for (const auto& part: particles) {
+		const auto temp = get_accumulated_value_weighted(
+			part[Velocity()],
+			part[Mass()] / part[Species_Mass()],
+			particle_min, particle_max,
+			cell_min, cell_max
+		);
+		accu_vel.first += temp.first;
+		accu_vel.second += temp.second;
+	}
+	accu_vel.first /= accu_vel.second;
+
+	for (size_t dim = 0; dim < 3; dim++) {
+		if (abs(accu_vel.first[dim] - bulk_velocity[dim]) / abs(bulk_velocity[dim]) > 1e-2) {
+			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << dim << ", "
+				<< accu_vel.first[dim] << " " << bulk_velocity[dim]
+				<< std::endl;
+			return false;
+		}
+	}
+
+	// relative kinetic energy
+	std::pair<double, double> accu_ekin{0, 0};
+	for (const auto& part: particles) {
+		const auto temp = get_accumulated_value_weighted(
+			0.5 * part[Mass()] * (part[Velocity()] - bulk_velocity).squaredNorm(),
+			part[Mass()] / part[Species_Mass()],
+			particle_min, particle_max,
+			cell_min, cell_max
+		);
+		accu_ekin.first += temp.first;
+		accu_ekin.second += temp.second;
+	}
+	accu_ekin.first /= accu_ekin.second;
+
+	// temperature
+	const double
+		temp = accu_ekin.first * 2.0 / 3.0 / particle_temp_nrj_ratio,
+		ref_temp = temperature.sum() / 3;
+	if (abs(temp - ref_temp) / abs(ref_temp) > 1e-2) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+			<< temp << " " << ref_temp
+			<< std::endl;
+		return false;
+	}
+
+	// pressure
+	const double
+		ref_pres = ref_temp * particle_temp_nrj_ratio * ref_nr_real / volume,
+		pres = 2 * accu_nr_real * accu_ekin.first / 3.0 / volume;
+	if (abs(pres - ref_pres) / abs(ref_pres) > 1e-2) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+			<< temp << " " << ref_temp
+			<< std::endl;
+		return false;
+	}
+
+	return true;
+}
+
+
+int main()
+{
+	if (
+		not test_accumulation(
+			1e5, // nr_particles
+			{-5, 4, 9}, // part vol
+			{-1, 8, 33},
+			{-5, 4, 9}, // cell vol
+			{-1, 8, 33},
+			0.25, // boltzmann
+			{1, 2, 3}, // bulk velocity
+			{1, 1, 1}, // bulk temperature
+			123, // total mass
+			1, // species mass
+			997 // seed
+		)
+	) {
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
