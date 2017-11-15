@@ -795,7 +795,11 @@ template<
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Bulk_Velocity(*cell_data).first /= Bulk_Velocity(*cell_data).second;
+		if (Bulk_Velocity(*cell_data).second <= 0) {
+			Bulk_Velocity(*cell_data).first = {0, 0, 0};
+		} else {
+			Bulk_Velocity(*cell_data).first /= Bulk_Velocity(*cell_data).second;
+		}
 		Bulk_Momentum(*cell_data) = Bulk_Velocity(*cell_data).first * Bulk_Mass(*cell_data);
 	}
 
@@ -952,7 +956,11 @@ template<
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Bulk_Relative_Velocity2(*cell_data).first /= Bulk_Relative_Velocity2(*cell_data).second;
+		if (Bulk_Relative_Velocity2(*cell_data).second <= 0) {
+			Bulk_Relative_Velocity2(*cell_data).first = 0;
+		} else {
+			Bulk_Relative_Velocity2(*cell_data).first /= Bulk_Relative_Velocity2(*cell_data).second;
+		}
 	}
 }
 
@@ -1026,7 +1034,6 @@ template<
 				return
 					Number_Of_Particles(*cell_data)
 					* Particle_Bulk_Relative_Velocity2(*cell_data).first
-					/ Particle_Bulk_Mass(*cell_data)
 					/ 3 / volume;
 			}
 		}();
