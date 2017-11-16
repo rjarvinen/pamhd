@@ -230,8 +230,7 @@ struct Number_Of_Particles {
 };
 
 struct Bulk_Relative_Velocity2 {
-	//! second value used for tracking total weight of particles in cell
-	using data_type = std::pair<double, double>;
+	using data_type = double;
 	static const std::string get_name() { return {"bulk relative velocity2"}; }
 	static const std::string get_option_name() { return {"bulk-relative-velocity2"}; }
 	static const std::string get_option_help() { return {"Accumulated square of particle velocity relative to bulk velocity"}; }

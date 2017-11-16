@@ -188,9 +188,21 @@ const auto Part_Vel
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Velocity::data_type&{
 		return particle[pamhd::particle::Velocity()];
 	};
+// as above but for caller that also provides cell's data
+const auto Part_Vel_Cell
+	= [](Cell&, pamhd::particle::Particle_Internal& particle)
+		-> typename pamhd::particle::Velocity::data_type&
+	{
+		return particle[pamhd::particle::Velocity()];
+	};
 const auto Part_C2M
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Charge_Mass_Ratio::data_type&{
 		return particle[pamhd::particle::Charge_Mass_Ratio()];
+	};
+// copy of number of real particles represented by simulation particle
+const auto Part_Nr
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type{
+		return particle[pamhd::particle::Mass()] / particle[pamhd::particle::Species_Mass()];
 	};
 const auto Part_Mas
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type&{
@@ -215,20 +227,14 @@ const auto Part_SpM_Cell
 	= [](Cell&, pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Species_Mass::data_type&{
 		return particle[pamhd::particle::Species_Mass()];
 	};
-// returns a copy of given particle's momentun
-const auto Part_Mom
-	= [](Cell&, pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Velocity::data_type{
-		return particle[pamhd::particle::Mass()] * particle[pamhd::particle::Velocity()];
-	};
-// copy of particle's velocity squared relative to pamhd::particle::Bulk_Velocity
-const auto Part_RV2
-	= [](Cell& cell_data, pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type{
+// copy of particle's kinetic energy relative to pamhd::particle::Bulk_Velocity
+const auto Part_Ekin
+	= [](Cell& cell_data, pamhd::particle::Particle_Internal& particle)->double{
 		return
-			particle[pamhd::particle::Species_Mass()]
-			* particle[pamhd::particle::Mass()]
+			0.5 * particle[pamhd::particle::Mass()]
 			* (
 				particle[pamhd::particle::Velocity()]
-				- cell_data[pamhd::particle::Bulk_Velocity()]
+				- cell_data[pamhd::particle::Bulk_Velocity()].first
 			).squaredNorm();
 	};
 
@@ -294,11 +300,11 @@ const auto Accu_List_Bulk_Mass_Getter
 		return accu_item[pamhd::particle::Bulk_Mass()];
 	};
 
-const auto Accu_List_Bulk_Momentum_Getter
+const auto Accu_List_Bulk_Velocity_Getter
 	= [](pamhd::particle::Accumulated_To_Cell& accu_item)
-		->typename pamhd::particle::Bulk_Momentum::data_type&
+		->typename pamhd::particle::Bulk_Velocity::data_type&
 	{
-		return accu_item[pamhd::particle::Bulk_Momentum()];
+		return accu_item[pamhd::particle::Bulk_Velocity()];
 	};
 
 const auto Accu_List_Bulk_Relative_Velocity2_Getter
@@ -437,6 +443,7 @@ int main(int argc, char* argv[])
 	using std::get;
 	using std::min;
 	using std::sqrt;
+	using std::to_string;
 
 	/*
 	Initialize MPI
@@ -901,16 +908,17 @@ int main(int argc, char* argv[])
 		Part_Pos,
 		Part_Mas_Cell,
 		Part_SpM_Cell,
-		Part_Mom,
-		Part_RV2,
+		Part_Vel_Cell,
+		Part_Ekin,
 		Nr_Particles,
+		Part_Nr,
 		Bulk_Mass_Getter,
 		Bulk_Momentum_Getter,
 		Bulk_Relative_Velocity2_Getter,
 		Bulk_Velocity_Getter,
 		Accu_List_Number_Of_Particles_Getter,
 		Accu_List_Bulk_Mass_Getter,
-		Accu_List_Bulk_Momentum_Getter,
+		Accu_List_Bulk_Velocity_Getter,
 		Accu_List_Bulk_Relative_Velocity2_Getter,
 		Accu_List_Target_Getter,
 		Accu_List_Length_Getter,
@@ -1035,7 +1043,7 @@ int main(int argc, char* argv[])
 			abort();
 		}
 
-		accumulate_mhd_data(
+		pamhd::particle::accumulate_mhd_data(
 			inner_cells,
 			outer_cells,
 			grid,
@@ -1043,16 +1051,17 @@ int main(int argc, char* argv[])
 			Part_Pos,
 			Part_Mas_Cell,
 			Part_SpM_Cell,
-			Part_Mom,
-			Part_RV2,
+			Part_Vel_Cell,
+			Part_Ekin,
 			Nr_Particles,
+			Part_Nr,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
 			Bulk_Velocity_Getter,
 			Accu_List_Number_Of_Particles_Getter,
 			Accu_List_Bulk_Mass_Getter,
-			Accu_List_Bulk_Momentum_Getter,
+			Accu_List_Bulk_Velocity_Getter,
 			Accu_List_Bulk_Relative_Velocity2_Getter,
 			Accu_List_Target_Getter,
 			Accu_List_Length_Getter,
@@ -1128,10 +1137,6 @@ int main(int argc, char* argv[])
 				abort();
 			}
 
-			Bulk_Velocity_Getter(*cell_data)
-				= Bulk_Momentum_Getter(*cell_data)
-				/ Bulk_Mass_Getter(*cell_data);
-
 			J_m_V(*cell_data)
 				= Cur(*cell_data)
 				- (Mom1(*cell_data) + Mom2(*cell_data))
@@ -1146,10 +1151,6 @@ int main(int argc, char* argv[])
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 				abort();
 			}
-
-			Bulk_Velocity_Getter(*cell_data)
-				= Bulk_Momentum_Getter(*cell_data)
-				/ Bulk_Mass_Getter(*cell_data);
 
 			J_m_V(*cell_data)
 				= Cur(*cell_data)

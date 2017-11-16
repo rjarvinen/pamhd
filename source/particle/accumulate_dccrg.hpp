@@ -623,6 +623,9 @@ template<
 }
 
 
+/*!
+Updates Bulk_Momentum.
+*/
 template<
 	class Cell,
 	class Particles_Getter,
@@ -630,7 +633,7 @@ template<
 	class Particle_Mass_Getter,
 	class Particle_Species_Mass_Getter,
 	class Particle_Velocity_Getter,
-	class Particle_Relative_Velocity2_Getter,
+	class Particle_Relative_Kinetic_Energy_Getter,
 	class Number_Of_Particles_Getter,
 	class Particle_Weight_Getter,
 	class Bulk_Mass_Getter,
@@ -657,7 +660,7 @@ template<
 	Particle_Mass_Getter Particle_Mass,
 	Particle_Species_Mass_Getter Particle_Species_Mass,
 	Particle_Velocity_Getter Particle_Velocity,
-	Particle_Relative_Velocity2_Getter Particle_Relative_Velocity2,
+	Particle_Relative_Kinetic_Energy_Getter Particle_Relative_Kinetic_Energy,
 	Number_Of_Particles_Getter Number_Of_Particles,
 	Particle_Weight_Getter Particle_Weight,
 	Bulk_Mass_Getter Bulk_Mass,
@@ -818,9 +821,8 @@ template<
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Number_Of_Particles(*cell_data)            =
-		Bulk_Relative_Velocity2(*cell_data).first  =
-		Bulk_Relative_Velocity2(*cell_data).second = 0;
+		Number_Of_Particles(*cell_data)     =
+		Bulk_Relative_Velocity2(*cell_data) = 0;
 	}
 	for (const auto& cell: outer_cell_ids) {
 		auto* const cell_data = grid[cell];
@@ -828,9 +830,8 @@ template<
 			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 			abort();
 		}
-		Number_Of_Particles(*cell_data)            =
-		Bulk_Relative_Velocity2(*cell_data).first  =
-		Bulk_Relative_Velocity2(*cell_data).second = 0;
+		Number_Of_Particles(*cell_data)     =
+		Bulk_Relative_Velocity2(*cell_data) = 0;
 	}
 
 	grid.wait_remote_neighbor_copy_update_receives();
@@ -861,13 +862,12 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate_weighted(
+	accumulate(
 		outer_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
-		Particle_Relative_Velocity2,
-		Particle_Weight,
+		Particle_Relative_Kinetic_Energy,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
 		Accu_List_Target,
@@ -898,13 +898,12 @@ template<
 		Sol_Info,
 		false
 	);
-	accumulate_weighted(
+	accumulate(
 		inner_cell_ids,
 		grid,
 		Particles,
 		Particle_Position,
-		Particle_Relative_Velocity2,
-		Particle_Weight,
+		Particle_Relative_Kinetic_Energy,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
 		Accu_List_Target,
@@ -937,7 +936,7 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate_weighted_from_remote_neighbors(
+	accumulate_from_remote_neighbors(
 		grid,
 		Bulk_Relative_Velocity2,
 		Accu_List_Bulk_Relative_Velocity2,
@@ -948,20 +947,6 @@ template<
 
 	grid.wait_remote_neighbor_copy_update_sends();
 	Cell::set_transfer_all(false, accu_list_var);
-
-	// scale velocities relative to total weights
-	for (const auto& cell: cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		if (Bulk_Relative_Velocity2(*cell_data).second <= 0) {
-			Bulk_Relative_Velocity2(*cell_data).first = 0;
-		} else {
-			Bulk_Relative_Velocity2(*cell_data).first /= Bulk_Relative_Velocity2(*cell_data).second;
-		}
-	}
 }
 
 
@@ -1032,8 +1017,7 @@ template<
 				return 0.0;
 			} else {
 				return
-					Number_Of_Particles(*cell_data)
-					* Particle_Bulk_Relative_Velocity2(*cell_data).first
+					2 * Particle_Bulk_Relative_Velocity2(*cell_data)
 					/ 3 / volume;
 			}
 		}();

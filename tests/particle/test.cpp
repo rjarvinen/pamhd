@@ -185,6 +185,11 @@ const auto Part_C2M
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Charge_Mass_Ratio::data_type&{
 		return particle[pamhd::particle::Charge_Mass_Ratio()];
 	};
+// copy of number of real particles represented by simulation particle
+const auto Part_Nr
+	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type{
+		return particle[pamhd::particle::Mass()] / particle[pamhd::particle::Species_Mass()];
+	};
 const auto Part_Mas
 	= [](pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Mass::data_type&{
 		return particle[pamhd::particle::Mass()];
@@ -208,12 +213,11 @@ const auto Part_SpM_Cell
 	= [](Cell&, pamhd::particle::Particle_Internal& particle)->typename pamhd::particle::Species_Mass::data_type&{
 		return particle[pamhd::particle::Species_Mass()];
 	};
-// copy of particle's velocity squared relative to pamhd::particle::Bulk_Velocity
-const auto Part_RV2
+// copy of particle's kinetic energy relative to pamhd::particle::Bulk_Velocity
+const auto Part_Ekin
 	= [](Cell& cell_data, pamhd::particle::Particle_Internal& particle)->double{
 		return
-			particle[pamhd::particle::Species_Mass()]
-			* particle[pamhd::particle::Mass()]
+			0.5 * particle[pamhd::particle::Mass()]
 			* (
 				particle[pamhd::particle::Velocity()]
 				- cell_data[pamhd::particle::Bulk_Velocity()].first
@@ -241,7 +245,6 @@ const auto Bulk_Relative_Velocity2_Getter
 		return cell_data[pamhd::particle::Bulk_Relative_Velocity2()];
 	};
 
-// accumulated momentum / accumulated velocity of particles in given cell
 const auto Bulk_Velocity_Getter
 	= [](Cell& cell_data)->typename pamhd::particle::Bulk_Velocity::data_type&{
 		return cell_data[pamhd::particle::Bulk_Velocity()];
@@ -903,9 +906,9 @@ int main(int argc, char* argv[])
 			Part_Mas_Cell,
 			Part_SpM_Cell,
 			Part_Vel_Cell,
-			Part_RV2,
+			Part_Ekin,
 			Nr_Particles,
-			Part_Mas,
+			Part_Nr,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
 			Bulk_Relative_Velocity2_Getter,
