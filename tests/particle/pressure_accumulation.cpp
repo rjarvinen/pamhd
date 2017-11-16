@@ -93,12 +93,12 @@ bool test_accumulation(
 
 	const double
 		volume
-			= (cell_max[0] - cell_min[0])
-			* (cell_max[1] - cell_min[1])
-			* (cell_max[2] - cell_min[2]);
+			= (particle_max[0] - particle_min[0])
+			* (particle_max[1] - particle_min[1])
+			* (particle_max[2] - particle_min[2]),
+		intersection_volume = get_intersection_volume(particle_min, particle_max, cell_min, cell_max),
+		volume_fraction = intersection_volume / volume;
 
-	const double volume_fraction
-		= get_intersection_volume(particle_min, particle_max, cell_min, cell_max) / volume;
 	// number of particles
 	const double ref_nr_real = volume_fraction * total_mass / species_mass;
 	double accu_nr_real = 0;
@@ -113,6 +113,24 @@ bool test_accumulation(
 	if (abs(accu_nr_real - ref_nr_real) / abs(ref_nr_real) > 1e-2) {
 		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
 			<< accu_nr_real << " " << ref_nr_real
+			<< std::endl;
+		return false;
+	}
+
+	// bulk mass
+	const double ref_mass = volume_fraction * total_mass;
+	double accu_mass = 0;
+	for (const auto& part: particles) {
+		accu_mass
+			+= get_accumulated_value(
+				part[Mass()],
+				particle_min, particle_max,
+				cell_min, cell_max
+			);
+	}
+	if (abs(accu_mass - ref_mass) / abs(ref_mass) > 1e-2) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
+			<< accu_mass << " " << ref_mass
 			<< std::endl;
 		return false;
 	}
@@ -132,7 +150,7 @@ bool test_accumulation(
 	accu_vel.first /= accu_vel.second;
 
 	for (size_t dim = 0; dim < 3; dim++) {
-		if (abs(accu_vel.first[dim] - bulk_velocity[dim]) / abs(bulk_velocity[dim]) > 1e-2) {
+		if (abs(accu_vel.first[dim] - bulk_velocity[dim]) / abs(bulk_velocity[dim]) > 1e-1) {
 			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << dim << ", "
 				<< accu_vel.first[dim] << " " << bulk_velocity[dim]
 				<< std::endl;
@@ -141,22 +159,18 @@ bool test_accumulation(
 	}
 
 	// relative kinetic energy
-	std::pair<double, double> accu_ekin{0, 0};
+	double accu_ekin = 0;
 	for (const auto& part: particles) {
-		const auto temp = get_accumulated_value_weighted(
+		accu_ekin += get_accumulated_value(
 			0.5 * part[Mass()] * (part[Velocity()] - bulk_velocity).squaredNorm(),
-			part[Mass()] / part[Species_Mass()],
 			particle_min, particle_max,
 			cell_min, cell_max
 		);
-		accu_ekin.first += temp.first;
-		accu_ekin.second += temp.second;
 	}
-	accu_ekin.first /= accu_ekin.second;
 
 	// temperature
 	const double
-		temp = accu_ekin.first * 2.0 / 3.0 / particle_temp_nrj_ratio,
+		temp = 2 * accu_ekin / 3.0 / accu_nr_real / particle_temp_nrj_ratio,
 		ref_temp = temperature.sum() / 3;
 	if (abs(temp - ref_temp) / abs(ref_temp) > 1e-2) {
 		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
@@ -168,10 +182,10 @@ bool test_accumulation(
 	// pressure
 	const double
 		ref_pres = ref_temp * particle_temp_nrj_ratio * ref_nr_real / volume,
-		pres = 2 * accu_nr_real * accu_ekin.first / 3.0 / volume;
+		pres = 2 * accu_ekin / 3.0 / volume;
 	if (abs(pres - ref_pres) / abs(ref_pres) > 1e-2) {
 		std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-			<< temp << " " << ref_temp
+			<< pres << " " << ref_pres
 			<< std::endl;
 		return false;
 	}
@@ -197,6 +211,45 @@ int main()
 			997 // seed
 		)
 	) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	if (
+		not test_accumulation(
+			1e5, // nr_particles
+			{-5, 4, 9}, // part vol
+			{-1, 8, 33},
+			{-3, 6, 7}, // cell vol
+			{ 1, 9, 11},
+			0.25, // boltzmann
+			{1, 2, 3}, // bulk velocity
+			{1, 1, 1}, // bulk temperature
+			123, // total mass
+			1, // species mass
+			997 // seed
+		)
+	) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	if (
+		not test_accumulation(
+			1e5, // nr_particles
+			{-5, 4, 9}, // part vol
+			{-1, 8, 33},
+			{-5, 4, 9}, // cell vol
+			{-1, 8, 33},
+			3, // boltzmann
+			{-3, -2, -1}, // bulk velocity
+			{2, 2, 2}, // bulk temperature
+			47, // total mass
+			0.1, // species mass
+			998 // seed
+		)
+	) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
 		return EXIT_FAILURE;
 	}
 
