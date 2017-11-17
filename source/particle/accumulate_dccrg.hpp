@@ -638,11 +638,11 @@ template<
 	class Particle_Weight_Getter,
 	class Bulk_Mass_Getter,
 	class Bulk_Momentum_Getter,
-	class Bulk_Relative_Velocity2_Getter,
+	class Bulk_Relative_Kinetic_Energy_Getter,
 	class Number_Of_Particles_In_List_Getter,
 	class Bulk_Mass_In_List_Getter,
 	class Bulk_Momentum_In_List_Getter,
-	class Bulk_Relative_Velocity2_In_List_Getter,
+	class Bulk_Relative_Kinetic_Energy_In_List_Getter,
 	class Bulk_Velocity_Getter,
 	class Target_In_List_Getter,
 	class Accumulation_List_Length_Getter,
@@ -665,12 +665,12 @@ template<
 	Particle_Weight_Getter Particle_Weight,
 	Bulk_Mass_Getter Bulk_Mass,
 	Bulk_Momentum_Getter Bulk_Momentum,
-	Bulk_Relative_Velocity2_Getter Bulk_Relative_Velocity2,
+	Bulk_Relative_Kinetic_Energy_Getter Bulk_Relative_Kinetic_Energy,
 	Bulk_Velocity_Getter Bulk_Velocity,
 	Number_Of_Particles_In_List_Getter Accu_List_Number_Of_Particles,
 	Bulk_Mass_In_List_Getter Accu_List_Bulk_Mass,
 	Bulk_Momentum_In_List_Getter Accu_List_Bulk_Velocity,
-	Bulk_Relative_Velocity2_In_List_Getter Accu_List_Bulk_Relative_Velocity2,
+	Bulk_Relative_Kinetic_Energy_In_List_Getter Accu_List_Bulk_Relative_Kinetic_Energy,
 	Target_In_List_Getter Accu_List_Target,
 	Accumulation_List_Length_Getter Accu_List_Length,
 	Accumulation_List_Getter Accu_List,
@@ -822,7 +822,7 @@ template<
 			abort();
 		}
 		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Velocity2(*cell_data) = 0;
+		Bulk_Relative_Kinetic_Energy(*cell_data) = 0;
 	}
 	for (const auto& cell: outer_cell_ids) {
 		auto* const cell_data = grid[cell];
@@ -831,7 +831,7 @@ template<
 			abort();
 		}
 		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Velocity2(*cell_data) = 0;
+		Bulk_Relative_Kinetic_Energy(*cell_data) = 0;
 	}
 
 	grid.wait_remote_neighbor_copy_update_receives();
@@ -868,8 +868,8 @@ template<
 		Particles,
 		Particle_Position,
 		Particle_Relative_Kinetic_Energy,
-		Bulk_Relative_Velocity2,
-		Accu_List_Bulk_Relative_Velocity2,
+		Bulk_Relative_Kinetic_Energy,
+		Accu_List_Bulk_Relative_Kinetic_Energy,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
@@ -904,8 +904,8 @@ template<
 		Particles,
 		Particle_Position,
 		Particle_Relative_Kinetic_Energy,
-		Bulk_Relative_Velocity2,
-		Accu_List_Bulk_Relative_Velocity2,
+		Bulk_Relative_Kinetic_Energy,
+		Accu_List_Bulk_Relative_Kinetic_Energy,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
@@ -938,8 +938,8 @@ template<
 	);
 	accumulate_from_remote_neighbors(
 		grid,
-		Bulk_Relative_Velocity2,
-		Accu_List_Bulk_Relative_Velocity2,
+		Bulk_Relative_Kinetic_Energy,
+		Accu_List_Bulk_Relative_Kinetic_Energy,
 		Accu_List_Target,
 		Accu_List,
 		Sol_Info
@@ -961,7 +961,7 @@ template<
 	class Number_Of_Particles_Getter,
 	class Particle_Bulk_Mass_Getter,
 	class Particle_Bulk_Momentum_Getter,
-	class Particle_Bulk_Relative_Velocity2_Getter,
+	class Particle_Bulk_Relative_Kinetic_Energy_Getter,
 	class Particle_List_Getter,
 	class MHD_Mass_Getter,
 	class MHD_Momentum_Getter,
@@ -977,7 +977,7 @@ template<
 	Number_Of_Particles_Getter Number_Of_Particles,
 	Particle_Bulk_Mass_Getter Particle_Bulk_Mass,
 	Particle_Bulk_Momentum_Getter Particle_Bulk_Momentum,
-	Particle_Bulk_Relative_Velocity2_Getter Particle_Bulk_Relative_Velocity2,
+	Particle_Bulk_Relative_Kinetic_Energy_Getter Particle_Bulk_Relative_Kinetic_Energy,
 	Particle_List_Getter Particle_List,
 	MHD_Mass_Getter MHD_Mass,
 	MHD_Momentum_Getter MHD_Momentum,
@@ -1017,7 +1017,7 @@ template<
 				return 0.0;
 			} else {
 				return
-					2 * Particle_Bulk_Relative_Velocity2(*cell_data)
+					2 * Particle_Bulk_Relative_Kinetic_Energy(*cell_data)
 					/ 3 / volume;
 			}
 		}();
