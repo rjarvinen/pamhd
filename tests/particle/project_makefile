@@ -39,6 +39,7 @@ TESTS_PARTICLE_TESTS = \
   tests/particle/velocity.tst \
   tests/particle/temperature.tst \
   tests/particle/accumulate.tst \
+  tests/particle/pressure_accumulation.tst \
   tests/particle/solve_1d.mtst \
   tests/particle/solve_1d_periodic.mtst \
   tests/particle/solve_2d.mtst \
