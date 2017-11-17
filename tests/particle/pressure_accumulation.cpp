@@ -253,5 +253,25 @@ int main()
 		return EXIT_FAILURE;
 	}
 
+	constexpr auto Re = 6.371e6;
+	if (
+		not test_accumulation(
+			1e5, // nr_particles
+			{0, 0, 0}, // part vol
+			{Re, Re, Re},
+			{0, 0, 0}, // cell vol
+			{2*Re, 2*Re, 2*Re},
+			1.38064852e-23, // boltzmann
+			{-5e5, 1e4, -1e4}, // bulk velocity
+			{1e5, 1e5, 1e5}, // bulk temperature
+			432534, // total mass
+			1.6726217770000001e-27, // species mass
+			999 // seed
+		)
+	) {
+		std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
+		return EXIT_FAILURE;
+	}
+
 	return EXIT_SUCCESS;
 }
