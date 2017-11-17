@@ -53,6 +53,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "prettyprint.hpp"
 
 #include "mhd/variables.hpp"
+#include "particle/common.hpp"
 #include "particle/save.hpp"
 #include "particle/variables.hpp"
 
@@ -318,7 +319,8 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 	const unordered_map<uint64_t, Cell_test_particle>& simulation_data,
 	const dccrg::Mapping& cell_id_mapping,
 	const dccrg::Grid_Topology& topology,
-	const dccrg::Cartesian_Geometry& geometry
+	const dccrg::Cartesian_Geometry& geometry,
+	const double particle_temp_nrj_ratio
 ) {
 	static_assert(
 		std::numeric_limits<double>::is_iec559,
@@ -360,6 +362,7 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 			or plot_variable == "v"
 			or plot_variable == "mass"
 			or plot_variable == "count"
+			or plot_variable == "temperature"
 		)
 	) {
 		std::cerr <<  __FILE__ << "(" << __LINE__<< "): "
@@ -548,6 +551,14 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 		horiz_cell_length = (horiz_max - horiz_min) / horizontal_resolution,
 		vert_cell_length = (vert_max - vert_min) / vertical_resolution;
 
+	std::vector<std::vector<std::vector<Particle_Internal>>> plot_data_particles(
+		vertical_resolution,
+		std::vector<std::vector<Particle_Internal>>(
+			horizontal_resolution,
+			std::vector<Particle_Internal>()
+		)
+	);
+
 	for (const auto& item: simulation_data) {
 		const auto cell_id = item.first;
 		const auto
@@ -658,6 +669,11 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 					vertical_resolution - 1,
 					size_t(floor((vert - vert_min) / vert_cell_length))
 				);
+
+			if (plot_variable == "temperature") {
+				plot_data_particles[vert_index][horiz_index].push_back(particle);
+			}
+
 			plot_data(vert_index, horiz_index) += value;
 			nr_of_particles++;
 		}
@@ -668,6 +684,17 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 	}
 	if (fabs(vert_min - vert_max) / fabs(vert_min + vert_max) < 1e-4) {
 		vert_max += 1e-4 * fabs(vert_max);
+	}
+
+	if (plot_variable == "temperature") {
+		for (size_t v_i = 0; v_i < vertical_resolution; v_i++) {
+		for (size_t h_i = 0; h_i < horizontal_resolution; h_i++) {
+			plot_data(v_i, h_i)
+				= get_temperature<Mass, Velocity, Species_Mass>(
+					plot_data_particles[v_i][h_i],
+					particle_temp_nrj_ratio
+				);
+		}}
 	}
 
 	return std::make_tuple(plot_data, horiz_min, horiz_max, vert_min, vert_max);
@@ -780,7 +807,7 @@ int main(int argc, char* argv[])
 			boost::program_options::value<>(&plot_variable)
 				->default_value(plot_variable),
 			"Plot variable arg as a function of horizontal and vertical variables "
-			"(one of r, rx, ry, rz, v, vx, vy, vz, mass, count, E, B)")
+			"(one of r, rx, ry, rz, v, vx, vy, vz, mass, count, temperature)")
 		("horizontal-variable",
 			boost::program_options::value<>(&horizontal_variable)
 				->default_value(horizontal_variable),
@@ -940,7 +967,8 @@ int main(int argc, char* argv[])
 			simulation_data,
 			cell_id_mapping,
 			topology,
-			geometry
+			geometry,
+			(*metadata)[3]
 		);
 
 		// error or nothing to plot
