@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAMHD_PARTICLE_ACCUMULATE_DCCRG_HPP
 
 
+#include "algorithm"
 #include "iostream"
 #include "utility"
 #include "vector"
@@ -974,6 +975,7 @@ template<
 	const double adiabatic_index,
 	const double vacuum_permeability,
 	const double particle_temp_nrj_ratio,
+	const double minimum_pressure,
 	Number_Of_Particles_Getter Number_Of_Particles,
 	Particle_Bulk_Mass_Getter Particle_Bulk_Mass,
 	Particle_Bulk_Momentum_Getter Particle_Bulk_Momentum,
@@ -1016,9 +1018,10 @@ template<
 			if (Particle_Bulk_Mass(*cell_data) <= 0) {
 				return 0.0;
 			} else {
-				return
-					2 * Particle_Bulk_Relative_Kinetic_Energy(*cell_data)
-					/ 3 / volume;
+				return std::max(
+					minimum_pressure,
+					2 * Particle_Bulk_Relative_Kinetic_Energy(*cell_data) / 3 / volume
+				);
 			}
 		}();
 

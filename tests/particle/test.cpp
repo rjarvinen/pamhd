@@ -936,6 +936,7 @@ int main(int argc, char* argv[])
 			options_sim.adiabatic_index,
 			options_sim.vacuum_permeability,
 			options_sim.boltzmann,
+			options_mhd.min_pressure,
 			Nr_Particles,
 			Bulk_Mass_Getter,
 			Bulk_Momentum_Getter,
