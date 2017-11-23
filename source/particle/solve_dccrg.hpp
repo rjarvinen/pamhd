@@ -436,8 +436,8 @@ template<
 
 
 template<
-	class Nr_Particles_External_T,
-	class Particles_External_T,
+	class Nr_Particles_T,
+	class Particles_T,
 	class Cell
 > void resize_receiving_containers(
 	const std::vector<uint64_t>& cell_ids,
@@ -452,8 +452,7 @@ template<
 		}
 		auto& cell_data = *cell_ptr;
 
-		cell_data[Particles_External_T()]
-			.resize(cell_data[Nr_Particles_External_T()]);
+		cell_data[Particles_T()].resize(cell_data[Nr_Particles_T()]);
 	}
 }
 
