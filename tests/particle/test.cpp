@@ -1431,8 +1431,9 @@ int main(int argc, char* argv[])
 
 		/*
 		Update internal particles for setting particle copy boundaries.
+
+		TODO overlap computation and communication in boundary processing
 		*/
-		// TODO overlap computation and communication in boundary processing
 		for (const auto& cell: grid.cells) {
 			// (ab)use external number counter as internal number counter
 			(*cell.data)[pamhd::particle::Nr_Particles_External()]

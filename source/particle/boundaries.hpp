@@ -993,9 +993,12 @@ template<
 				}
 
 				Bdy_N(*source_data) = get_bulk_nr_particles<Particle_Mass_T, Particle_Species_Mass_T>(Par(*source_data));
-				source_value += Bdy_N(*source_data);
+
+				const auto source_length = grid.geometry.get_length(item[i]);
+				const auto volume = source_length[0] * source_length[1] * source_length[2];
+				source_value += Bdy_N(*source_data) / volume;
 			}
-			source_value /= item.size() - 1;
+			source_value /= item.size() - 1; // TODO probably bad with AMR
 
 			Bdy_N(*target_data) = source_value;
 		}
