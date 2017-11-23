@@ -882,12 +882,13 @@ template<
 		current_id_start = first_particle_id,
 		nr_particles_created = 0;
 
+	std::set<uint64_t> copy_bdy_cells;
 	for (size_t bdy_i = 0; bdy_i < boundaries.size(); bdy_i++) {
 
 		// number density, set boundary data variable and replace particles later
 		// TODO?: adjust particle parameters in-place to keep particle ids
 		constexpr pamhd::particle::Bdy_Number_Density N{};
-		std::set<uint64_t> bdy_cells;
+		std::set<uint64_t> value_bdy_cells;
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(N);
@@ -907,7 +908,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -927,6 +928,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			// copy particles
 			size_t total_number_of_particles = 0;
@@ -1024,7 +1026,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -1044,6 +1046,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			// particles copied in number density
 
@@ -1090,7 +1093,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -1110,6 +1113,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			pamhd::particle::Bdy_Temperature::data_type source_value{0};
 			for (size_t i = 1; i < item.size(); i++) {
@@ -1154,7 +1158,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -1174,6 +1178,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			pamhd::particle::Bdy_Nr_Particles_In_Cell::data_type source_value{0};
 			for (size_t i = 1; i < item.size(); i++) {
@@ -1218,7 +1223,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -1238,6 +1243,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			pamhd::particle::Bdy_Species_Mass::data_type source_value{0};
 			for (size_t i = 1; i < item.size(); i++) {
@@ -1286,7 +1292,7 @@ template<
 					continue;
 				}
 
-				bdy_cells.insert(cell);
+				value_bdy_cells.insert(cell);
 
 				const auto c = grid.geometry.get_center(cell);
 				const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
@@ -1306,6 +1312,7 @@ template<
 				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
+			copy_bdy_cells.insert(item[0]);
 
 			pamhd::particle::Charge_Mass_Ratio::data_type source_value{0};
 			for (size_t i = 1; i < item.size(); i++) {
@@ -1333,7 +1340,12 @@ template<
 			Bdy_C2M(*target_data) = source_value;
 		}
 
-		for (const auto& cell: bdy_cells) {
+		for (const auto& cell: value_bdy_cells) {
+			// copy boundary takes precedence
+			if (copy_bdy_cells.count(cell) > 0) {
+				continue;
+			}
+
 			random_source.seed(cell + 100000 * simulation_step + 10000000000 * bdy_i);
 
 			auto* const cell_data = grid[cell];
