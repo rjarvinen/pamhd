@@ -1456,7 +1456,7 @@ int main(int argc, char* argv[])
 		);
 
 		pamhd::particle::incorporate_external_particles<
-			pamhd::particle::Nr_Particles_External,
+			pamhd::particle::Nr_Particles_Internal,
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
@@ -1465,7 +1465,7 @@ int main(int argc, char* argv[])
 		grid.wait_remote_neighbor_copy_update_receives();
 
 		pamhd::particle::incorporate_external_particles<
-			pamhd::particle::Nr_Particles_External,
+			pamhd::particle::Nr_Particles_Internal,
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
@@ -1477,10 +1477,7 @@ int main(int argc, char* argv[])
 		>(inner_cells, grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Particles_External()
-		);
+		Cell::set_transfer_all(false, pamhd::particle::Particles_External());
 
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
@@ -1606,8 +1603,34 @@ int main(int argc, char* argv[])
 		}
 
 		/*
-		Let copy boundaries use data from previous step
+		Update internal particles for setting particle copy boundaries.
+
+		TODO overlap computation and communication in boundary processing
 		*/
+		for (const auto& cell: grid.cells) {
+			// (ab)use external number counter as internal number counter
+			(*cell.data)[pamhd::particle::Nr_Particles_External()]
+				= (*cell.data)[pamhd::particle::Particles_Internal()].size();
+		}
+		Cell::set_transfer_all(
+			true,
+			pamhd::Magnetic_Field(),
+			pamhd::particle::Nr_Particles_External()
+		);
+		grid.update_copies_of_remote_neighbors();
+		Cell::set_transfer_all(
+			false,
+			pamhd::Magnetic_Field(),
+			pamhd::particle::Nr_Particles_External()
+		);
+
+		pamhd::particle::resize_receiving_containers<
+			pamhd::particle::Nr_Particles_External,
+			pamhd::particle::Particles_Internal
+		>(remote_cells, grid);
+		Cell::set_transfer_all(true, pamhd::particle::Particles_Internal());
+		grid.update_copies_of_remote_neighbors();
+		Cell::set_transfer_all(false, pamhd::particle::Particles_Internal());
 
 		pamhd::mhd::apply_magnetic_field_boundaries(
 			grid,
@@ -1659,7 +1682,6 @@ int main(int argc, char* argv[])
 				Bdy_C2M
 			);
 		next_particle_id += nr_particles_created * grid.get_comm_size();
-
 
 			// add magnetic nrj to fluid boundary cells
 			/*if ((*cell_data)[pamhd::mhd::Cell_Type()] == bdy_classifier_fluid1.value_boundary_cell) {
