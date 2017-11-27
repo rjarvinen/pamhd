@@ -80,6 +80,13 @@ template<
 		}
 
 		const size_t original_nr_particles = Particles(*cell.data).size();
+		if (original_nr_particles == 0) {
+			std::cerr << __FILE__ "(" << __LINE__ << "): "
+				<< "No particles in cell " << cell.id
+				<< std::endl;
+			abort();
+		}
+
 		if (original_nr_particles >= min_particles) {
 			continue;
 		}
@@ -93,7 +100,6 @@ template<
 
 		std::uniform_int_distribution<size_t> index_generator(0, original_nr_particles - 1);
 		for (size_t i = 0; i < min_particles - original_nr_particles; i++) {
-			//const auto part_i = index_generator(random_source);
 			auto& particle = Particles(*cell.data)[index_generator(random_source)];
 			const auto old_pos = Part_Pos(particle);
 
