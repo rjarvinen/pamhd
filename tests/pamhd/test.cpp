@@ -68,6 +68,7 @@ particles represent one of the fluids.
 #include "particle/options.hpp"
 #include "particle/save.hpp"
 #include "particle/solve_dccrg.hpp"
+#include "particle/splitter.hpp"
 #include "particle/variables.hpp"
 #include "simulation_options.hpp"
 
@@ -1043,6 +1044,16 @@ int main(int argc, char* argv[])
 				<< std::endl;
 			abort();
 		}
+
+		pamhd::particle::split_particles(
+			options_particle.min_particles,
+			random_source,
+			grid,
+			Part_Int,
+			Part_Pos,
+			Part_Mas,
+			Sol_Info
+		);
 
 		pamhd::particle::accumulate_mhd_data(
 			inner_cells,

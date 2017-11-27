@@ -279,6 +279,7 @@ tests/particle/test.exe: \
   source/particle/accumulate_dccrg.hpp \
   source/particle/accumulation_variables.hpp \
   source/particle/options.hpp \
+  source/particle/splitter.hpp \
   source/mhd/boundaries.hpp \
   source/mhd/common.hpp \
   source/mhd/solve.hpp \

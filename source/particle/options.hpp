@@ -57,6 +57,7 @@ struct Options
 
 	std::string solver = "rkf78";
 	double save_n = -1;
+	size_t min_particles = 0;
 
 	void set(const rapidjson::Value& object) {
 		using std::isnormal;
@@ -89,6 +90,14 @@ struct Options
 				+ ", should be one of euler, (modified) midpoint, rk4 (runge_kutta4), rkck54 (runge_kutta_cash_karp54), rkf78 (runge_kutta_fehlberg78), see http://www.boost.org/doc/libs/release/libs/numeric/odeint/doc/html/boost_numeric_odeint/odeint_in_detail/steppers.html#boost_numeric_odeint.odeint_in_detail.steppers.stepper_overview"
 			);
 		}
+
+		if (not object.HasMember("minimum-particles")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a minimum-particles key."
+			);
+		}
+		min_particles = object["minimum-particles"].GetUint();
 	}
 };
 
