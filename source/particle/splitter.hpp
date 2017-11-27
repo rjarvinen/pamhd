@@ -84,6 +84,9 @@ template<
 			continue;
 		}
 
+		// don't allocate in below loop and also prevent reference invalidation
+		Particles(*cell.data).reserve(min_particles);
+
 		const auto
 			cell_min = grid.geometry.get_min(cell.id),
 			cell_max = grid.geometry.get_max(cell.id);
@@ -108,13 +111,13 @@ template<
 				offset_z = offset_gen(random_source);
 
 			Part_Mas(particle) /= 2;
-			Particles(*cell.data).push_back(particle);
 			Part_Pos(particle) = {
 				old_pos[0] + offset_x,
 				old_pos[1] + offset_y,
 				old_pos[2] + offset_z
 			};
-			Part_Pos(Particles(*cell.data)[Particles(*cell.data).size() - 1]) = {
+			Particles(*cell.data).push_back(particle);
+			Part_Pos(particle) = {
 				old_pos[0] - offset_x,
 				old_pos[1] - offset_y,
 				old_pos[2] - offset_z
