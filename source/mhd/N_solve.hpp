@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "limits"
 #include "string"
 #include "tuple"
+#include "type_traits"
 #include "vector"
 
 #include "dccrg.hpp"
@@ -223,10 +224,8 @@ template <
 			if (not std::isnormal(shared_area) or shared_area < 0) {
 				throw std::domain_error(
 					"Invalid area between cells "
-					+ to_string(cell_id)
-					+ " and "
-					+ to_string(neighbor_id)
-					+ ": "
+					+ to_string(cell_id) + " and "
+					+ to_string(neighbor_id) + ": "
 					+ to_string(shared_area)
 				);
 			}
@@ -236,17 +235,18 @@ template <
 				= [&](Cell& cell_data) {
 					detail::MHD state;
 					state[mas_int] = Mas.first(cell_data) + Mas.second(cell_data);
-					state[mom_int]
-						= get_rotated_vector(Mom.first(cell_data), abs(neighbor_dir))
-						+ get_rotated_vector(Mom.second(cell_data), abs(neighbor_dir));
+					const typename std::remove_reference<
+						decltype(Mom.first(cell_data))
+					>::type total_mom = Mom.first(cell_data) + Mom.second(cell_data);
+					state[mom_int] = get_rotated_vector(total_mom, abs(neighbor_dir));
 					state[nrj_int] = Nrj.first(cell_data) + Nrj.second(cell_data);
 					state[mag_int] = get_rotated_vector(Mag(cell_data), abs(neighbor_dir));
 					return state;
 				};
 
-			// take into account direction of neighbor from cell
 			detail::MHD state_neg, state_pos;
 			Magnetic_Field::data_type bg_face_b;
+			// take into account direction of neighbor from cell
 			if (neighbor_dir > 0) {
 				state_neg = get_total_state(*cell_data);
 				state_pos = get_total_state(*neighbor_data);
