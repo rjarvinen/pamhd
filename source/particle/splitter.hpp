@@ -34,18 +34,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAMHD_PARTICLE_SPLITTER_HPP
 
 
-#include "type_traits"
+#include "algorithm"
 #include "random"
 #include "utility"
 
 #include "dccrg.hpp"
-#include "Eigen/Core"
-#include "Eigen/Geometry"
 #include "prettyprint.hpp"
 
 #include "common.hpp"
-#include "interpolate.hpp"
-#include "variables.hpp"
 
 
 namespace pamhd {
@@ -83,6 +79,7 @@ template<
 		if (original_nr_particles == 0) {
 			std::cerr << __FILE__ "(" << __LINE__ << "): "
 				<< "No particles in cell " << cell.id
+				<< " at " << grid.geometry.get_center(cell.id)
 				<< std::endl;
 			abort();
 		}
