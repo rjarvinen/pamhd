@@ -199,19 +199,19 @@ template <
 		return std::make_tuple(flux, 0);
 	}
 
-	const auto Mas_getter
+	constexpr auto Mas_getter
 		= [](MHD& state) -> typename Mass_Density::data_type& {
 			return state[Mass_Density()];
 		};
-	const auto Mom_getter
+	constexpr auto Mom_getter
 		= [](MHD& state) -> typename Momentum_Density::data_type& {
 			return state[Momentum_Density()];
 		};
-	const auto Nrj_getter
+	constexpr auto Nrj_getter
 		= [](MHD& state) -> typename Total_Energy_Density::data_type& {
 			return state[Total_Energy_Density()];
 		};
-	const auto Mag_getter
+	constexpr auto Mag_getter
 		= [](MHD& state) -> typename Magnetic_Field::data_type& {
 			return state[Magnetic_Field()];
 		};

@@ -55,7 +55,7 @@ template <
 > std::tuple<detail::MHD, detail::MHD, Scalar> get_flux_N_hll(
 	detail::MHD& state_neg,
 	detail::MHD& state_pos,
-	const Vector& /*bg_face_magnetic_field*/,
+	const Vector& bg_face_magnetic_field,
 	const Scalar& area,
 	const Scalar& dt,
 	const Scalar& adiabatic_index,
@@ -69,8 +69,6 @@ template <
 	const Momentum_Density Mom{};
 	const Total_Energy_Density Nrj{};
 	const Magnetic_Field Mag{};
-
-	const Vector bg_face_magnetic_field{0, 0, 0};
 
 	const auto
 		flow_v_neg = get_velocity(state_neg[Mom], state_neg[Mas]),
@@ -209,6 +207,8 @@ template <
 		vacuum_permeability
 	);
 
+	flux_neg -= state_neg * bm;
+	flux_pos -= state_pos * bp;
 	flux_neg *= bp / (bp - bm) * area * dt;
 	flux_pos *= bm / (bm - bp) * area * dt;
 
