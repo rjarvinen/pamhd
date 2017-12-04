@@ -1294,7 +1294,8 @@ int main(int argc, char* argv[])
 			options_sim.vacuum_permeability,
 			Mas, Mom, Nrj, Mag,
 			Mas_f, Mom_f, Nrj_f, Mag_f,
-			Sol_Info
+			Sol_Info,
+			false // particles will overwrite negative density
 		);
 
 		pamhd::particle::incorporate_external_particles<

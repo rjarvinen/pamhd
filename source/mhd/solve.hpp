@@ -403,7 +403,8 @@ template <
 	const Momentum_Density_Flux_Getter Mom_f,
 	const Total_Energy_Density_Flux_Getter Nrj_f,
 	const Magnetic_Field_Flux_Getter Mag_f,
-	const Solver_Info_Getter Sol_Info
+	const Solver_Info_Getter Sol_Info,
+	const bool check_new_state = true
 ) {
 	using std::to_string;
 
@@ -423,7 +424,7 @@ template <
 		const auto length = grid.geometry.get_length(cell.id);
 		const double inverse_volume = 1.0 / (length[0] * length[1] * length[2]);
 
-		if ((Sol_Info(*cell.data) & Solver_Info::mass_density_bdy) == 0) {
+		if (check_new_state and (Sol_Info(*cell.data) & Solver_Info::mass_density_bdy) == 0) {
 			Mas(*cell.data) += Mas_f(*cell.data) * inverse_volume;
 
 			if (Mas(*cell.data) <= 0) {
