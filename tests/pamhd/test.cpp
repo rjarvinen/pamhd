@@ -526,6 +526,7 @@ int main(int argc, char* argv[])
 	pamhd::particle::Options options_particle{document};
 
 	if (rank == 0 and options_sim.output_directory != "") {
+		std::cout << "Saving results into directory " << options_sim.output_directory << std::endl;
 		try {
 			boost::filesystem::create_directories(options_sim.output_directory);
 		} catch (const boost::filesystem::filesystem_error& e) {
