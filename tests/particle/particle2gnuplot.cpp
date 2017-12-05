@@ -583,6 +583,23 @@ std::tuple<Eigen::MatrixXd, double, double, double, double> prepare_plot_data(
 				&r = particle[Position()],
 				&v = particle[Velocity()];
 
+			if (
+				   r[0] < real_r_start[0]
+				or r[1] < real_r_start[1]
+				or r[2] < real_r_start[2]
+				or r[0] > real_r_end[0]
+				or r[1] > real_r_end[1]
+				or r[2] > real_r_end[2]
+				or v[0] < real_v_start[0]
+				or v[1] < real_v_start[1]
+				or v[2] < real_v_start[2]
+				or v[0] > real_v_end[0]
+				or v[1] > real_v_end[1]
+				or v[2] > real_v_end[2]
+			) {
+				continue;
+			}
+
 			double value = 0;
 
 			if (plot_variable == "rx") {
