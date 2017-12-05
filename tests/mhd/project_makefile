@@ -14,6 +14,7 @@ TESTS_MHD_TESTS = \
   tests/mhd/reference.tst_hll_athena \
   tests/mhd/reference.tst_hlld_athena \
   tests/mhd/reference.tst_roe_athena \
+  tests/mhd/two_reference.tst_rusanov \
   tests/mhd/two_reference.tst_hll_athena
 
 tests/mhd_executables: $(TESTS_MHD_EXECUTABLES)
@@ -180,3 +181,5 @@ tests/mhd/reference.tst_roe_athena: tests/mhd/reference.exe
 
 tests/mhd/two_reference.tst_hll_athena: tests/mhd/two_reference.exe
 	@printf RUN\ HLL_Athena\ $<...\ \  && $(RUN) ./$< --solver hll_athena && printf "PASS\n" && touch $@
+tests/mhd/two_reference.tst_rusanov: tests/mhd/two_reference.exe
+	@printf RUN\ Rusanov\ $<...\ \  && $(RUN) ./$< --solver rusanov && printf "PASS\n" && touch $@

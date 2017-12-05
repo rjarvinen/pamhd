@@ -53,8 +53,6 @@ Multi-population version of get_flux_rusanov() in rusanov.hpp.
 
 Splits returned flux into contributions from state_neg and state_pos
 to all populations based on their fraction of mass vs total mass.
-
-Ignores background magnetic field.
 */
 template <
 	class Mass_Density,
@@ -66,7 +64,7 @@ template <
 > std::tuple<detail::MHD, detail::MHD, Scalar> get_flux_N_rusanov(
 	detail::MHD& state_neg,
 	detail::MHD& state_pos,
-	const Vector& /*bg_face_magnetic_field*/,
+	const Vector& bg_face_magnetic_field,
 	const Scalar& area,
 	const Scalar& dt,
 	const Scalar& adiabatic_index,
@@ -80,8 +78,6 @@ template <
 	const Momentum_Density Mom{};
 	const Total_Energy_Density Nrj{};
 	const Magnetic_Field Mag{};
-
-	const Vector bg_face_magnetic_field{0, 0, 0};
 
 	if (not isnormal(state_neg[Mas]) or state_neg[Mas] < 0) {
 		throw std::domain_error(
@@ -139,8 +135,11 @@ template <
 		vacuum_permeability
 	);
 
-	flux_neg *= 0.5 * max_signal * area * dt;
-	flux_pos *= 0.5 * max_signal * area * dt;
+	flux_neg += state_neg * max_signal;
+	flux_pos -= state_pos * max_signal;
+
+	flux_neg *= 0.5 * area * dt;
+	flux_pos *= 0.5 * area * dt;
 
 	return std::make_tuple(flux_neg, flux_pos, max_signal);
 }
