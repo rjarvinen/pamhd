@@ -1,6 +1,6 @@
 {
-	"comment": "particle-assisted version of two-stream ion-ion instability",
-	"output-directory": "results/two-stream/1d/+x/part=50_30_fluid=20/euler_hll_athena",
+	"comment": "particle-assisted version of two-stream ion-ion instability with background magnetic field",
+	"output-directory": "results/two-stream/1d/+x/part=50_50_fluid=0_bg_B/euler_hll_athena",
 	"time-start": 0,
 	"time-length": 20,
 	"minimum-pressure": 0,
@@ -25,14 +25,14 @@
 		"volume": "{10, 1, 1}",
 		"start": "{0, 0, 0}"
 	},
-	"number-density":        {"default":        0.2},
-	"velocity":              {"default": [ 3, 0, 0]},
-	"pressure":              {"default":        0.2},
+	"number-density":        {"default":          0},
+	"velocity":              {"default": [ 0, 0, 0]},
+	"pressure":              {"default":          0},
 	"particle-population-1": {
-		"number-density":    {"default":        0.3},
+		"number-density":    {"default":        0.5},
 		"velocity":          {"default": [ 3, 0, 0]},
 		"temperature":       {"default":          1},
-		"nr-particles":      {"default":          6},
+		"nr-particles":      {"default":         10},
 		"species-mass":      {"default":          1},
 		"charge-mass-ratio": {"default":          1}
 	},
@@ -44,5 +44,6 @@
 		"species-mass":      {"default":          1},
 		"charge-mass-ratio": {"default":          1}
 	},
-	"magnetic-field": {"default": [1, 0, 0]}
+	"magnetic-field": {"default": [0, 0, 0]},
+	"background-magnetic-field": {"value": [1, 0, 0]}
 }
