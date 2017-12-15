@@ -47,6 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "mhd/common.hpp"
 #include "particle/common.hpp"
+#include "particle/splitter.hpp"
 #include "particle/variables.hpp"
 
 
@@ -229,7 +230,9 @@ template<
 	);
 
 	if (
-		not std::equal(
+		dont_solve_mass.size() != dont_solve_spm.size()
+		and dont_solve_mass.size() > 0
+		and not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
 			dont_solve_spm.cbegin()
@@ -241,7 +244,9 @@ template<
 		);
 	}
 	if (
-		not std::equal(
+		dont_solve_mass.size() != dont_solve_c2m.size()
+		and dont_solve_mass.size() > 0
+		and not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
 			dont_solve_c2m.cbegin()
@@ -253,7 +258,9 @@ template<
 		);
 	}
 	if (
-		not std::equal(
+		dont_solve_mass.size() != dont_solve_nr_pic.size()
+		and dont_solve_mass.size() > 0
+		and not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
 			dont_solve_nr_pic.cbegin()
@@ -265,7 +272,9 @@ template<
 		);
 	}
 	if (
-		not std::equal(
+		dont_solve_mass.size() != dont_solve_velocity.size()
+		and dont_solve_mass.size() > 0
+		and not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
 			dont_solve_velocity.cbegin()
@@ -277,7 +286,9 @@ template<
 		);
 	}
 	if (
-		not std::equal(
+		dont_solve_mass.size() != dont_solve_temperature.size()
+		and dont_solve_mass.size() > 0
+		and not std::equal(
 			dont_solve_mass.cbegin(),
 			dont_solve_mass.cend(),
 			dont_solve_temperature.cbegin()
@@ -287,84 +298,6 @@ template<
 			std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
 			+ "Mass density and temperature dont_solves aren't equal."
 		);
-	}
-
-	for (size_t i = 0; i < boundaries.size(); i++) {
-		const auto& npic_cpy_cells = boundaries[i].get_copy_boundary_cells(NPIC);
-		const auto& spm_cpy_cells = boundaries[i].get_copy_boundary_cells(SpM);
-		if (
-			not std::equal(
-				npic_cpy_cells.cbegin(),
-				npic_cpy_cells.cend(),
-				spm_cpy_cells.cbegin()
-			)
-		) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Number of particles in cell and species mass copy boundaries not identical for population "
-				+ std::to_string(i)
-			);
-		}
-
-		const auto& c2m_cpy_cells = boundaries[i].get_copy_boundary_cells(C2M);
-		if (
-			not std::equal(
-				npic_cpy_cells.cbegin(),
-				npic_cpy_cells.cend(),
-				c2m_cpy_cells.cbegin()
-			)
-		) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Number of particles in cell and charge to mass copy boundaries not identical for population "
-				+ std::to_string(i)
-			);
-		}
-
-		const auto& n_cpy_cells = boundaries[i].get_copy_boundary_cells(N);
-		if (
-			not std::equal(
-				npic_cpy_cells.cbegin(),
-				npic_cpy_cells.cend(),
-				n_cpy_cells.cbegin()
-			)
-		) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Number of particles in cell and number copy boundaries not identical for population "
-				+ std::to_string(i)
-			);
-		}
-
-		const auto& v_cpy_cells = boundaries[i].get_copy_boundary_cells(V);
-		if (
-			not std::equal(
-				npic_cpy_cells.cbegin(),
-				npic_cpy_cells.cend(),
-				v_cpy_cells.cbegin()
-			)
-		) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Number of particles in cell and velocity copy boundaries not identical for population "
-				+ std::to_string(i)
-			);
-		}
-
-		const auto& t_cpy_cells = boundaries[i].get_copy_boundary_cells(T);
-		if (
-			not std::equal(
-				npic_cpy_cells.cbegin(),
-				npic_cpy_cells.cend(),
-				t_cpy_cells.cbegin()
-			)
-		) {
-			throw std::invalid_argument(
-				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "Number of particles in cell and temperature copy boundaries not identical for population "
-				+ std::to_string(i)
-			);
-		}
 	}
 
 	// don't solve cells in which no variable is solved
@@ -829,6 +762,85 @@ template<
 
 
 /*
+Copies N random particles into cells[0] from cells[>0].
+
+N is the average number of particles in cells[>0].
+
+Returns number of copied particles.
+*/
+template<
+	class Particle_Position_T,
+	class Particle_ID_T,
+	class Grid,
+	class Particles_Getter
+> size_t copy_particles(
+	const std::vector<uint64_t>& cells,
+	unsigned long long int first_particle_id,
+	const unsigned long long int particle_id_increase,
+	std::mt19937_64& random_source,
+	Grid& grid,
+	const Particles_Getter Par
+) {
+	size_t total_number_of_particles = 0;
+	for (size_t i = 1; i < cells.size(); i++) {
+		auto* const source_data = grid[cells[i]];
+		if (source_data == nullptr) {
+			std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+			abort();
+		}
+		total_number_of_particles += Par(*source_data).size();
+	}
+
+	auto* const target_data = grid[cells[0]];
+	if (target_data == nullptr) {
+		std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+		abort();
+	}
+	Par(*target_data).clear();
+
+	// copy particles to random position in target cell
+	const auto
+		cell_min = grid.geometry.get_min(cells[0]),
+		cell_max = grid.geometry.get_max(cells[0]);
+	std::uniform_real_distribution<double>
+		pos_x_gen(cell_min[0], cell_max[0]),
+		pos_y_gen(cell_min[1], cell_max[1]),
+		pos_z_gen(cell_min[2], cell_max[2]);
+
+	size_t nr_copied_particles = 0;
+	for (size_t i = 1; i < cells.size(); i++) {
+		auto* const source_data = grid[cells[i]];
+		const size_t nr_particles = Par(*source_data).size();
+		if (nr_particles == 0) {
+			continue;
+		}
+
+		std::uniform_int_distribution<size_t> index_generator(0, nr_particles - 1);
+		const size_t nr_particles_to_copy = nr_particles * (double(nr_particles) / total_number_of_particles);
+
+		std::set<size_t> particles_to_copy;
+		while (particles_to_copy.size() < nr_particles_to_copy) {
+			particles_to_copy.emplace(index_generator(random_source));
+		}
+		for (const auto& index: particles_to_copy) {
+			auto particle = Par(*source_data)[index];
+			nr_copied_particles++;
+
+			particle[Particle_Position_T()][0] = pos_x_gen(random_source);
+			particle[Particle_Position_T()][1] = pos_y_gen(random_source);
+			particle[Particle_Position_T()][2] = pos_z_gen(random_source);
+			particle[Particle_ID_T()] = first_particle_id;
+			first_particle_id += particle_id_increase;
+
+			Par(*target_data).emplace_back(particle);
+		}
+	}
+
+	return nr_copied_particles;
+}
+
+
+/*
 Applies particle boundary logic.
 
 Copy boundaries copy N random particles from neighboring normal cells
@@ -848,7 +860,8 @@ template<
 	class Particle_Species_Mass_T,
 	class Sim_Geometries,
 	class Boundaries,
-	class Grid,
+	class Cell_Data,
+	class Geometry,
 	class Solver_Info_Getter,
 	class Particles_Getter,
 	class Boundary_Number_Density_Getter,
@@ -863,7 +876,7 @@ template<
 	const double simulation_time,
 	const size_t simulation_step,
 	const std::vector<uint64_t>& cells,
-	Grid& grid,
+	dccrg::Dccrg<Cell_Data, Geometry>& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
 	const double vacuum_permeability,
@@ -879,16 +892,233 @@ template<
 	const Boundary_Charge_To_Mass_Ratio_Getter Bdy_C2M,
 	const Boundary_Species_Mass_Getter Bdy_SpM
 ) {
+	constexpr pamhd::particle::Bdy_Number_Density N{};
+	constexpr pamhd::particle::Bdy_Velocity V{};
+	constexpr pamhd::particle::Bdy_Temperature T{};
+	constexpr pamhd::particle::Bdy_Nr_Particles_In_Cell Nr{};
+	constexpr pamhd::particle::Bdy_Species_Mass SpM{};
+	constexpr pamhd::particle::Bdy_Charge_Mass_Ratio C2M{};
+
 	size_t
 		current_id_start = first_particle_id,
 		nr_particles_created = 0;
 
-	std::set<uint64_t> copy_bdy_cells;
+	/*
+	Copy particles first, if copy and value boundaries
+	overlap in space for different variables adjust copied
+	particles to needed bulk value afterwards.
+	*/
+
+	// copy particles in every cell with at least one copy boundary variable
+	std::set<uint64_t>
+		cpy_bdy_cells, n_cells, v_cells, t_cells,
+		nr_cells, spm_cells, c2m_cells;
+	for (size_t bdy_i = 0; bdy_i < boundaries.size(); bdy_i++) {
+		// TODO: loop over N, V, T, ...
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(N)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			n_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(V)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			v_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(T)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			t_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(Nr)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			nr_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(SpM)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			spm_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(C2M)) {
+			if (item.size() < 2) {
+				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+				abort();
+			}
+			c2m_cells.insert(item[0]);
+			cpy_bdy_cells.insert(item[0]);
+		}
+	}
+
 	for (size_t bdy_i = 0; bdy_i < boundaries.size(); bdy_i++) {
 
-		// number density, set boundary data variable and replace particles later
-		// TODO?: adjust particle parameters in-place to keep particle ids
-		constexpr pamhd::particle::Bdy_Number_Density N{};
+		// copy particles into number density cells
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(N)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+
+		// velocity, unless copied in density
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(V)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+
+		// temperature
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(T)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+
+		// number of particles
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(Nr)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+
+		// particle species mass
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(SpM)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+
+		// particle charge mass ratio
+		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(C2M)) {
+			if (cpy_bdy_cells.count(item[0]) == 0) {
+				continue;
+			}
+			cpy_bdy_cells.erase(item[0]);
+
+			current_id_start
+				+= particle_id_increase
+				* copy_particles<
+					Particle_Position_T,
+					Particle_ID_T
+				>(
+					item,
+					current_id_start,
+					particle_id_increase,
+					random_source,
+					grid,
+					Par
+				);
+		}
+	}
+
+	if (cpy_bdy_cells.size() > 0) {
+		std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
+		abort();
+	}
+
+	cpy_bdy_cells.insert(n_cells.cbegin(), n_cells.cend());
+	cpy_bdy_cells.insert(v_cells.cbegin(), v_cells.cend());
+	cpy_bdy_cells.insert(t_cells.cbegin(), t_cells.cend());
+	cpy_bdy_cells.insert(nr_cells.cbegin(), nr_cells.cend());
+	cpy_bdy_cells.insert(spm_cells.cbegin(), spm_cells.cend());
+	cpy_bdy_cells.insert(c2m_cells.cbegin(), c2m_cells.cend());
+
+	/*
+	Value boundaries
+	*/
+
+	for (size_t bdy_i = 0; bdy_i < boundaries.size(); bdy_i++) {
+
+		// number density
 		std::set<uint64_t> value_bdy_cells;
 		for (
 			size_t i = 0;
@@ -922,92 +1152,30 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(N)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			// copy particles
-			size_t total_number_of_particles = 0;
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
-				}
-				total_number_of_particles += Par(*source_data).size();
-			}
+				/*
+				If not a copy bdy for density, adjust copied particles
+				to match number density given by value boundary.
+				*/
+				if (n_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					const auto bulk_nr_particles = get_bulk_nr_particles<
+						Particle_Mass_T,
+						Particle_Species_Mass_T
+					>(Par(*cell_data));
 
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
+					const auto length = grid.geometry.get_length(cell);
+					const double
+						volume = length[0] * length[1] * length[2],
+						mass_factor = Bdy_N(*cell_data) / (bulk_nr_particles / volume);
 
-			Par(*target_data).clear(); // only do when bdy_i == 0?
-
-			// copy particles to random position in target cell
-			const auto
-				cell_min = grid.geometry.get_min(item[0]),
-				cell_max = grid.geometry.get_max(item[0]);
-			std::uniform_real_distribution<double>
-				pos_x_gen(cell_min[0], cell_max[0]),
-				pos_y_gen(cell_min[1], cell_max[1]),
-				pos_z_gen(cell_min[2], cell_max[2]);
-
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				const size_t nr_particles = Par(*source_data).size();
-				if (nr_particles == 0) {
-					continue;
-				}
-
-				std::uniform_int_distribution<size_t> index_generator(0, nr_particles - 1);
-				const size_t nr_particles_to_copy = nr_particles * (double(nr_particles) / total_number_of_particles);
-
-				std::set<size_t> particles_to_copy;
-				while (particles_to_copy.size() < nr_particles_to_copy) {
-					particles_to_copy.emplace(index_generator(random_source));
-				}
-				for (const auto& index: particles_to_copy) {
-					auto particle = Par(*source_data)[index];
-
-					particle[Particle_Position_T()][0] = pos_x_gen(random_source);
-					particle[Particle_Position_T()][1] = pos_y_gen(random_source);
-					particle[Particle_Position_T()][2] = pos_z_gen(random_source);
-					particle[Particle_ID_T()] = current_id_start;
-					current_id_start += particle_id_increase;
-
-					Par(*target_data).emplace_back(particle);
+					for (auto& particle: Par(*cell_data)) {
+						particle[Particle_Mass_T()] *= mass_factor;
+					}
 				}
 			}
-
-			// copy bulk data, assume identical copy boundary cells for all variables
-			pamhd::particle::Bdy_Number_Density::data_type source_value{0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
-				}
-
-				Bdy_N(*source_data) = get_bulk_nr_particles<Particle_Mass_T, Particle_Species_Mass_T>(Par(*source_data));
-
-				const auto source_length = grid.geometry.get_length(item[i]);
-				const auto volume = source_length[0] * source_length[1] * source_length[2];
-				source_value += Bdy_N(*source_data) / volume;
-			}
-			source_value /= item.size() - 1; // TODO probably bad with AMR
-
-			Bdy_N(*target_data) = source_value;
 		}
 
 		// velocity
-		constexpr pamhd::particle::Bdy_Velocity V{};
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(V);
@@ -1040,41 +1208,23 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(V)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			// particles copied in number density
+				if (v_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					const auto bulk_velocity = get_bulk_velocity<
+						Particle_Mass_T,
+						Particle_Velocity_T,
+						Particle_Species_Mass_T
+					>(Par(*cell_data));
 
-			pamhd::particle::Bdy_Velocity::data_type source_value{0, 0, 0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
+					const auto bulk_v_offset = Bdy_V(*cell_data) - bulk_velocity;
+					for (auto& particle: Par(*cell_data)) {
+						particle[Particle_Velocity_T()] += bulk_v_offset;
+					}
 				}
-
-				Bdy_V(*source_data) = get_bulk_velocity<Particle_Mass_T, Particle_Velocity_T, Particle_Species_Mass_T>(Par(*source_data));
-				source_value += Bdy_V(*source_data);
 			}
-			source_value /= item.size() - 1;
-
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Bdy_V(*target_data) = source_value;
 		}
 
 		// temperature
-		constexpr pamhd::particle::Bdy_Temperature T{};
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(T);
@@ -1107,39 +1257,32 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(T)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			pamhd::particle::Bdy_Temperature::data_type source_value{0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
+				if (t_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					const auto bulk_velocity = get_bulk_velocity<
+						Particle_Mass_T,
+						Particle_Velocity_T,
+						Particle_Species_Mass_T
+					>(Par(*cell_data));
+					const auto temperature = get_temperature<
+						Particle_Mass_T,
+						Particle_Velocity_T,
+						Particle_Species_Mass_T
+					>(Par(*cell_data), particle_temp_nrj_ratio);
+
+					const auto temp_factor = std::sqrt(Bdy_T(*cell_data) / temperature);
+					for (auto& particle: Par(*cell_data)) {
+						for (size_t dim = 0; dim < 3; dim++) {
+							particle[Particle_Velocity_T()][dim]
+								= temp_factor * particle[Particle_Velocity_T()][dim]
+								+ bulk_velocity[dim] * (1 - temp_factor);
+						}
+					}
 				}
-
-				Bdy_T(*source_data) = get_temperature<Particle_Mass_T, Particle_Velocity_T, Particle_Species_Mass_T>(Par(*source_data), particle_temp_nrj_ratio);
-				source_value += Bdy_T(*source_data);
 			}
-			source_value /= item.size() - 1;
-
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Bdy_T(*target_data) = source_value;
 		}
 
 		// number of particles
-		constexpr pamhd::particle::Bdy_Nr_Particles_In_Cell Nr{};
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(Nr);
@@ -1172,39 +1315,31 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(Nr)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			pamhd::particle::Bdy_Nr_Particles_In_Cell::data_type source_value{0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
+				if (nr_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					const auto
+						cell_min = grid.geometry.get_min(cell),
+						cell_max = grid.geometry.get_max(cell);
+					split(
+						Par(*cell_data),
+						Bdy_NPIC(*cell_data),
+						cell,
+						cell_data,
+						cell_min,
+						cell_max,
+						random_source,
+						[](Particle& particle)->typename Particle_Position_T::data_type&{
+							return particle[Particle_Position_T()];
+						},
+						[](Particle& particle)->typename Particle_Mass_T::data_type&{
+							return particle[Particle_Mass_T()];
+						}
+					);
 				}
-
-				Bdy_NPIC(*source_data) = Par(*source_data).size();
-				source_value += Bdy_NPIC(*source_data);
 			}
-			source_value /= item.size() - 1;
-
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Bdy_NPIC(*target_data) = source_value;
 		}
 
 		// particle species mass
-		constexpr pamhd::particle::Bdy_Species_Mass SpM{};
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(SpM);
@@ -1237,43 +1372,18 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(SpM)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			pamhd::particle::Bdy_Species_Mass::data_type source_value{0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
+				if (spm_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					for (auto& particle: Par(*cell_data)) {
+						const auto factor = Bdy_SpM(*cell_data) / particle[Particle_Species_Mass_T()];
+						particle[Particle_Species_Mass_T()] *= factor;
+						particle[Particle_Mass_T()] *= factor;
+					}
 				}
-
-				Bdy_SpM(*source_data) = 0;
-				for (const auto& particle: Par(*source_data)) {
-					Bdy_SpM(*source_data) += particle[Particle_Species_Mass_T()];
-				}
-				Bdy_SpM(*source_data) /= Par(*source_data).size();
-				source_value += Bdy_SpM(*source_data);
 			}
-			source_value /= item.size() - 1;
-
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Bdy_SpM(*target_data) = source_value;
 		}
 
 		// particle charge mass ratio
-		constexpr pamhd::particle::Bdy_Charge_Mass_Ratio C2M{};
 		for (
 			size_t i = 0;
 			i < boundaries[bdy_i].get_number_of_value_boundaries(C2M);
@@ -1306,44 +1416,20 @@ template<
 					c[0], c[1], c[2],
 					r, lat, lon
 				);
-			}
-		}
-		for (const auto& item: boundaries[bdy_i].get_copy_boundary_cells(C2M)) {
-			if (item.size() < 2) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-			copy_bdy_cells.insert(item[0]);
 
-			pamhd::particle::Charge_Mass_Ratio::data_type source_value{0};
-			for (size_t i = 1; i < item.size(); i++) {
-				auto* const source_data = grid[item[i]];
-				if (source_data == nullptr) {
-					std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-					abort();
+				if (c2m_cells.count(cell) == 0 and cpy_bdy_cells.count(cell) > 0) {
+					for (auto& particle: Par(*cell_data)) {
+						particle[Particle_Charge_Mass_Ratio_T()]
+							*= Bdy_C2M(*cell_data)
+							/ particle[Particle_Charge_Mass_Ratio_T()];
+					}
 				}
-
-				Bdy_C2M(*source_data) = 0;
-				for (const auto& particle: Par(*source_data)) {
-					Bdy_C2M(*source_data) += particle[Particle_Charge_Mass_Ratio_T()];
-				}
-				Bdy_C2M(*source_data) /= Par(*source_data).size();
-				source_value += Bdy_C2M(*source_data);
 			}
-			source_value /= item.size() - 1;
-
-			auto* const target_data = grid[item[0]];
-			if (target_data == nullptr) {
-				std::cerr <<  __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			Bdy_C2M(*target_data) = source_value;
 		}
 
 		for (const auto& cell: value_bdy_cells) {
-			// copy boundary takes precedence
-			if (copy_bdy_cells.count(cell) > 0) {
+			// don't overwrite adjusted particles in copy boundaries
+			if (cpy_bdy_cells.count(cell) > 0) {
 				continue;
 			}
 

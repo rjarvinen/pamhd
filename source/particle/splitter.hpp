@@ -49,6 +49,117 @@ namespace particle {
 
 
 /*
+Splits given particle and return one of the new ones.
+
+Given particle is modified in-place:
+  -moved to random position within a cube fitting within
+   given cell volume centered on given particle
+  -particle mass is halved
+Returned copy is on opposite side of original position
+with respect to given particle's new position.
+*/
+template<
+	class Particle,
+	class Vector,
+	class Particle_Position_Getter,
+	class Particle_Mass_Getter
+> Particle split(
+	Particle& particle,
+	const Vector& cell_min,
+	const Vector& cell_max,
+	std::mt19937_64& random_source,
+	const Particle_Position_Getter Part_Pos,
+	const Particle_Mass_Getter Part_Mas
+) {
+	using std::max;
+	using std::min;
+
+	const auto old_pos = Part_Pos(particle);
+
+	// particle must be created within this distance in every
+	// coord to stay within cell while preserving center of mass
+	const auto max_distance =
+		min(min(cell_max[0] - old_pos[0], old_pos[0] - cell_min[0]), // x
+		min(min(cell_max[1] - old_pos[1], old_pos[1] - cell_min[1]), // y
+		    min(cell_max[2] - old_pos[2], old_pos[2] - cell_min[2]))); // z
+
+	std::uniform_real_distribution<double> offset_gen(-max_distance, max_distance);
+	const auto
+		offset_x = offset_gen(random_source),
+		offset_y = offset_gen(random_source),
+		offset_z = offset_gen(random_source);
+
+	Part_Mas(particle) /= 2;
+	auto new_particle = particle;
+
+	Part_Pos(particle) = {
+		old_pos[0] + offset_x,
+		old_pos[1] + offset_y,
+		old_pos[2] + offset_z
+	};
+	Part_Pos(new_particle) = {
+		old_pos[0] - offset_x,
+		old_pos[1] - offset_y,
+		old_pos[2] - offset_z
+	};
+
+	return new_particle;
+}
+
+
+template<
+	class Particle,
+	class Cell_Data,
+	class Vector,
+	class Particle_Position_Getter,
+	class Particle_Mass_Getter
+> void split(
+	std::vector<Particle>& particles,
+	const size_t min_particles,
+	const uint64_t cell_id,
+	const Cell_Data* cell_data,
+	const Vector& cell_min,
+	const Vector& cell_max,
+	std::mt19937_64& random_source,
+	const Particle_Position_Getter Part_Pos,
+	const Particle_Mass_Getter Part_Mas
+) {
+	using std::max;
+	using std::min;
+
+	const size_t original_nr_particles = particles.size();
+	if (original_nr_particles == 0) {
+		std::cerr << __FILE__ "(" << __LINE__ << "): "
+			<< "No particles in cell " << cell_id
+			<< " starting at " << cell_min
+			<< std::endl;
+		abort();
+	}
+
+	if (original_nr_particles >= min_particles) {
+		return;
+	}
+
+	// don't allocate in below loop
+	particles.reserve(min_particles);
+
+	std::uniform_int_distribution<size_t> index_generator(0, original_nr_particles - 1);
+	for (size_t i = 0; i < min_particles - original_nr_particles; i++) {
+		particles.push_back(
+			split(
+				particles[index_generator(random_source)],
+				cell_min,
+				cell_max,
+				random_source,
+				Part_Pos,
+				Part_Mas
+			)
+		);
+	}
+}
+
+
+/*
 Splits random particles in normal cells until given minimum exist.
 
 Every split preserves center of mass, other parameters also unchanged.
@@ -68,64 +179,26 @@ template<
 	const Particle_Mass_Getter Part_Mas,
 	const Solver_Info_Getter Sol_Info
 ) {
-	using std::min;
-
 	for (const auto& cell: grid.cells) {
 		if (Sol_Info(*cell.data) != pamhd::particle::Solver_Info::normal) {
 			continue;
 		}
 
-		const size_t original_nr_particles = Particles(*cell.data).size();
-		if (original_nr_particles == 0) {
-			std::cerr << __FILE__ "(" << __LINE__ << "): "
-				<< "No particles in cell " << cell.id
-				<< " at " << grid.geometry.get_center(cell.id)
-				<< std::endl;
-			abort();
-		}
-
-		if (original_nr_particles >= min_particles) {
-			continue;
-		}
-
-		// don't allocate in below loop and also prevent reference invalidation
-		Particles(*cell.data).reserve(min_particles);
-
 		const auto
 			cell_min = grid.geometry.get_min(cell.id),
 			cell_max = grid.geometry.get_max(cell.id);
 
-		std::uniform_int_distribution<size_t> index_generator(0, original_nr_particles - 1);
-		for (size_t i = 0; i < min_particles - original_nr_particles; i++) {
-			auto& particle = Particles(*cell.data)[index_generator(random_source)];
-			const auto old_pos = Part_Pos(particle);
-
-			// particle must be created within this distance in every
-			// coord to stay within cell while preserving center of mass
-			const auto max_distance =
-				min(min(cell_max[0] - old_pos[0], old_pos[0] - cell_min[0]), // x
-				min(min(cell_max[1] - old_pos[1], old_pos[1] - cell_min[1]), // y
-				    min(cell_max[2] - old_pos[2], old_pos[2] - cell_min[2]))); // z
-
-			std::uniform_real_distribution<double> offset_gen(-max_distance, max_distance);
-			const auto
-				offset_x = offset_gen(random_source),
-				offset_y = offset_gen(random_source),
-				offset_z = offset_gen(random_source);
-
-			Part_Mas(particle) /= 2;
-			Part_Pos(particle) = {
-				old_pos[0] + offset_x,
-				old_pos[1] + offset_y,
-				old_pos[2] + offset_z
-			};
-			Particles(*cell.data).push_back(particle);
-			Part_Pos(particle) = {
-				old_pos[0] - offset_x,
-				old_pos[1] - offset_y,
-				old_pos[2] - offset_z
-			};
-		}
+		split(
+			Particles(*cell.data),
+			min_particles,
+			cell.id,
+			cell.data,
+			cell_min,
+			cell_max,
+			random_source,
+			Part_Pos,
+			Part_Mas
+		);
 	}
 }
 
