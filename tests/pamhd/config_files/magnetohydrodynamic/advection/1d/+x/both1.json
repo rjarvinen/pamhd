@@ -4,7 +4,7 @@
 	"time-start": 0,
 	"time-length": 1,
 	"minimum-pressure": 0,
-	"mimimum-particles": 0,
+	"minimum-particles": 0,
 	"resistivity": "0",
 	"solver-particle": "euler",
 	"solver-mhd": "hll-athena",
