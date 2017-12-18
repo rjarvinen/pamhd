@@ -39,6 +39,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vector"
 
 #include "boost/program_options.hpp"
+#include "mpi.h"
 
 
 using namespace std;
@@ -276,6 +277,17 @@ void extract(
 
 int main(int argc, char* argv[])
 {
+	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
+		cerr << "Coudln't initialize MPI." << endl;
+		abort();
+	}
+
+	MPI_Comm comm = MPI_COMM_WORLD;
+
+	int rank = 0, comm_size = 0;
+	MPI_Comm_rank(comm, &rank);
+	MPI_Comm_size(comm, &comm_size);
+
 	// program options
 	vector<string> input_files;
 	double
@@ -344,6 +356,10 @@ int main(int argc, char* argv[])
 	}
 
 	for (size_t i = 1; i < input_files.size(); i += 2) {
+		if (int((i-1)/2) % comm_size != rank) {
+			continue;
+		}
+
 		extract(
 			input_files[i - 1],
 			input_files[i],
@@ -351,6 +367,8 @@ int main(int argc, char* argv[])
 			{max_x, max_y, max_z}
 		);
 	}
+
+	MPI_Finalize();
 
 	return EXIT_SUCCESS;
 }

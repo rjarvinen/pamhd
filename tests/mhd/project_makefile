@@ -138,7 +138,7 @@ tests/mhd/mhd_extract.exe: \
   tests/mhd/project_makefile \
   $(ENVIRONMENT_MAKEFILE) \
   Makefile
-	@printf "CXX $<\n" && $(CXX) $(TEST_MHD_COMPILE_COMMOM)
+	@printf "MPICXX $<\n" && $(MPICXX) $(TEST_MHD_COMPILE_COMMOM)
 
 tests/mhd/test.exe: \
   tests/mhd/test.cpp \
