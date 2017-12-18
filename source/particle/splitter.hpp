@@ -128,7 +128,7 @@ template<
 	using std::min;
 
 	const size_t original_nr_particles = particles.size();
-	if (original_nr_particles == 0) {
+	if (min_particles > 0 and original_nr_particles == 0) {
 		std::cerr << __FILE__ "(" << __LINE__ << "): "
 			<< "No particles in cell " << cell_id
 			<< " starting at " << cell_min

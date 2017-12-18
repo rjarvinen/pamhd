@@ -54,6 +54,7 @@ TEST_PAMHD_COMMON_DEPS = \
   source/particle/initialize.hpp \
   source/particle/save.hpp \
   source/particle/solve_dccrg.hpp \
+  source/particle/splitter.hpp \
   source/particle/variables.hpp \
   source/pamhd/initialize.hpp
 
