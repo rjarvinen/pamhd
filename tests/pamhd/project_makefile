@@ -43,6 +43,7 @@ TEST_PAMHD_COMMON_DEPS = \
   source/boundaries/common.hpp \
   source/mhd/common.hpp \
   source/mhd/N_hll_athena.hpp \
+  source/mhd/N_rusanov.hpp \
   source/mhd/initialize.hpp \
   source/mhd/save.hpp \
   source/mhd/N_solve.hpp \
