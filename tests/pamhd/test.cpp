@@ -148,12 +148,6 @@ const auto Nr_Ext
 		return cell_data[pamhd::particle::Nr_Particles_External()];
 	};
 
-// solver info variable for boundary logic
-const auto Sol_Info_P
-	= [](Cell& cell_data)->typename pamhd::particle::Solver_Info::data_type&{
-		return cell_data[pamhd::particle::Solver_Info()];
-	};
-
 // references to initial condition & boundary data of cell
 const auto Bdy_N
 	= [](Cell& cell_data)->typename pamhd::particle::Bdy_Number_Density::data_type&{
@@ -863,7 +857,7 @@ int main(int argc, char* argv[])
 			Bdy_Nr_Par,
 			Bdy_SpM,
 			Bdy_C2M,
-			Sol_Info_P
+			Sol_Info
 		);
 		next_particle_id += nr_particles_created * grid.get_comm_size();
 	}
@@ -1018,16 +1012,19 @@ int main(int argc, char* argv[])
 	/*
 	Classify cells into normal, boundary and dont_solve
 	*/
+	pamhd::mhd::set_solver_info<pamhd::mhd::Solver_Info>(
+		grid, boundaries_fluid, geometries, Sol_Info
+	);
 	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
-		grid, boundaries_particles, geometries, Sol_Info_P
+		grid, boundaries_particles, geometries, Sol_Info
 	);
 
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
 	for (const auto& cell: grid.cells) {
-		if ((Sol_Info_P(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
 			skip_cells.push_back(cell.id);
-		} else if (Sol_Info_P(*cell.data) > 0) {
+		} else if (Sol_Info(*cell.data) > 0) {
 			bdy_cells.push_back(cell.id);
 		} else {
 			solve_cells.push_back(cell.id);
@@ -1312,7 +1309,7 @@ int main(int argc, char* argv[])
 				std::make_pair(Mom1_f, Mom2_f),
 				std::make_pair(Nrj1_f, Nrj2_f),
 				Mag_f,
-				Sol_Info_P
+				Sol_Info
 			);
 		} catch (const std::exception& e) {
 			std::cerr << __FILE__ "(" << __LINE__ << ": "
@@ -1386,7 +1383,7 @@ int main(int argc, char* argv[])
 				std::make_pair(Mom1_f, Mom2_f),
 				std::make_pair(Nrj1_f, Nrj2_f),
 				Mag_f,
-				Sol_Info_P
+				Sol_Info
 			);
 		} catch (const std::exception& e) {
 			std::cerr << __FILE__ "(" << __LINE__ << ": "
@@ -1507,7 +1504,7 @@ int main(int argc, char* argv[])
 				std::make_pair(Mom1_f, Mom2_f),
 				std::make_pair(Nrj1_f, Nrj2_f),
 				Mag_f,
-				Sol_Info_P
+				Sol_Info
 			);
 		} catch (const std::exception& e) {
 			std::cerr << __FILE__ "(" << __LINE__ << ": "
