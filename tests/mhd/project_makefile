@@ -6,6 +6,7 @@ TESTS_MHD_EXECUTABLES = \
   tests/mhd/mhd2vtk.exe \
   tests/mhd/2mhd2gnuplot.exe \
   tests/mhd/mhd_extract.exe \
+  tests/mhd/2mhd_extract.exe \
   tests/mhd/test.exe \
   tests/mhd/two_test.exe
 
@@ -135,6 +136,13 @@ tests/mhd/2mhd2gnuplot.exe: \
 
 tests/mhd/mhd_extract.exe: \
   tests/mhd/mhd_extract.cpp \
+  tests/mhd/project_makefile \
+  $(ENVIRONMENT_MAKEFILE) \
+  Makefile
+	@printf "MPICXX $<\n" && $(MPICXX) $(TEST_MHD_COMPILE_COMMOM)
+
+tests/mhd/2mhd_extract.exe: \
+  tests/mhd/2mhd_extract.cpp \
   tests/mhd/project_makefile \
   $(ENVIRONMENT_MAKEFILE) \
   Makefile
