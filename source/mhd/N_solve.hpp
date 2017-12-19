@@ -463,6 +463,9 @@ template <
 	class Solver_Info_Getter
 > void apply_fluxes_N(
 	dccrg::Dccrg<Cell, Geometry>& grid,
+	const double min_pressure,
+	const double adiabatic_index,
+	const double vacuum_permeability,
 	const Mass_Density_Getters Mas,
 	const Momentum_Density_Getters Mom,
 	const Total_Energy_Density_Getters Nrj,
@@ -474,6 +477,23 @@ template <
 	const Solver_Info_Getter Sol_Info
 ) {
 	for (auto& cell: grid.cells) {
+		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
+			Mas_f.first(*cell.data)     =
+			Mas_f.second(*cell.data)    =
+			Mom_f.first(*cell.data)[0]  =
+			Mom_f.first(*cell.data)[1]  =
+			Mom_f.first(*cell.data)[2]  =
+			Mom_f.second(*cell.data)[0] =
+			Mom_f.second(*cell.data)[1] =
+			Mom_f.second(*cell.data)[2] =
+			Nrj_f.first(*cell.data)     =
+			Nrj_f.second(*cell.data)    =
+			Mag_f(*cell.data)[0]        =
+			Mag_f(*cell.data)[1]        =
+			Mag_f(*cell.data)[2]        = 0;
+			continue;
+		}
+
 		const auto length = grid.geometry.get_length(cell.id);
 		const double inverse_volume = 1.0 / (length[0] * length[1] * length[2]);
 
@@ -520,6 +540,27 @@ template <
 		Mag_f(*cell.data)[0] =
 		Mag_f(*cell.data)[1] =
 		Mag_f(*cell.data)[2] = 0;
+
+
+		// enforce minimum pressure in fluid part
+		const auto pressure = get_pressure(
+			Mas.first(*cell.data),
+			Mom.first(*cell.data),
+			Nrj.first(*cell.data),
+			Mag(*cell.data),
+			adiabatic_index,
+			vacuum_permeability
+		);
+		if (pressure < min_pressure) {
+			Nrj.first(*cell.data) = get_total_energy_density(
+				Mas.first(*cell.data),
+				get_velocity(Mom.first(*cell.data), Mas.first(*cell.data)),
+				min_pressure,
+				Mag(*cell.data),
+				adiabatic_index,
+				vacuum_permeability
+			);
+		}
 	}
 }
 

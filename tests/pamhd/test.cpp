@@ -1496,6 +1496,9 @@ int main(int argc, char* argv[])
 		try {
 			pamhd::mhd::apply_fluxes_N(
 				grid,
+				options_mhd.min_pressure,
+				options_sim.adiabatic_index,
+				options_sim.vacuum_permeability,
 				std::make_pair(Mas1, Mas2),
 				std::make_pair(Mom1, Mom2),
 				std::make_pair(Nrj1, Nrj2),
