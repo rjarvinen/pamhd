@@ -51,6 +51,7 @@ TEST_PAMHD_COMMON_DEPS = \
   source/particle/accumulate.hpp \
   source/particle/accumulate_dccrg.hpp \
   source/particle/accumulation_variables.hpp \
+  source/particle/boundaries.hpp \
   source/particle/common.hpp \
   source/particle/initialize.hpp \
   source/particle/save.hpp \
