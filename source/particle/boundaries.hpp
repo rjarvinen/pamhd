@@ -78,13 +78,10 @@ template<
 			Sol_Info(*cell.data) = 0;
 		}
 
-		Cell_Data::set_transfer_all(true, pamhd::particle::Solver_Info());
 		grid.update_copies_of_remote_neighbors();
-		Cell_Data::set_transfer_all(false, pamhd::particle::Solver_Info());
 		return;
 	}
 
-	Cell_Data::set_transfer_all(true, pamhd::particle::Solver_Info());
 	boundaries[0].classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
@@ -311,7 +308,6 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell_Data::set_transfer_all(false, pamhd::particle::Solver_Info());
 }
 
 
@@ -329,7 +325,6 @@ template<
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter Sol_Info
 ) {
-	Cell_Data::set_transfer_all(true, pamhd::particle::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
@@ -364,7 +359,6 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell_Data::set_transfer_all(false, pamhd::particle::Solver_Info());
 }
 
 

@@ -177,10 +177,11 @@ template<
 	const Particles_Getter Particles,
 	const Particle_Position_Getter Part_Pos,
 	const Particle_Mass_Getter Part_Mas,
-	const Solver_Info_Getter Sol_Info
+	const Solver_Info_Getter Sol_Info,
+	const unsigned int normal_cell
 ) {
 	for (const auto& cell: grid.cells) {
-		if (Sol_Info(*cell.data) != pamhd::particle::Solver_Info::normal) {
+		if (Sol_Info(*cell.data) != normal_cell) {
 			continue;
 		}
 

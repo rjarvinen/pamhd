@@ -514,9 +514,11 @@ int main(int argc, char* argv[])
 	Classify cells into normal, boundary and dont_solve
 	*/
 
+	Cell::set_transfer_all(true, pamhd::mhd::Solver_Info());
 	pamhd::mhd::set_solver_info<pamhd::mhd::Solver_Info>(
 		grid, boundaries, geometries, Sol_Info
 	);
+	Cell::set_transfer_all(false, pamhd::mhd::Solver_Info());
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
 	for (const auto& cell: grid.cells) {

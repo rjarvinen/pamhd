@@ -1012,12 +1012,14 @@ int main(int argc, char* argv[])
 	/*
 	Classify cells into normal, boundary and dont_solve
 	*/
+	Cell::set_transfer_all(true, pamhd::particle::Solver_Info());
 	pamhd::mhd::set_solver_info<pamhd::mhd::Solver_Info>(
 		grid, boundaries_fluid, geometries, Sol_Info
 	);
 	pamhd::particle::set_solver_info<pamhd::particle::Solver_Info>(
 		grid, boundaries_particles, geometries, Sol_Info
 	);
+	Cell::set_transfer_all(false, pamhd::particle::Solver_Info());
 
 	// make lists from above for divergence removal functions
 	std::vector<uint64_t> solve_cells, bdy_cells, skip_cells;
@@ -1064,7 +1066,8 @@ int main(int argc, char* argv[])
 			Part_Int,
 			Part_Pos,
 			Part_Mas,
-			Sol_Info
+			Sol_Info,
+			pamhd::particle::Solver_Info::normal
 		);
 
 		try {
@@ -1768,7 +1771,6 @@ int main(int argc, char* argv[])
 					/ (Mas1(*cell_data) + Mas2(*cell_data));
 				Nrj1(*cell_data) += mass_frac * 0.5 * Mag(*cell_data).squaredNorm() / options_sim.vacuum_permeability;
 			}*/
-
 
 		/*
 		Save simulation to disk

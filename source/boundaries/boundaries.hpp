@@ -198,6 +198,12 @@ public:
 					break;
 				}
 
+				// cell itself doesn't count
+				if (cell_id == neighbor_id) {
+					i++;
+					continue;
+				}
+
 				auto* const neighbor_data = get<1>(cell_data_pointers[i]);
 				if (Cell_Type(*neighbor_data) == normal_cell) {
 					has_normal_neighbor = true;

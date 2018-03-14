@@ -68,7 +68,6 @@ template<
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
 ) {
-	Cell::set_transfer_all(true, pamhd::mhd::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
@@ -317,7 +316,6 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::mhd::Solver_Info());
 }
 
 

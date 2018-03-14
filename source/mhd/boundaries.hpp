@@ -67,7 +67,6 @@ template<
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
 ) {
-	Cell::set_transfer_all(true, pamhd::mhd::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
@@ -108,12 +107,13 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::mhd::Solver_Info());
 }
 
 
 /*!
 Prepares boundary information needed for MHD solver about each simulation cell.
+
+MPI transfer of Sol_Info variable must be switched on before calling this.
 */
 template<
 	class Solver_Info,
@@ -128,7 +128,6 @@ template<
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
 ) {
-	Cell::set_transfer_all(true, pamhd::mhd::Solver_Info());
 	boundaries.classify(grid, geometries, Sol_Info);
 
 	for (const auto& cell: grid.cells) {
@@ -275,7 +274,6 @@ template<
 	}
 
 	grid.update_copies_of_remote_neighbors();
-	Cell::set_transfer_all(false, pamhd::mhd::Solver_Info());
 }
 
 
