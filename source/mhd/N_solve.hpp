@@ -543,23 +543,25 @@ template <
 
 
 		// enforce minimum pressure in fluid part
-		const auto pressure = get_pressure(
-			Mas.first(*cell.data),
-			Mom.first(*cell.data),
-			Nrj.first(*cell.data),
-			Mag(*cell.data),
-			adiabatic_index,
-			vacuum_permeability
-		);
-		if (pressure < min_pressure) {
-			Nrj.first(*cell.data) = get_total_energy_density(
+		if (Mas.first(*cell.data) > 0) {
+			const auto pressure = get_pressure(
 				Mas.first(*cell.data),
-				get_velocity(Mom.first(*cell.data), Mas.first(*cell.data)),
-				min_pressure,
+				Mom.first(*cell.data),
+				Nrj.first(*cell.data),
 				Mag(*cell.data),
 				adiabatic_index,
 				vacuum_permeability
 			);
+			if (pressure < min_pressure) {
+				Nrj.first(*cell.data) = get_total_energy_density(
+					Mas.first(*cell.data),
+					get_velocity(Mom.first(*cell.data), Mas.first(*cell.data)),
+					min_pressure,
+					Mag(*cell.data),
+					adiabatic_index,
+					vacuum_permeability
+				);
+			}
 		}
 	}
 }
