@@ -102,18 +102,15 @@ template<class Vector> std::pair<double, double> get_gyro_info(
 
 
 /*!
-Returns minimum and maximum allowed time step for a particle.
+Returns maximum allowed time steps for a particle.
 
-Maximum time step is a minimum value from:
-	- flight time of particle through a cell
-	- given fraction of particle's gyro period
-
-Minimum time step is given fraction of maximum time step.
+First value is minimum of flight time of particle through cell
+and particle's acceleration due to electric field,
+second value is given fraction of gyro period.
 
 Assumes all simulation cells are cubes of given length.
 */
-template<class Vector> std::pair<double, double> get_minmax_step(
-	const double max_step_fraction,
+template<class Vector> std::pair<double, double> get_step_size(
 	const double gyro_period_fraction,
 	const double cell_length,
 	const double charge_to_mass_ratio,
@@ -122,18 +119,13 @@ template<class Vector> std::pair<double, double> get_minmax_step(
 	const Vector& magnetic_field
 ) {
 	using std::isnan;
-	using std::make_pair;
 	using std::min;
 	using std::sqrt;
 
-	const auto gyro_info
-		= get_gyro_info(
-			charge_to_mass_ratio,
-			velocity,
-			magnetic_field
-		);
-
-	auto max_step = std::numeric_limits<double>::max();
+	std::pair<double, double> ret_val{
+		std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::max()
+	};
 
 	const auto displacement // max allowed, due to electric field
 		= [&](){
@@ -149,20 +141,26 @@ template<class Vector> std::pair<double, double> get_minmax_step(
 			}
 		}();
 	if (not isnan(displacement)) {
-		max_step = min(max_step, displacement);
+		ret_val.first = min(ret_val.first, displacement);
 	}
 
 	const auto travel_time = cell_length / velocity.norm();
 	if (not isnan(travel_time)) {
-		max_step = min(max_step, travel_time);
+		ret_val.first = min(ret_val.first, travel_time);
 	}
 
+	const auto gyro_info
+		= get_gyro_info(
+			charge_to_mass_ratio,
+			velocity,
+			magnetic_field
+		);
 	const auto gyro_time = gyro_period_fraction / gyro_info.second;
 	if (not isnan(gyro_time)) {
-		max_step = min(max_step, gyro_time);
+		ret_val.second = min(ret_val.second, gyro_time);
 	}
 
-	return make_pair(max_step_fraction * max_step, max_step);
+	return ret_val;
 }
 
 

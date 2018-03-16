@@ -173,6 +173,7 @@ template<
 	class Solver_Info_Getter
 > double solve(
 	const double dt,
+	const bool ignore_gyroperiod,
 	const std::vector<uint64_t>& cell_ids,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
 	const Background_Magnetic_Field& bg_B,
@@ -194,6 +195,8 @@ template<
 	namespace odeint = boost::numeric::odeint;
 	using std::isnan;
 	using std::is_same;
+	using std::max;
+	using std::min;
 
 	static_assert(
 		is_same<Stepper, odeint::euler<state_t>>::value
@@ -307,20 +310,22 @@ template<
 			auto particle = Part_Int(*cell_data)[i]; // reference faster?
 
 			// TODO check accurately only for most restrictive particle(s) in each cell?
-			max_time_step = std::min(
-				max_time_step,
-				get_minmax_step(
-					1.0,
+			const auto step_size
+				= get_step_size(
 					1.0 / 32.0,
 					// only allow particles to propagate through half a
 					// cell in order to not break field interpolation
-					std::min(cell_length[0], std::min(cell_length[1], cell_length[2])) / 2.0,
+					min(cell_length[0], min(cell_length[1], cell_length[2])) / 2.0,
 					Part_C2M(particle),
 					Part_Vel(particle),
 					E_centered,
 					B_centered
-				).second
-			);
+				);
+
+			max_time_step = min(max_time_step, step_size.first);
+			if (not ignore_gyroperiod) {
+				max_time_step = min(max_time_step, step_size.second);
+			}
 
 			const Particle_Propagator propagator(
 				Part_C2M(particle),
@@ -332,8 +337,22 @@ template<
 				bg_B.get_background_field(Part_Pos(particle), vacuum_permeability)
 			);
 
+			// propagate for dt with substeps at most 1/32 of gyroperiod
+			const int substeps
+				= [&dt, &step_size](){
+					const auto substeps = std::ceil(max(1.0, dt / step_size.second));
+					if (substeps > std::numeric_limits<int>::max()) {
+						std::cerr << __FILE__ "(" << __LINE__ << ") too many substeps" << std::endl;
+						abort();
+					} else {
+						return int(substeps);
+					}
+				}();
+
 			state_t state{{Part_Pos(particle), Part_Vel(particle)}};
-			stepper.do_step(propagator, state, 0.0, dt);
+			for (int i = 0; i < substeps; i++) {
+				stepper.do_step(propagator, state, 0.0, dt / substeps);
+			}
 			Part_Vel(Part_Int(*cell_data)[i]) = state[1];
 
 			// take into account periodic grid
