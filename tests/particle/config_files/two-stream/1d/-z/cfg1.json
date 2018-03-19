@@ -2,7 +2,6 @@
 	"output-directory": "results/two-stream/1d/-z/euler_hll_athena",
 	"time-start": 0,
 	"time-length": 20,
-	"minimum-pressure": 0,
 	"minimum-particles": 0,
 	"resistivity": "0",
 	"solver-particle": "euler",
@@ -15,7 +14,8 @@
 	"proton-mass": 1,
 	"particle-temp-nrj-ratio": 1,
 	"remove-div-B-n": -1,
-	"time-step-factor": 0.5,
+	"gyroperiod-time-step-factor": 1,
+	"flight-time-step-factor": 1,
 	"poisson-norm-stop": 1e-15,
 	"poisson-norm-increase-max": 10,
 	"grid-options": {

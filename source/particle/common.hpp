@@ -141,12 +141,12 @@ template<class Vector> std::pair<double, double> get_step_size(
 			}
 		}();
 	if (not isnan(displacement)) {
-		ret_val.first = min(ret_val.first, displacement);
+		ret_val.first = min(displacement, ret_val.first);
 	}
 
 	const auto travel_time = cell_length / velocity.norm();
 	if (not isnan(travel_time)) {
-		ret_val.first = min(ret_val.first, travel_time);
+		ret_val.first = min(travel_time, ret_val.first);
 	}
 
 	const auto gyro_info
@@ -157,7 +157,7 @@ template<class Vector> std::pair<double, double> get_step_size(
 		);
 	const auto gyro_time = gyro_period_fraction / gyro_info.second;
 	if (not isnan(gyro_time)) {
-		ret_val.second = min(ret_val.second, gyro_time);
+		ret_val.second = min(gyro_time, ret_val.second);
 	}
 
 	return ret_val;

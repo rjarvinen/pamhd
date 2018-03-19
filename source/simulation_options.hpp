@@ -65,8 +65,7 @@ struct Options
 		time_length = 1,
 		adiabatic_index = 5.0 / 3.0,
 		vacuum_permeability = 4e-7 * M_PI,
-		proton_mass = 1.672621777e-27,
-		boltzmann = 1.38064852e-23;
+		proton_mass = 1.672621777e-27;
 
 	void set(const rapidjson::Value& object) {
 		using std::isfinite;

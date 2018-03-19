@@ -171,9 +171,8 @@ template<
 	class Particle_Mass_Getter,
 	class Particle_Destination_Cell_Getter,
 	class Solver_Info_Getter
-> double solve(
+> std::pair<double, double> solve(
 	const double dt,
-	const bool ignore_gyroperiod,
 	const std::vector<uint64_t>& cell_ids,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
 	const Background_Magnetic_Field& bg_B,
@@ -209,7 +208,7 @@ template<
 
 
 	Stepper stepper;
-	double max_time_step = std::numeric_limits<double>::max();
+	std::pair<double, double> max_time_step{std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
 	for (const auto& cell_id: cell_ids) {
 
 		auto* const cell_data = grid[cell_id];
@@ -322,10 +321,8 @@ template<
 					B_centered
 				);
 
-			max_time_step = min(max_time_step, step_size.first);
-			if (not ignore_gyroperiod) {
-				max_time_step = min(max_time_step, step_size.second);
-			}
+			max_time_step.first = min(step_size.first, max_time_step.first);
+			max_time_step.second = min(step_size.second, max_time_step.second);
 
 			const Particle_Propagator propagator(
 				Part_C2M(particle),

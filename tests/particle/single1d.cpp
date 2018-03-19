@@ -703,17 +703,18 @@ int main(int argc, char* argv[])
 			}
 
 			double max_time_step = std::numeric_limits<double>::max();
-			max_time_step = std::min(
-				max_time_step,
-				pamhd::particle::get_minmax_step(
-					1.0,
+			const auto step_size
+				= pamhd::particle::get_step_size(
 					1.0 / 32.0,
 					min_wavelength / 8,
 					electron_c2m,
 					state[1],
 					EB[0],
 					EB[1]
-				).second
+				);
+			max_time_step = std::min(
+				max_time_step,
+				std::min(step_size.first, step_size.second)
 			);
 			max_time_step = std::min(max_time_step, 1 / em_frequency / 8);
 			dt = max_time_step * time_step_factor;

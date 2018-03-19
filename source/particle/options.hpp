@@ -2,6 +2,7 @@
 Handles options of particle part of PAMHD.
 
 Copyright 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -56,7 +57,11 @@ struct Options
 	};
 
 	std::string solver = "rkf78";
-	double save_n = -1;
+	double
+		boltzmann = 1.38064852e-23,
+		save_n = -1,
+		gyroperiod_time_step_factor = 1,
+		flight_time_step_factor = 1;
 	size_t min_particles = 0;
 
 	void set(const rapidjson::Value& object) {
@@ -68,7 +73,14 @@ struct Options
 				+ "JSON data doesn't have a save-particle-n key."
 			);
 		}
-		save_n = object["save-particle-n"].GetDouble();
+		const auto& save_n_json = object["save-particle-n"];
+		if (not save_n_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item save-particle-n is not a number."
+			);
+		}
+		save_n = save_n_json.GetDouble();
 
 		if (not object.HasMember("solver-particle")) {
 			throw std::invalid_argument(
@@ -97,7 +109,66 @@ struct Options
 				+ "JSON data doesn't have a minimum-particles key."
 			);
 		}
-		min_particles = object["minimum-particles"].GetUint();
+		const auto& min_particles_json = object["minimum-particles"];
+		if (not min_particles_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item minimum-particles is not a number."
+			);
+		}
+		min_particles = min_particles_json.GetUint();
+
+		if (not object.HasMember("particle-temp-nrj-ratio")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a particle-temp-nrj-ratio key."
+			);
+		}
+		const auto& boltzmann_json = object["particle-temp-nrj-ratio"];
+		if (not boltzmann_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item particle-temp-nrj-ratio is not a number."
+			);
+		}
+		boltzmann = object["particle-temp-nrj-ratio"].GetDouble();
+		if (not isnormal(boltzmann) or boltzmann < 0) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "Invalid particle temperature to energy ratio: " + std::to_string(boltzmann)
+				+ ", should be > 0"
+			);
+		}
+
+		if (not object.HasMember("gyroperiod-time-step-factor")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a gyroperiod-time-step-factor key."
+			);
+		}
+		const auto& gyroperiod_json = object["gyroperiod-time-step-factor"];
+		if (not gyroperiod_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item gyroperiod-time-step-factor is not a number."
+			);
+		}
+		gyroperiod_time_step_factor = gyroperiod_json.GetDouble();
+
+		if (not object.HasMember("flight-time-step-factor")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a flight-time-step-factor key."
+			);
+		}
+		const auto& flight_time_json = object["flight-time-step-factor"];
+		if (not flight_time_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item flight-time-step-factor is not a number."
+			);
+		}
+		flight_time_step_factor = flight_time_json.GetDouble();
 	}
 };
 

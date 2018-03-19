@@ -427,7 +427,8 @@ int main(int argc, char* argv[])
 
 	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
-		max_dt = 0,
+		max_dt_particle_gyro = 0,
+		max_dt_particle_flight = 0,
 		simulation_time = options_sim.time_start,
 		next_particle_save = options_particle.save_n;
 
@@ -477,7 +478,7 @@ int main(int argc, char* argv[])
 			cells,
 			grid,
 			random_source,
-			options_sim.boltzmann,
+			options_particle.boltzmann,
 			next_particle_id,
 			grid.get_comm_size(),
 			true,
@@ -510,7 +511,7 @@ int main(int argc, char* argv[])
 			cells,
 			grid,
 			random_source,
-			options_sim.boltzmann,
+			options_particle.boltzmann,
 			options_sim.vacuum_permeability,
 			next_particle_id,
 			grid.get_comm_size(),
@@ -561,7 +562,10 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = min(min(options_sim.time_step_factor * max_dt, until_end), max_dt),
+			local_time_step = min(min(
+				options_particle.gyroperiod_time_step_factor * max_dt_particle_gyro,
+				options_particle.flight_time_step_factor * max_dt_particle_flight),
+				until_end),
 			time_step = -1;
 
 		if (
@@ -589,8 +593,8 @@ int main(int argc, char* argv[])
 				<< " s with time step " << time_step << " s" << endl;
 		}
 
-		max_dt = std::numeric_limits<double>::max();
-
+		max_dt_particle_gyro   =
+		max_dt_particle_flight = std::numeric_limits<double>::max();
 
 		Cell::set_transfer_all(
 			true,
@@ -606,6 +610,7 @@ int main(int argc, char* argv[])
 
 		// E is given directly to particle propagator
 		// TODO: don't use preprocessor
+		std::pair<double, double> particle_max_dt{0, 0};
 		#define SOLVE_WITH_STEPPER(given_type, given_cells) \
 			pamhd::particle::solve<\
 				given_type\
@@ -631,79 +636,53 @@ int main(int argc, char* argv[])
 
 		switch (particle_stepper) {
 		case 0:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, outer_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, outer_cells);
 			break;
 		case 1:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, outer_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, outer_cells);
 			break;
 		case 2:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, outer_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, outer_cells);
 			break;
 		case 3:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, outer_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, outer_cells);
 			break;
 		case 4:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, outer_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, outer_cells);
 			break;
 		default:
 			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
 			abort();
 		}
+		max_dt_particle_flight = min(particle_max_dt.first, max_dt_particle_flight);
+		max_dt_particle_gyro = min(particle_max_dt.second, max_dt_particle_gyro);
 
 		Cell::set_transfer_all(true, pamhd::particle::Nr_Particles_External());
 		grid.start_remote_neighbor_copy_updates();
 
 		switch (particle_stepper) {
 		case 0:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, inner_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, inner_cells);
 			break;
 		case 1:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, inner_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, inner_cells);
 			break;
 		case 2:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, inner_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, inner_cells);
 			break;
 		case 3:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, inner_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, inner_cells);
 			break;
 		case 4:
-			max_dt = min(
-				max_dt,
-				SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, inner_cells)
-			);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, inner_cells);
 			break;
 		default:
 			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
 			abort();
 		}
 		#undef SOLVE_WITH_STEPPER
+		max_dt_particle_flight = min(particle_max_dt.first, max_dt_particle_flight);
+		max_dt_particle_gyro = min(particle_max_dt.second, max_dt_particle_gyro);
 
 		simulation_time += time_step;
 
@@ -767,7 +746,7 @@ int main(int argc, char* argv[])
 				cells,
 				grid,
 				random_source,
-				options_sim.boltzmann,
+				options_particle.boltzmann,
 				options_sim.vacuum_permeability,
 				next_particle_id,
 				grid.get_comm_size(),
@@ -818,7 +797,7 @@ int main(int argc, char* argv[])
 					simulation_time,
 					0,
 					0,
-					options_sim.boltzmann
+					options_particle.boltzmann
 				)
 			) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << "): Couldn't save particle result." << std::endl;

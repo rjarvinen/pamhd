@@ -295,9 +295,8 @@ int main(int argc, char* argv[])
 
 		max_dt = std::numeric_limits<double>::max();
 
-		max_dt = std::min(
-			max_dt,
-			pamhd::particle::solve<
+		auto solve_max_dt
+			= pamhd::particle::solve<
 				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
 			>(
 				time_step,
@@ -317,8 +316,8 @@ int main(int argc, char* argv[])
 				Part_Mas,
 				Part_Des,
 	 			Sol_Info
-			)
-		);
+			);
+		max_dt = std::min(std::min(solve_max_dt.first, solve_max_dt.second), max_dt);
 
 		Cell::set_transfer_all(
 			true,
@@ -328,9 +327,8 @@ int main(int argc, char* argv[])
 		);
 		grid.start_remote_neighbor_copy_updates();
 
-		max_dt = std::min(
-			max_dt,
-			pamhd::particle::solve<
+		solve_max_dt
+			= pamhd::particle::solve<
 				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
 			>(
 				time_step,
@@ -350,8 +348,8 @@ int main(int argc, char* argv[])
 				Part_Mas,
 				Part_Des,
 	 			Sol_Info
-			)
-		);
+			);
+		max_dt = std::min(std::min(solve_max_dt.first, solve_max_dt.second), max_dt);
 
 		simulation_time += time_step;
 
