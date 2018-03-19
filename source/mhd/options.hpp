@@ -59,7 +59,8 @@ struct Options
 	std::string solver = "roe_athena";
 	double
 		save_n = -1,
-		min_pressure = 0;
+		min_pressure = 0,
+		time_step_factor = 0.5;
 
 	void set(const rapidjson::Value& object) {
 		using std::isnormal;
@@ -68,6 +69,13 @@ struct Options
 			throw std::invalid_argument(
 				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
 				+ "JSON data doesn't have a save-mhd-n key."
+			);
+		}
+		const auto& save_n_json = object["save-mhd-n"];
+		if (not save_n_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item save-mhd-n is not a number."
 			);
 		}
 		save_n = object["save-mhd-n"].GetDouble();
@@ -106,6 +114,21 @@ struct Options
 			);
 		}
 		min_pressure = min_pressure_json.GetDouble();
+
+		if (not object.HasMember("mhd-time-step-factor")) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON data doesn't have a mhd-time-step-factor key."
+			);
+		}
+		const auto& time_step_factor_json = object["mhd-time-step-factor"];
+		if (not time_step_factor_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item mhd-time-step-factor is not a number."
+			);
+		}
+		time_step_factor = object["mhd-time-step-factor"].GetDouble();
 	}
 };
 

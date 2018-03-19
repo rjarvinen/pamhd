@@ -481,7 +481,7 @@ int main(int argc, char* argv[])
 
 	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
-		max_dt = 0,
+		max_dt_mhd = 0,
 		simulation_time = options_sim.time_start,
 		next_mhd_save = options_mhd.save_n,
 		next_rem_div_B = options_div_B.remove_n;
@@ -579,7 +579,7 @@ int main(int argc, char* argv[])
 		double
 			// don't step over the final simulation time
 			until_end = time_end - simulation_time,
-			local_time_step = min(options_sim.time_step_factor * max_dt, until_end),
+			local_time_step = min(options_mhd.time_step_factor * max_dt_mhd, until_end),
 			time_step = -1;
 
 		if (
@@ -603,7 +603,7 @@ int main(int argc, char* argv[])
 		Solve
 		*/
 
-		max_dt = std::numeric_limits<double>::max();
+		max_dt_mhd = std::numeric_limits<double>::max();
 
 		if (rank == 0) {
 			cout << "Solving MHD at time " << simulation_time
@@ -656,10 +656,7 @@ int main(int argc, char* argv[])
 			Mag_f,
 			Sol_Info
 		);
-		max_dt = min(
-			max_dt,
-			solve_max_dt
-		);
+		max_dt_mhd = min(solve_max_dt, max_dt_mhd);
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
@@ -684,10 +681,7 @@ int main(int argc, char* argv[])
 			Mag_f,
 			Sol_Info
 		);
-		max_dt = min(
-			max_dt,
-			solve_max_dt
-		);
+		max_dt_mhd = min(solve_max_dt, max_dt_mhd);
 
 		pamhd::divergence::get_curl(
 			outer_cells,

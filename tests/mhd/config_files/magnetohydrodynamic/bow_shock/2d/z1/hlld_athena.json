@@ -11,7 +11,7 @@
 	"vacuum-permeability": 1,
 	"proton-mass": 1,
 	"remove-div-B-n": 0.5,
-	"time-step-factor": 0.5,
+	"mhd-time-step-factor": 0.5,
 	"poisson-norm-stop": 1e-10,
 	"poisson-norm-increase-max": 10,
 	"grid-options": {

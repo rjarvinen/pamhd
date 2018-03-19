@@ -2,6 +2,7 @@
 Handles options common to MHD, particle and PAMHD test programs.
 
 Copyright 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -62,13 +63,13 @@ struct Options
 	double
 		time_start = 0,
 		time_length = 1,
-		time_step_factor = 0.5,
 		adiabatic_index = 5.0 / 3.0,
 		vacuum_permeability = 4e-7 * M_PI,
 		proton_mass = 1.672621777e-27,
 		boltzmann = 1.38064852e-23;
 
 	void set(const rapidjson::Value& object) {
+		using std::isfinite;
 		using std::isnormal;
 
 		if (not object.HasMember("time-start")) {
@@ -77,7 +78,20 @@ struct Options
 				+ "JSON data doesn't have a time-start key."
 			);
 		}
+		const auto& time_start_json = object["time-start"];
+		if (not time_start_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item time-start is not a number."
+			);
+		}
 		time_start = object["time-start"].GetDouble();
+		if (not isfinite(time_start)) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "Invalid time-start: " + std::to_string(time_start)
+			);
+		}
 
 		if (not object.HasMember("time-length")) {
 			throw std::invalid_argument(
@@ -85,20 +99,33 @@ struct Options
 				+ "JSON data doesn't have a time-length key."
 			);
 		}
-		time_length = object["time-length"].GetDouble();
-
-		if (not object.HasMember("time-step-factor")) {
+		const auto& time_length_json = object["time-length"];
+		if (not time_length_json.IsNumber()) {
 			throw std::invalid_argument(
 				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-				+ "JSON data doesn't have a time-step-factor key."
+				+ "JSON item time-length is not a number."
 			);
 		}
-		time_step_factor = object["time-step-factor"].GetDouble();
+		time_length = object["time-length"].GetDouble();
+		if (not isnormal(time_length) or time_length < 0) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "Invalid time-length: " + std::to_string(time_length)
+				+ ", should be > 0"
+			);
+		}
 
 		if (not object.HasMember("adiabatic-index")) {
 			throw std::invalid_argument(
 				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
 				+ "JSON data doesn't have a adiabatic-index key."
+			);
+		}
+		const auto& adiabatic_index_json = object["adiabatic-index"];
+		if (not adiabatic_index_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item adiabatic-index is not a number."
 			);
 		}
 		adiabatic_index = object["adiabatic-index"].GetDouble();
@@ -116,6 +143,13 @@ struct Options
 				+ "JSON data doesn't have a vacuum-permeability key."
 			);
 		}
+		const auto& vacuum_permeability_json = object["vacuum-permeability"];
+		if (not vacuum_permeability_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item vacuum-permeability is not a number."
+			);
+		}
 		vacuum_permeability = object["vacuum-permeability"].GetDouble();
 		if (not isnormal(vacuum_permeability) or vacuum_permeability < 0) {
 			throw std::invalid_argument(
@@ -131,6 +165,13 @@ struct Options
 				+ "JSON data doesn't have a proton-mass key."
 			);
 		}
+		const auto& proton_mass_json = object["proton-mass"];
+		if (not proton_mass_json.IsNumber()) {
+			throw std::invalid_argument(
+				std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
+				+ "JSON item proton-mass is not a number."
+			);
+		}
 		proton_mass = object["proton-mass"].GetDouble();
 		if (not isnormal(proton_mass) or proton_mass < 0) {
 			throw std::invalid_argument(
@@ -138,17 +179,6 @@ struct Options
 				+ "Invalid proton_mass: " + std::to_string(proton_mass)
 				+ ", should be > 0"
 			);
-		}
-
-		if (object.HasMember("particle-temp-nrj-ratio")) {
-			boltzmann = object["particle-temp-nrj-ratio"].GetDouble();
-			if (not isnormal(boltzmann) or boltzmann < 0) {
-				throw std::invalid_argument(
-					std::string(__FILE__ "(") + std::to_string(__LINE__) + "): "
-					+ "Invalid particle temperature to energy ratio: " + std::to_string(boltzmann)
-					+ ", should be > 0"
-				);
-			}
 		}
 
 		if (object.HasMember("output-directory")) {
