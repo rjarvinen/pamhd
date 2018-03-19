@@ -93,38 +93,36 @@ int main()
 
 	// test get_max_step
 	double cell_length = 0.1;
-	auto max_step
-		= get_minmax_step(
-			0.01,
+	auto step_size
+		= get_step_size(
 			0.05,
 			cell_length,
 			particle[C2M],
 			particle[Vel],
 			electric_field,
 			magnetic_field
-		).second; 
+		);
 
-	if (max_step > 1.001 * cell_length / 7.0) {
+	if (min(step_size.first, step_size.second) > 1.001 * cell_length / 7.0) {
 		std::cerr <<  __FILE__ << ":" << __LINE__
-			<< " Incorrect maximum time step for particle: " << max_step
+			<< " Incorrect maximum time step for particle: " << min(step_size.first, step_size.second)
 			<< std::endl;
 		abort();
 	}
 
 	cell_length = 10;
-	max_step = get_minmax_step(
-		0.01,
+	step_size = get_step_size(
 		0.05,
 		cell_length,
 		particle[C2M],
 		particle[Vel],
 		electric_field,
 		magnetic_field
-	).second;
+	);
 
-	if (max_step > 1.001 * 0.05 / c2m_abs / B_mag * 2 * M_PI) {
+	if (min(step_size.first, step_size.second) > 1.001 * 0.05 / c2m_abs / B_mag * 2 * M_PI) {
 		std::cerr <<  __FILE__ << ":" << __LINE__
-			<< " Incorrect maximum time step for particle: " << max_step
+			<< " Incorrect maximum time step for particle: " << min(step_size.first, step_size.second)
 			<< std::endl;
 		abort();
 	}
