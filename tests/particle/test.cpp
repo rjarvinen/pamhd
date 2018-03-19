@@ -720,7 +720,6 @@ int main(int argc, char* argv[])
 
 	const double time_end = options_sim.time_start + options_sim.time_length;
 	double
-		max_dt = 0,
 		max_dt_mhd = 0,
 		max_dt_particle_gyro = 0,
 		max_dt_particle_flight = 0,
