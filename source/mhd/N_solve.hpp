@@ -257,6 +257,7 @@ template <
 						<< cell_id << ", "
 						<< neighbor_dir
 						<< std::endl;
+					abort();
 				}
 
 				state_pos = get_total_state(*neighbor_data);
@@ -268,6 +269,7 @@ template <
 						<< neighbor_id << ", "
 						<< neighbor_dir
 						<< std::endl;
+					abort();
 				}
 
 				switch (neighbor_dir) {
@@ -293,6 +295,7 @@ template <
 						<< cell_id << ", "
 						<< neighbor_dir
 						<< std::endl;
+					abort();
 				}
 
 				state_neg = get_total_state(*neighbor_data);
@@ -304,6 +307,7 @@ template <
 						<< neighbor_id << ", "
 						<< neighbor_dir
 						<< std::endl;
+					abort();
 				}
 
 				switch (neighbor_dir) {
