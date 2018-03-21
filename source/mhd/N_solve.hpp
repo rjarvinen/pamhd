@@ -249,7 +249,26 @@ template <
 			// take into account direction of neighbor from cell
 			if (neighbor_dir > 0) {
 				state_neg = get_total_state(*cell_data);
+				if (state_neg[nrj_int] < 0) {
+					std::cerr << __FILE__ "(" << __LINE__ << ") "
+						<< "Negative energy in total state: "
+						<< Nrj.first(*cell_data) << " + "
+						<< Nrj.second(*cell_data) << ", "
+						<< cell_id << ", "
+						<< neighbor_dir
+						<< std::endl;
+				}
+
 				state_pos = get_total_state(*neighbor_data);
+				if (state_pos[nrj_int] < 0) {
+					std::cerr << __FILE__ "(" << __LINE__ << ") "
+						<< "Negative energy in total state: "
+						<< Nrj.first(*neighbor_data) << " + "
+						<< Nrj.second(*neighbor_data) << ", "
+						<< neighbor_id << ", "
+						<< neighbor_dir
+						<< std::endl;
+				}
 
 				switch (neighbor_dir) {
 				case 1:
@@ -266,7 +285,26 @@ template <
 				}
 			} else {
 				state_pos = get_total_state(*cell_data);
+				if (state_pos[nrj_int] < 0) {
+					std::cerr << __FILE__ "(" << __LINE__ << ") "
+						<< "Negative energy in total state: "
+						<< Nrj.first(*cell_data) << " + "
+						<< Nrj.second(*cell_data) << ", "
+						<< cell_id << ", "
+						<< neighbor_dir
+						<< std::endl;
+				}
+
 				state_neg = get_total_state(*neighbor_data);
+				if (state_neg[nrj_int] < 0) {
+					std::cerr << __FILE__ "(" << __LINE__ << ") "
+						<< "Negative energy in total state: "
+						<< Nrj.first(*neighbor_data) << " + "
+						<< Nrj.second(*neighbor_data) << ", "
+						<< neighbor_id << ", "
+						<< neighbor_dir
+						<< std::endl;
+				}
 
 				switch (neighbor_dir) {
 				case -1:
