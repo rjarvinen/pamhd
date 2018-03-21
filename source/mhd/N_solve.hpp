@@ -542,16 +542,10 @@ template <
 		if ((Sol_Info(*cell.data) & Solver_Info::mass_density_bdy) == 0) {
 			Mas.first(*cell.data) += Mas_f.first(*cell.data) * inverse_volume;
 		}
-		if (Mas.first(*cell.data) < 0) {
-			Mas.first(*cell.data) = 0;
-		}
 		Mas_f.first(*cell.data) = 0;
 
 		if ((Sol_Info(*cell.data) & Solver_Info::mass_density2_bdy) == 0) {
 			Mas.second(*cell.data) += Mas_f.second(*cell.data) * inverse_volume;
-		}
-		if (Mas.second(*cell.data) < 0) {
-			Mas.second(*cell.data) = 0;
 		}
 		Mas_f.second(*cell.data) = 0;
 
@@ -574,16 +568,10 @@ template <
 		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
 			Nrj.first(*cell.data) += Nrj_f.first(*cell.data) * inverse_volume;
 		}
-		if (Nrj.first(*cell.data) < 0) {
-			Nrj.first(*cell.data) = 0;
-		}
 		Nrj_f.first(*cell.data) = 0;
 
 		if ((Sol_Info(*cell.data) & Solver_Info::pressure2_bdy) == 0) {
 			Nrj.second(*cell.data) += Nrj_f.second(*cell.data) * inverse_volume;
-		}
-		if (Nrj.second(*cell.data) < 0) {
-			Nrj.second(*cell.data) = 0;
 		}
 		Nrj_f.second(*cell.data) = 0;
 
@@ -596,27 +584,40 @@ template <
 		Mag_f(*cell.data)[2] = 0;
 
 
-		// enforce minimum pressure in fluid part
-		if (Mas.first(*cell.data) > 0) {
-			const auto pressure = get_pressure(
-				Mas.first(*cell.data),
-				Mom.first(*cell.data),
-				Nrj.first(*cell.data),
+		/*
+		Enforce minimum pressure
+		*/
+
+		const auto
+			total_mass = Mas.first(*cell.data) + Mas.second(*cell.data),
+			total_energy = Nrj.first(*cell.data) + Nrj.second(*cell.data);
+		const typename std::remove_reference<decltype(Mom.first(*cell.data))>::type total_momentum
+			= Mom.first(*cell.data) + Mom.second(*cell.data);
+
+		const auto pressure_both = get_pressure(
+			total_mass,
+			total_momentum,
+			total_energy,
+			Mag(*cell.data),
+			adiabatic_index,
+			vacuum_permeability
+		);
+		if (pressure_both >= min_pressure) {
+			continue;
+		}
+
+		// divide new energy by mass fraction
+		const auto new_total_energy
+			= get_total_energy_density(
+				total_mass,
+				get_velocity(total_momentum, total_mass),
+				min_pressure,
 				Mag(*cell.data),
 				adiabatic_index,
 				vacuum_permeability
 			);
-			if (pressure < min_pressure) {
-				Nrj.first(*cell.data) = get_total_energy_density(
-					Mas.first(*cell.data),
-					get_velocity(Mom.first(*cell.data), Mas.first(*cell.data)),
-					min_pressure,
-					Mag(*cell.data),
-					adiabatic_index,
-					vacuum_permeability
-				);
-			}
-		}
+		Nrj.first(*cell.data) = Mas.first(*cell.data) / total_mass * new_total_energy;
+		Nrj.second(*cell.data) = Mas.second(*cell.data) / total_mass * new_total_energy;
 	}
 }
 
