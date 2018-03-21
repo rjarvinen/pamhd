@@ -542,10 +542,16 @@ template <
 		if ((Sol_Info(*cell.data) & Solver_Info::mass_density_bdy) == 0) {
 			Mas.first(*cell.data) += Mas_f.first(*cell.data) * inverse_volume;
 		}
+		if (Mas.first(*cell.data) < 0) {
+			Mas.first(*cell.data) = 0;
+		}
 		Mas_f.first(*cell.data) = 0;
 
 		if ((Sol_Info(*cell.data) & Solver_Info::mass_density2_bdy) == 0) {
 			Mas.second(*cell.data) += Mas_f.second(*cell.data) * inverse_volume;
+		}
+		if (Mas.second(*cell.data) < 0) {
+			Mas.second(*cell.data) = 0;
 		}
 		Mas_f.second(*cell.data) = 0;
 
@@ -568,10 +574,16 @@ template <
 		if ((Sol_Info(*cell.data) & Solver_Info::pressure_bdy) == 0) {
 			Nrj.first(*cell.data) += Nrj_f.first(*cell.data) * inverse_volume;
 		}
+		if (Nrj.first(*cell.data) < 0) {
+			Nrj.first(*cell.data) = 0;
+		}
 		Nrj_f.first(*cell.data) = 0;
 
 		if ((Sol_Info(*cell.data) & Solver_Info::pressure2_bdy) == 0) {
 			Nrj.second(*cell.data) += Nrj_f.second(*cell.data) * inverse_volume;
+		}
+		if (Nrj.second(*cell.data) < 0) {
+			Nrj.second(*cell.data) = 0;
 		}
 		Nrj_f.second(*cell.data) = 0;
 
