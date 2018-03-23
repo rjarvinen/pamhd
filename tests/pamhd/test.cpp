@@ -1219,12 +1219,15 @@ int main(int argc, char* argv[])
 		Solve
 		*/
 
+		max_dt_mhd             =
+		max_dt_particle_flight =
+		max_dt_particle_gyro   = std::numeric_limits<double>::max();
+
 		if (rank == 0) {
 			cout << "Solving at time " << simulation_time
 				<< " s with time step " << time_step << " s" << endl;
 		}
 
-		std::pair<double, double> particle_max_dt{std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
 		// TODO: don't use preprocessor
 		#define SOLVE_WITH_STEPPER(given_type, given_cells) \
 			pamhd::particle::solve<\
@@ -1248,6 +1251,8 @@ int main(int argc, char* argv[])
 				Part_Des,\
 				Sol_Info\
 			)
+
+		std::pair<double, double> particle_max_dt{0, 0};
 
 		// outer cells
 		switch (particle_stepper) {
