@@ -59,7 +59,7 @@ def get_plasma_data():
 
 		dt = datetime(int(yyyy), int(mm), int(dd), int(hhmm[0:2]), int(hhmm[2:4]))
 		bx, by, bz = float(bx)*1e-9, float(by)*1e-9, float(bz)*1e-9
-		mag_data.append((dt, bx, by, bx))
+		mag_data.append((dt, bx, by, bz))
 
 	# use average value of Bx
 	Bx_avg = 0
