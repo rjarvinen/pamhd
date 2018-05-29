@@ -1659,12 +1659,16 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			true,
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::mhd::HD2_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid.update_copies_of_remote_neighbors();
 		Cell::set_transfer_all(
 			false,
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::mhd::HD2_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 
