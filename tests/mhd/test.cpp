@@ -848,9 +848,17 @@ int main(int argc, char* argv[])
 		}
 
 		// use latest values for copy boundaries
-		Cell::set_transfer_all(true, pamhd::mhd::HD_State_Conservative());
+		Cell::set_transfer_all(
+			true,
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::Magnetic_Field()
+		);
 		grid.update_copies_of_remote_neighbors();
-		Cell::set_transfer_all(false, pamhd::mhd::HD_State_Conservative());
+		Cell::set_transfer_all(
+			false,
+			pamhd::mhd::HD_State_Conservative(),
+			pamhd::Magnetic_Field()
+		);
 
 		pamhd::mhd::apply_magnetic_field_boundaries(
 			grid,
