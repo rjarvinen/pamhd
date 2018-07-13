@@ -55,7 +55,7 @@ double div_of_function(const double x)
 }
 
 
-struct Vector_Field {
+struct Vector {
 	using data_type = std::array<double, 3>;
 };
 
@@ -63,43 +63,43 @@ struct Divergence {
 	using data_type = double;
 };
 
+struct Cell_Type {
+	using data_type = bool;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
-	Vector_Field,
-	Divergence
+	Vector,
+	Divergence,
+	Cell_Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0
 */
-template<class Grid_T> double get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Cell_Type()] != 1) {
+			continue;
 		}
 
-		const auto center = grid.geometry.get_center(cell);
+		const auto center = grid.geometry.get_center(cell.id);
 
 		if (p == 0) {
 			local_norm = std::max(
 				local_norm,
-				std::fabs((*cell_data)[Divergence()] - div_of_function(center[dimension]))
+				std::fabs((*cell.data)[Divergence()] - div_of_function(center[dimension]))
 			);
 		} else {
 			local_norm += std::pow(
-				std::fabs((*cell_data)[Divergence()] - div_of_function(center[dimension])),
+				std::fabs((*cell.data)[Divergence()] - div_of_function(center[dimension])),
 				p
 			);
 		}
@@ -117,6 +117,67 @@ template<class Grid_T> double get_diff_lp_norm(
 		MPI_Comm_free(&comm);
 		return std::pow(global_norm, 1.0 / p);
 	}
+}
+
+
+template<class Vector, class Cell_Type, class Grid> void initialize(
+	Grid& grid,
+	MPI_Comm& comm,
+	const uint64_t nr_of_cells,
+	const unsigned int dimension
+) {
+	std::array<uint64_t, 3> grid_size;
+	std::array<double, 3> cell_length, grid_start;
+	switch (dimension) {
+	case 0:
+		grid_size = {nr_of_cells + 2, 1, 1};
+		cell_length = {2 * M_PI / (grid_size[dimension] - 2), 1, 1};
+		grid_start = {-cell_length[dimension], 0, 0};
+		break;
+	case 1:
+		grid_size = {1, nr_of_cells + 2, 1};
+		cell_length = {1, 2 * M_PI / (grid_size[dimension] - 2), 1};
+		grid_start = {0, -cell_length[dimension], 0};
+		break;
+	case 2:
+		grid_size = {1, 1, nr_of_cells + 2};
+		cell_length = {1, 1, 2 * M_PI / (grid_size[dimension] - 2)};
+		grid_start = {0, 0, -cell_length[dimension]};
+		break;
+	default:
+		abort();
+		break;
+	}
+	grid
+		.set_load_balancing_method("RANDOM")
+		.set_initial_length(grid_size)
+		.set_neighborhood_length(0)
+		.set_maximum_refinement_level(0)
+		.initialize(comm);
+
+	dccrg::Cartesian_Geometry::Parameters geom_params;
+	geom_params.start = grid_start;
+	geom_params.level_0_cell_length = cell_length;
+	grid.set_geometry(geom_params);
+
+	for (const auto& cell: grid.local_cells) {
+		const auto center = grid.geometry.get_center(cell.id);
+
+		auto& vec = (*cell.data)[Vector()];
+		vec[0] =
+		vec[1] =
+		vec[2] = 0;
+		vec[dimension] = function(center[dimension]);
+
+		// exclude one layer of boundary cells
+		const auto index = grid.mapping.get_indices(cell.id);
+		if (index[dimension] > 0 and index[dimension] < grid_size[dimension] - 1) {
+			(*cell.data)[Cell_Type()] = 1;
+		} else {
+			(*cell.data)[Cell_Type()] = 0;
+		}
+	}
+	grid.update_copies_of_remote_neighbors();
 }
 
 
@@ -156,120 +217,36 @@ int main(int argc, char* argv[])
 	for (size_t nr_of_cells = 8; nr_of_cells <= 4096; nr_of_cells *= 2) {
 
 		dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry> grid_x, grid_y, grid_z;
+		initialize<Vector, Cell_Type>(grid_x, comm, nr_of_cells, 0);
+		initialize<Vector, Cell_Type>(grid_y, comm, nr_of_cells, 1);
+		initialize<Vector, Cell_Type>(grid_z, comm, nr_of_cells, 2);
 
-		const std::array<uint64_t, 3>
-			grid_size_x{{nr_of_cells + 2, 1, 1}},
-			grid_size_y{{1, nr_of_cells + 2, 1}},
-			grid_size_z{{1, 1, nr_of_cells + 2}};
-
-		if (not grid_x.initialize(grid_size_x,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.initialize(grid_size_y,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.initialize(grid_size_z,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		const std::array<double, 3>
-			cell_length_x{{2 * M_PI / (grid_size_x[0] - 2), 1, 1}},
-			cell_length_y{{1, 2 * M_PI / (grid_size_y[1] - 2), 1}},
-			cell_length_z{{1, 1, 2 * M_PI / (grid_size_z[2] - 2)}},
-			grid_start_x{{-cell_length_x[0], 0, 0}},
-			grid_start_y{{0, -cell_length_y[1], 0}},
-			grid_start_z{{0, 0, -cell_length_z[2]}};
-
-		const double cell_volume
-			= cell_length_x[0] * cell_length_x[1] * cell_length_x[2];
-
-		dccrg::Cartesian_Geometry::Parameters geom_params_x,geom_params_y,geom_params_z;
-		geom_params_x.start = grid_start_x;
-		geom_params_x.level_0_cell_length = cell_length_x;
-		geom_params_y.start = grid_start_y;
-		geom_params_y.level_0_cell_length = cell_length_y;
-		geom_params_z.start = grid_start_z;
-		geom_params_z.level_0_cell_length = cell_length_z;
-
-		if (not grid_x.set_geometry(geom_params_x)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.set_geometry(geom_params_y)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.set_geometry(geom_params_z)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-
-		const auto all_cells = grid_x.get_cells();
-		for (const auto& cell: all_cells) {
-			auto
-				*const cell_data_x = grid_x[cell],
-				*const cell_data_y = grid_y[cell],
-				*const cell_data_z = grid_z[cell];
-
-			if (cell_data_x == NULL or cell_data_y == NULL or cell_data_z == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			const auto center = grid_x.geometry.get_center(cell);
-
-			auto
-				&vec_x = (*cell_data_x)[Vector_Field()],
-				&vec_y = (*cell_data_y)[Vector_Field()],
-				&vec_z = (*cell_data_z)[Vector_Field()];
-
-			vec_x[0] = function(center[0]);
-			vec_x[1] =
-			vec_x[2] = 0;
-			vec_y[1] = function(center[0]);
-			vec_y[0] =
-			vec_y[2] = 0;
-			vec_z[2] = function(center[0]);
-			vec_z[0] =
-			vec_z[1] = 0;
-		}
-		grid_x.update_copies_of_remote_neighbors();
-		grid_y.update_copies_of_remote_neighbors();
-		grid_z.update_copies_of_remote_neighbors();
-
-		// exclude one layer of boundary cells
-		std::vector<uint64_t> solve_cells;
-		for (const auto& cell: all_cells) {
-			const auto index = grid_x.mapping.get_indices(cell);
-			if (index[0] > 0 and index[0] < grid_size_x[0] - 1) {
-				solve_cells.push_back(cell);
-			}
-		}
-
-		auto Vector_Getter = [](Cell& cell_data) -> Vector_Field::data_type& {
-			return cell_data[Vector_Field()];
+		auto Vector_Getter = [](Cell& cell_data) -> Vector::data_type& {
+			return cell_data[Vector()];
 		};
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
 		};
+		auto Cell_Type_Getter = [](Cell& cell_data) -> bool {
+			return cell_data[Cell_Type()] == 1;
+		};
 		pamhd::divergence::get_divergence(
-			solve_cells, grid_x, Vector_Getter, Divergence_Getter
+			grid_x.local_cells, grid_x, Vector_Getter, Divergence_Getter, Cell_Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			solve_cells, grid_y, Vector_Getter, Divergence_Getter
+			grid_y.local_cells, grid_y, Vector_Getter, Divergence_Getter, Cell_Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			solve_cells, grid_z, Vector_Getter, Divergence_Getter
+			grid_z.local_cells, grid_z, Vector_Getter, Divergence_Getter, Cell_Type_Getter
 		);
 
+		const auto cell_length = grid_x.geometry.get_level_0_cell_length();
 		const double
+			cell_volume = cell_length[0] * cell_length[1] * cell_length[2],
 			p_of_norm = 2,
-			norm_x = get_diff_lp_norm(solve_cells, grid_x, p_of_norm, cell_volume, 0),
-			norm_y = get_diff_lp_norm(solve_cells, grid_y, p_of_norm, cell_volume, 1),
-			norm_z = get_diff_lp_norm(solve_cells, grid_z, p_of_norm, cell_volume, 2);
+			norm_x = get_diff_lp_norm(grid_x, p_of_norm, cell_volume, 0),
+			norm_y = get_diff_lp_norm(grid_y, p_of_norm, cell_volume, 1),
+			norm_z = get_diff_lp_norm(grid_z, p_of_norm, cell_volume, 2);
 
 		if (norm_x > old_norm_x) {
 			if (grid_x.get_rank() == 0) {
@@ -333,7 +310,9 @@ int main(int argc, char* argv[])
 						<< ": Y order of accuracy from "
 						<< old_nr_of_cells << " to " << nr_of_cells
 						<< " is too low: " << order_of_accuracy_y
-						<< std::endl;
+						<< " (" << norm_y << ", " << old_norm_y
+						<< ", " << nr_of_cells << ", " << old_nr_of_cells
+						<< ")" << std::endl;
 				}
 				abort();
 			}

@@ -2,6 +2,7 @@
 Functions for working with divergence of vector field.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -48,68 +49,74 @@ namespace divergence {
 
 
 /*!
-Calculates divergence of vector variable in given cells.
+Calculates divergence of vector variable.
+
+Divergence is calculated in all @cells for
+which @Cell_Type returns true.
 
 Returns the total divergence i.e. sum of absolute
 divergence in given cells of all processes divided
 by number of cells on all processes in which divergence
 was calculated.
 
-Vector variable must have a defined value in face
-neighbors of given cells. In given cells contribution
-to divergence is 0 from dimensions with at least one
-missing neighbor.
+Variable returned by @Vector must have a defined value
+in face neighbors of cells where divergence is calculated.
+Dimension(s) where at least one neighbor is missing
+doesn't contribute to divergence.
 
-Vector must be an object that, when given a reference
-to the data of one grid cell, returns a reference to
-the data from which divergnce should be calculated.
-Similarly Divergence should return a reference to data
-in which calculated divergence should be stored.
-
-Assumes Grid_T API is compatible with dccrg.
+@Cell_Type must be an object that, when given a reference
+to data of one grid cell, returns true if divergence
+should be calculated for that cell and false otherwise.
+@Vector must be an object that, when given a reference
+to the data of one grid cell, returns a *reference* to
+the data from which divergence should be calculated.
+Similarly @Divergence should return a *reference* to
+data in which calculated divergence should be stored.
 
 Example:
 
-struct Vector_Field {
-	using data_type = std::array<double, 3>;
+struct Cell_Data {
+	std::array<double, 3> vector_data;
+	double scalar_data;
+	bool calculate_div;
+	std::tuple<...> get_mpi_datatype() {...}
 };
 
-struct Divergence {
-	using data_type = double;
-};
-
-using Cell = gensimcell::Cell<
-	gensimcell::Always_Transfer,
-	Vector_Field,
-	Divergence
->;
-
-using Grid_T = dccrg::Dccrg<Cell, Cartesian_Geometry>;
+dccrg::Dccrg<Cell_Data, ...> grid;
 
 pamhd::divergence::get_divergence(
-	std::vector<uint64_t>(),
+	grid.local_cells,
 	grid,
-	[](Cell& cell_data)->Vector_Field::data_type& {
-		return cell_data[Vector_Field()];
+	[](Cell_Data& cell_data)->std::array<double, 3>& {
+		return cell_data.vector_data;
 	},
-	[](Cell& cell_data)->Divergence::data_type& {
-		return cell_data[Divergence()];
+	[](Cell_Data& cell_data)->double& {
+		return cell_data.scalar_data;
+	},
+	[](Cell_Data& cell_data)->bool {
+		return cell_data.calculate_div;
 	}
 );
 */
 template <
-	class Grid_T,
+	class Cell_Iterator,
+	class Cell_Data,
 	class Vector_Getter,
-	class Divergence_Getter
+	class Divergence_Getter,
+	class Cell_Type_Getter
 > double get_divergence(
-	const std::vector<uint64_t>& cells,
-	Grid_T& grid,
+	const Cell_Iterator& cells,
+	dccrg::Dccrg<Cell_Data, dccrg::Cartesian_Geometry>& grid,
 	Vector_Getter Vector,
-	Divergence_Getter Divergence
+	Divergence_Getter Divergence,
+	Cell_Type_Getter Cell_Type
 ) {
 	double local_divergence = 0, global_divergence = 0;
 	uint64_t local_calculated_cells = 0, global_calculated_cells = 0;
 	for (const auto& cell: cells) {
+		if (not Cell_Type(*cell.data)) {
+			continue;
+		}
 		// get distance between neighbors in same dimension
 		std::array<double, 3>
 			// distance from current cell on neg and pos side (> 0)
@@ -119,26 +126,43 @@ template <
 		// number of neighbors in each dimension
 		std::array<size_t, 3> nr_neighbors{{0, 0, 0}};
 
-		const auto cell_length = grid.geometry.get_length(cell);
-		const auto face_neighbors_of = grid.get_face_neighbors_of(cell);
-		for (const auto& item: face_neighbors_of) {
-			const auto neighbor = item.first;
-			const auto direction = item.second;
-			if (direction == 0 or std::abs(direction) > 3) {
-				std::cerr << __FILE__ << "(" << __LINE__<< ")" << std::endl;
-				abort();
+		const auto cell_length = grid.geometry.get_length(cell.id);
+		for (const auto& neighbor: cell.neighbors_of) {
+			// only calculate between face neighbors
+			int neighbor_dir = 0;
+			if (neighbor.x == 1 and neighbor.y == 0 and neighbor.z == 0) {
+				neighbor_dir = 1;
 			}
-			const size_t dim = std::abs(direction) - 1;
+			if (neighbor.x == -1 and neighbor.y == 0 and neighbor.z == 0) {
+				neighbor_dir = -1;
+			}
+			if (neighbor.x == 0 and neighbor.y == 1 and neighbor.z == 0) {
+				neighbor_dir = 2;
+			}
+			if (neighbor.x == 0 and neighbor.y == -1 and neighbor.z == 0) {
+				neighbor_dir = -2;
+			}
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == 1) {
+				neighbor_dir = 3;
+			}
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == -1) {
+				neighbor_dir = -3;
+			}
+			if (neighbor_dir == 0) {
+				continue;
+			}
+
+			const size_t dim = std::abs(neighbor_dir) - 1;
 
 			nr_neighbors[dim]++;
 
 			const auto neighbor_length
-				= grid.geometry.get_length(neighbor);
+				= grid.geometry.get_length(neighbor.id);
 
 			const double distance
 				= (cell_length[dim] + neighbor_length[dim]) / 2.0;
 
-			if (direction < 0) {
+			if (neighbor_dir < 0) {
 				neigh_neg_dist[dim] = distance;
 			} else {
 				neigh_pos_dist[dim] = distance;
@@ -162,23 +186,37 @@ template <
 		}
 		local_calculated_cells++;
 
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__<< "): "
-				<< "No data for simulation cell " << cell
-				<< std::endl;
-			abort();
-		}
-
-		auto& div = Divergence(*cell_data);
+		auto& div = Divergence(*cell.data);
 		div = 0;
 
-		const auto cell_ref_lvl = grid.get_refinement_level(cell);
+		const auto cell_ref_lvl = grid.get_refinement_level(cell.id);
 
-		for (const auto& item: face_neighbors_of) {
-			const auto neighbor = item.first;
-			const auto direction = item.second;
-			const size_t dim = std::abs(direction) - 1;
+		for (const auto& neighbor: cell.neighbors_of) {
+
+			int neighbor_dir = 0;
+			if (neighbor.x == 1 and neighbor.y == 0 and neighbor.z == 0) {
+				neighbor_dir = 1;
+			}
+			if (neighbor.x == -1 and neighbor.y == 0 and neighbor.z == 0) {
+				neighbor_dir = -1;
+			}
+			if (neighbor.x == 0 and neighbor.y == 1 and neighbor.z == 0) {
+				neighbor_dir = 2;
+			}
+			if (neighbor.x == 0 and neighbor.y == -1 and neighbor.z == 0) {
+				neighbor_dir = -2;
+			}
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == 1) {
+				neighbor_dir = 3;
+			}
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == -1) {
+				neighbor_dir = -3;
+			}
+			if (neighbor_dir == 0) {
+				continue;
+			}
+
+			const size_t dim = std::abs(neighbor_dir) - 1;
 
 			if (
 				nr_neighbors[dim] != 2
@@ -189,25 +227,16 @@ template <
 			}
 
 			double multiplier = 1 / (neigh_pos_dist[dim] + neigh_neg_dist[dim]);
-			if (direction < 0) {
+			if (neighbor_dir < 0) {
 				multiplier *= -1;
 			}
 
-			const auto neigh_ref_lvl = grid.get_refinement_level(neighbor);
+			const auto neigh_ref_lvl = grid.get_refinement_level(neighbor.id);
 			if (neigh_ref_lvl > cell_ref_lvl) {
 				multiplier /= 4;
 			}
 
-			auto* const neighbor_data = grid[neighbor];
-			if (neighbor_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__<< "): "
-					<< "No data for neighbor " << neighbor
-					<< " of cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			div += multiplier * Vector(*neighbor_data)[dim];
+			div += multiplier * Vector(*neighbor.data)[dim];
 		}
 
 		local_divergence += std::fabs(div);
@@ -242,12 +271,12 @@ Calculates gradient of scalar variable in given cells.
 See get_divergence() for more info on arguments, etc.
 */
 template <
-	class Grid_T,
+	class Grid,
 	class Scalar_Getter,
 	class Gradient_Getter
 > void get_gradient(
 	const std::vector<uint64_t>& cells,
-	Grid_T& grid,
+	Grid& grid,
 	Scalar_Getter Scalar,
 	Gradient_Getter Gradient
 ) {
@@ -362,12 +391,12 @@ Calculates curl of vector variable in given cells.
 See get_divergence() for more info on arguments, etc.
 */
 template <
-	class Grid_T,
+	class Grid,
 	class Vector_Getter,
 	class Curl_Getter
 > void get_curl(
 	const std::vector<uint64_t>& cells,
-	Grid_T& grid,
+	Grid& grid,
 	Vector_Getter Vector,
 	Curl_Getter Curl
 ) {
