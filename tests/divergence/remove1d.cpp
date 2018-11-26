@@ -2,6 +2,7 @@
 Tests vector field divergence removal of PAMHD in 1d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -58,7 +59,7 @@ double div_removed_function()
 }
 
 
-struct Vector_Field {
+struct Vector {
 	using data_type = std::array<double, 3>;
 };
 
@@ -70,11 +71,16 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
-	Vector_Field,
+	Vector,
 	Divergence,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
@@ -82,24 +88,19 @@ using Cell = gensimcell::Cell<
 Use p == 1 to get maximum norm.
 */
 template<class Grid_T> double get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
 	const Grid_T& grid,
 	const double p,
 	const double cell_volume,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
 		local_norm += std::pow(
-			std::fabs((*cell_data)[Vector_Field()][dimension] - div_removed_function()),
+			std::fabs((*cell.data)[Vector()][dimension] - div_removed_function()),
 			p
 		);
 	}
@@ -160,18 +161,26 @@ int main(int argc, char* argv[])
 			grid_size_y{{1, nr_of_cells + 2, 1}},
 			grid_size_z{{1, 1, nr_of_cells + 2}};
 
-		if (not grid_x.initialize(grid_size_x,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.initialize(grid_size_y,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.initialize(grid_size_z,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
+		grid_x
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_x)
+			.set_maximum_refinement_level(0)
+			.set_neighborhood_length(0)
+			.initialize(comm);
+
+		grid_y
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_y)
+			.set_maximum_refinement_level(0)
+			.set_neighborhood_length(0)
+			.initialize(comm);
+
+		grid_z
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_z)
+			.set_maximum_refinement_level(0)
+			.set_neighborhood_length(0)
+			.initialize(comm);
 
 		const std::array<double, 3>
 			cell_length_x{{2 * M_PI / (grid_size_x[0] - 2), 1, 1}},
@@ -192,46 +201,41 @@ int main(int argc, char* argv[])
 		geom_params_z.start = grid_start_z;
 		geom_params_z.level_0_cell_length = cell_length_z;
 
-		if (not grid_x.set_geometry(geom_params_x)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.set_geometry(geom_params_y)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.set_geometry(geom_params_z)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
+		grid_x.set_geometry(geom_params_x);
+		grid_y.set_geometry(geom_params_y);
+		grid_z.set_geometry(geom_params_z);
 
 		const auto all_cells = grid_x.get_cells();
-
-		std::vector<uint64_t>
-			solve_cells,
-			boundary_cells;
 		for (const auto& cell: all_cells) {
 			auto
 				*const cell_data_x = grid_x[cell],
 				*const cell_data_y = grid_y[cell],
 				*const cell_data_z = grid_z[cell];
-			if (cell_data_x == NULL or cell_data_y == NULL or cell_data_z == NULL) {
+			if (
+				cell_data_x == nullptr
+				or cell_data_y == nullptr
+				or cell_data_z == nullptr
+			) {
 				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
 
 			const auto index = grid_x.mapping.get_indices(cell);
 			if (index[0] > 0 and index[0] < grid_size_x[0] - 1) {
-				solve_cells.push_back(cell);
+				(*cell_data_x)[Type()] =
+				(*cell_data_y)[Type()] =
+				(*cell_data_z)[Type()] = 1;
 			} else {
-				boundary_cells.push_back(cell);
+				(*cell_data_x)[Type()] =
+				(*cell_data_y)[Type()] =
+				(*cell_data_z)[Type()] = 0;
 			}
 
 			const auto x = grid_x.geometry.get_center(cell)[0];
 			auto
-				&vec_x = (*cell_data_x)[Vector_Field()],
-				&vec_y = (*cell_data_y)[Vector_Field()],
-				&vec_z = (*cell_data_z)[Vector_Field()];
+				&vec_x = (*cell_data_x)[Vector()],
+				&vec_y = (*cell_data_y)[Vector()],
+				&vec_z = (*cell_data_z)[Vector()];
 			vec_x[0] =
 			vec_y[1] =
 			vec_z[2] = function(x);
@@ -261,17 +265,17 @@ int main(int argc, char* argv[])
 				*const cell_data_z = grid_z[neg_bdy_cell];
 
 			if (
-				cell_data_x == NULL or neighbor_data_x == NULL
-				or cell_data_y == NULL or neighbor_data_y == NULL
-				or cell_data_z == NULL or neighbor_data_z == NULL
+				cell_data_x == nullptr or neighbor_data_x == nullptr
+				or cell_data_y == nullptr or neighbor_data_y == nullptr
+				or cell_data_z == nullptr or neighbor_data_z == nullptr
 			) {
 				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
 
-			(*cell_data_x)[Vector_Field()] = (*neighbor_data_x)[Vector_Field()];
-			(*cell_data_y)[Vector_Field()] = (*neighbor_data_y)[Vector_Field()];
-			(*cell_data_z)[Vector_Field()] = (*neighbor_data_z)[Vector_Field()];
+			(*cell_data_x)[Vector()] = (*neighbor_data_x)[Vector()];
+			(*cell_data_y)[Vector()] = (*neighbor_data_y)[Vector()];
+			(*cell_data_z)[Vector()] = (*neighbor_data_z)[Vector()];
 		}
 
 		if (grid_x.is_local(pos_bdy_cell)) {
@@ -285,21 +289,21 @@ int main(int argc, char* argv[])
 				*const cell_data_z = grid_z[pos_bdy_cell];
 
 			if (
-				cell_data_x == NULL or neighbor_data_x == NULL
-				or cell_data_y == NULL or neighbor_data_y == NULL
-				or cell_data_z == NULL or neighbor_data_z == NULL
+				cell_data_x == nullptr or neighbor_data_x == nullptr
+				or cell_data_y == nullptr or neighbor_data_y == nullptr
+				or cell_data_z == nullptr or neighbor_data_z == nullptr
 			) {
 				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
 
-			(*cell_data_x)[Vector_Field()] = (*neighbor_data_x)[Vector_Field()];
-			(*cell_data_y)[Vector_Field()] = (*neighbor_data_y)[Vector_Field()];
-			(*cell_data_z)[Vector_Field()] = (*neighbor_data_z)[Vector_Field()];
+			(*cell_data_x)[Vector()] = (*neighbor_data_x)[Vector()];
+			(*cell_data_y)[Vector()] = (*neighbor_data_y)[Vector()];
+			(*cell_data_z)[Vector()] = (*neighbor_data_z)[Vector()];
 		}
 
-		auto Vector_Getter = [](Cell& cell_data) -> Vector_Field::data_type& {
-			return cell_data[Vector_Field()];
+		auto Vector_Getter = [](Cell& cell_data) -> Vector::data_type& {
+			return cell_data[Vector()];
 		};
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
@@ -307,42 +311,43 @@ int main(int argc, char* argv[])
 		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
 			return cell_data[Gradient()];
 		};
+		auto Cell_Type_Getter = [](Cell& cell_data) -> Type::data_type {
+			if (cell_data[Type()] > 0) {
+				return true;
+			} else {
+				return false;
+			}
+		};
 		pamhd::divergence::remove(
-			solve_cells,
-			boundary_cells,
-			{},
 			grid_x,
 			Vector_Getter,
 			Divergence_Getter,
 			Gradient_Getter,
+			Cell_Type_Getter,
 			2000, 0, 1e-15, 2, 100, false, false
 		);
 		pamhd::divergence::remove(
-			solve_cells,
-			boundary_cells,
-			{},
 			grid_y,
 			Vector_Getter,
 			Divergence_Getter,
 			Gradient_Getter,
+			Cell_Type_Getter,
 			2000, 0, 1e-15, 2, 100, false, false
 		);
 		pamhd::divergence::remove(
-			solve_cells,
-			boundary_cells,
-			{},
 			grid_z,
 			Vector_Getter,
 			Divergence_Getter,
 			Gradient_Getter,
+			Cell_Type_Getter,
 			2000, 0, 1e-15, 2, 100, false, false
 		);
 
 		const double
 			p_of_norm = 2,
-			norm_x = get_diff_lp_norm(solve_cells, grid_x, p_of_norm, cell_volume, 0),
-			norm_y = get_diff_lp_norm(solve_cells, grid_y, p_of_norm, cell_volume, 1),
-			norm_z = get_diff_lp_norm(solve_cells, grid_z, p_of_norm, cell_volume, 2);
+			norm_x = get_diff_lp_norm(grid_x, p_of_norm, cell_volume, 0),
+			norm_y = get_diff_lp_norm(grid_y, p_of_norm, cell_volume, 1),
+			norm_z = get_diff_lp_norm(grid_z, p_of_norm, cell_volume, 2);
 
 		if (norm_x > old_norm_x) {
 			if (grid_x.get_rank() == 0) {
