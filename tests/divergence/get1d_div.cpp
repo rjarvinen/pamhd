@@ -63,15 +63,15 @@ struct Divergence {
 	using data_type = double;
 };
 
-struct Cell_Type {
-	using data_type = bool;
+struct Type {
+	using data_type = int;
 };
 
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector,
 	Divergence,
-	Cell_Type
+	Type
 >;
 
 
@@ -86,7 +86,7 @@ template<class Grid> double get_diff_lp_norm(
 ) {
 	double local_norm = 0, global_norm = 0;
 	for (const auto& cell: grid.local_cells) {
-		if ((*cell.data)[Cell_Type()] != 1) {
+		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
 
@@ -120,7 +120,7 @@ template<class Grid> double get_diff_lp_norm(
 }
 
 
-template<class Vector, class Cell_Type, class Grid> void initialize(
+template<class Vector, class Type, class Grid> void initialize(
 	Grid& grid,
 	MPI_Comm& comm,
 	const uint64_t nr_of_cells,
@@ -172,9 +172,9 @@ template<class Vector, class Cell_Type, class Grid> void initialize(
 		// exclude one layer of boundary cells
 		const auto index = grid.mapping.get_indices(cell.id);
 		if (index[dimension] > 0 and index[dimension] < grid_size[dimension] - 1) {
-			(*cell.data)[Cell_Type()] = 1;
+			(*cell.data)[Type()] = 1;
 		} else {
-			(*cell.data)[Cell_Type()] = 0;
+			(*cell.data)[Type()] = 0;
 		}
 	}
 	grid.update_copies_of_remote_neighbors();
@@ -217,9 +217,9 @@ int main(int argc, char* argv[])
 	for (size_t nr_of_cells = 8; nr_of_cells <= 4096; nr_of_cells *= 2) {
 
 		dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry> grid_x, grid_y, grid_z;
-		initialize<Vector, Cell_Type>(grid_x, comm, nr_of_cells, 0);
-		initialize<Vector, Cell_Type>(grid_y, comm, nr_of_cells, 1);
-		initialize<Vector, Cell_Type>(grid_z, comm, nr_of_cells, 2);
+		initialize<Vector, Type>(grid_x, comm, nr_of_cells, 0);
+		initialize<Vector, Type>(grid_y, comm, nr_of_cells, 1);
+		initialize<Vector, Type>(grid_z, comm, nr_of_cells, 2);
 
 		auto Vector_Getter = [](Cell& cell_data) -> Vector::data_type& {
 			return cell_data[Vector()];
@@ -227,17 +227,17 @@ int main(int argc, char* argv[])
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
 		};
-		auto Cell_Type_Getter = [](Cell& cell_data) -> bool {
-			return cell_data[Cell_Type()] == 1;
+		auto Type_Getter = [](Cell& cell_data) -> bool {
+			return cell_data[Type()] == 1;
 		};
 		pamhd::divergence::get_divergence(
-			grid_x.local_cells, grid_x, Vector_Getter, Divergence_Getter, Cell_Type_Getter
+			grid_x.local_cells, grid_x, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			grid_y.local_cells, grid_y, Vector_Getter, Divergence_Getter, Cell_Type_Getter
+			grid_y.local_cells, grid_y, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			grid_z.local_cells, grid_z, Vector_Getter, Divergence_Getter, Cell_Type_Getter
+			grid_z.local_cells, grid_z, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 
 		const auto cell_length = grid_x.geometry.get_level_0_cell_length();

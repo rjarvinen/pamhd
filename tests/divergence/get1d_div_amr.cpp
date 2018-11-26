@@ -56,7 +56,7 @@ double div_of_function(const double x)
 }
 
 
-struct Vector_Field {
+struct Vector {
 	using data_type = std::array<double, 3>;
 };
 
@@ -64,36 +64,36 @@ struct Divergence {
 	using data_type = double;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
-	Vector_Field,
-	Divergence
+	Vector,
+	Divergence,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0
 */
-template<class Grid_T> double get_max_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_max_norm(
+	const Grid& grid,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto center = grid.geometry.get_center(cell);
+		const auto center = grid.geometry.get_center(cell.id);
 
 		local_norm = std::max(
 			local_norm,
-			std::fabs((*cell_data)[Divergence()] - div_of_function(center[dimension]))
+			std::fabs((*cell.data)[Divergence()] - div_of_function(center[dimension]))
 		);
 	}
 
@@ -151,19 +151,12 @@ int main(int argc, char* argv[])
 
 		const int max_ref_lvl = 2;
 		for (size_t dim = 0; dim < 3; dim++) {
-			if (
-				not grids[dim].initialize(
-					grid_sizes[dim],
-					comm,
-					"RANDOM",
-					0,
-					max_ref_lvl,
-					false,false,false
-				)
-			) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-			abort();
-			}
+			grids[dim]
+				.set_load_balancing_method("RANDOM")
+				.set_initial_length(grid_sizes[dim])
+				.set_neighborhood_length(0)
+				.set_maximum_refinement_level(max_ref_lvl)
+				.initialize(comm);
 		}
 
 		const std::array<std::array<double, 3>, 3>
@@ -182,10 +175,7 @@ int main(int argc, char* argv[])
 		for (size_t dim = 0; dim < 3; dim++) {
 			geom_params[dim].start = grid_starts[dim];
 			geom_params[dim].level_0_cell_length = cell_lengths[dim];
-			if (not grids[dim].set_geometry(geom_params[dim])) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-				abort();
-			}
+			grids[dim].set_geometry(geom_params[dim]);
 		}
 
 		for (int i = 0; i < max_ref_lvl; i++) {
@@ -224,7 +214,7 @@ int main(int argc, char* argv[])
 					abort();
 				}
 
-				auto& vec = (*cell_data)[Vector_Field()];
+				auto& vec = (*cell_data)[Vector()];
 				vec[0] = vec[1] = vec[2] = 0;
 
 				const auto center = grids[dim].geometry.get_center(cell)[dim];
@@ -234,33 +224,41 @@ int main(int argc, char* argv[])
 		}
 
 		// exclude one layer of boundary cells
-		std::array<std::vector<uint64_t>, 3> solve_cells;
 		for (size_t dim = 0; dim < 3; dim++) {
-			for (const auto& cell: grids[dim].get_cells()) {
-				const auto center = grids[dim].geometry.get_center(cell)[dim];
+			for (const auto& cell: grids[dim].local_cells) {
+				const auto center = grids[dim].geometry.get_center(cell.id)[dim];
 				if (center > 0 and center < 2 * M_PI) {
-					solve_cells[dim].push_back(cell);
+					(*cell.data)[Type()] = 1;
+				} else {
+					(*cell.data)[Type()] = 0;
 				}
 			}
 		}
 
-		auto Vector_Getter = [](Cell& cell_data) -> Vector_Field::data_type& {
-			return cell_data[Vector_Field()];
+		auto Vector_Getter = [](Cell& cell_data) -> Vector::data_type& {
+			return cell_data[Vector()];
 		};
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
 		};
+		auto Type_Getter = [](Cell& cell_data) -> bool {
+			return cell_data[Type()] == 1;
+		};
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			pamhd::divergence::get_divergence(
-				solve_cells[dim], grids[dim], Vector_Getter, Divergence_Getter
+				grids[dim].local_cells,
+				grids[dim],
+				Vector_Getter,
+				Divergence_Getter,
+				Type_Getter
 			);
 		}
 
 		const std::array<double, 3> norms{{
-			get_max_norm(solve_cells[0], grids[0], 0),
-			get_max_norm(solve_cells[1], grids[1], 1),
-			get_max_norm(solve_cells[2], grids[2], 2)
+			get_max_norm(grids[0], 0),
+			get_max_norm(grids[1], 1),
+			get_max_norm(grids[2], 2)
 		}};
 
 		for (size_t dim = 0; dim < 3; dim++) {
