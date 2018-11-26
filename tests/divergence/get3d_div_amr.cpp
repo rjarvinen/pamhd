@@ -2,6 +2,7 @@
 Tests vector field divergence calculation of PAMHD in 3d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -63,7 +64,7 @@ double div_of_function(const std::array<double, 3>& r)
 }
 
 
-struct Vector_Field {
+struct Vector {
 	using data_type = std::array<double, 3>;
 };
 
@@ -71,35 +72,35 @@ struct Divergence {
 	using data_type = double;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
-	Vector_Field,
-	Divergence
+	Vector,
+	Divergence,
+	Type
 >;
 
 
 /*!
 Returns maximum norm.
 */
-template<class Grid_T> double get_max_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid
+template<class Grid> double get_max_norm(
+	const Grid& grid
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto div_of = div_of_function(grid.geometry.get_center(cell));
+		const auto div_of = div_of_function(grid.geometry.get_center(cell.id));
 
 		local_norm = std::max(
 			local_norm,
-			std::fabs((*cell_data)[Divergence()] - div_of)
+			std::fabs((*cell.data)[Divergence()] - div_of)
 		);
 	}
 
@@ -148,21 +149,13 @@ int main(int argc, char* argv[])
 
 		const std::array<uint64_t, 3> grid_size{{nr_of_cells + 2, nr_of_cells + 2, nr_of_cells + 2}};
 
-		if (
-			not grid.initialize(
-				grid_size,
-				comm,
-				"RANDOM",
-				neighborhood_size,
-				max_refinement_level,
-				false, false, false
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grid."
-				<< std::endl;
-			abort();
-		}
+		grid
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size)
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(max_refinement_level)
+			.initialize(comm)
+			.balance_load();
 
 		const std::array<double, 3>
 			cell_length{{
@@ -179,19 +172,11 @@ int main(int argc, char* argv[])
 		dccrg::Cartesian_Geometry::Parameters geom_params;
 		geom_params.start = grid_start;
 		geom_params.level_0_cell_length = cell_length;
-
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't set grid geometry."
-				<< std::endl;
-			abort();
-		}
-
-		grid.balance_load();
+		grid.set_geometry(geom_params);
 
 		for (int i = 0; i < max_refinement_level; i++) {
-			for (const auto& cell: grid.get_cells()) {
-				const auto center = grid.geometry.get_center(cell);
+			for (const auto& cell: grid.local_cells) {
+				const auto center = grid.geometry.get_center(cell.id);
 				if (
 					center[0] > grid_start[0] + 3.0 * 1 / 4
 					and center[0] < grid_start[0] + 3.0 * 3 / 4
@@ -200,38 +185,31 @@ int main(int argc, char* argv[])
 					and center[2] > grid_start[2] + 4.0 * 1 / 4
 					and center[2] < grid_start[2] + 4.0 * 3 / 4
 				) {
-					grid.refine_completely(cell);
+					grid.refine_completely(cell.id);
 				}
 			}
 			grid.stop_refining();
 		}
 
-		const auto all_cells = grid.get_cells();
-		for (const auto& cell: all_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": No data for cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			(*cell_data)[Vector_Field()] = function(grid.geometry.get_center(cell));
+		for (const auto& cell: grid.local_cells) {
+			(*cell.data)[Vector()] = function(grid.geometry.get_center(cell.id));
 		}
 		grid.update_copies_of_remote_neighbors();
 
-		std::vector<uint64_t> solve_cells;
-		for (const auto& cell: all_cells) {
-			const auto center = grid.geometry.get_center(cell);
+		uint64_t solve_cells_local = 0, solve_cells_global = 0;
+		for (const auto& cell: grid.local_cells) {
+			const auto center = grid.geometry.get_center(cell.id);
 			if (
 				center[0] > -1 and center[0] < -1 + 3
 				and center[1] > -M_PI / 4 and center[1] < -M_PI / 4 + 1.5
 				and center[2] > -2 and center[2] < -2 + 4
 			) {
-				solve_cells.push_back(cell);
+				(*cell.data)[Type()] = 1;
+				solve_cells_local++;
+			} else {
+				(*cell.data)[Type()] = 0;
 			}
 		}
-		uint64_t solve_cells_local = solve_cells.size(), solve_cells_global = 0;
 		if (
 			MPI_Allreduce(
 				&solve_cells_local,
@@ -247,17 +225,20 @@ int main(int argc, char* argv[])
 		}
 
 		pamhd::divergence::get_divergence(
-			solve_cells,
+			grid.local_cells,
 			grid,
-			[](Cell& cell_data) -> Vector_Field::data_type& {
-				return cell_data[Vector_Field()];
+			[](Cell& cell_data) -> Vector::data_type& {
+				return cell_data[Vector()];
 			},
 			[](Cell& cell_data) -> Divergence::data_type& {
 				return cell_data[Divergence()];
+			},
+			[](Cell& cell_data) -> bool {
+				return cell_data[Type()] == 1;
 			}
 		);
 
-		const double norm = get_max_norm(solve_cells, grid);
+		const double norm = get_max_norm(grid);
 
 		if (norm > old_norm) {
 			if (grid.get_rank() == 0) {
