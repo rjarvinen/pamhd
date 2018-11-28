@@ -2,6 +2,7 @@
 Tests vector field double curl calculation of PAMHD in 3d.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -55,10 +56,15 @@ struct Result {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector,
-	Result
+	Result,
+	Type
 >;
 using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
 
@@ -70,6 +76,10 @@ const auto Result_Getter
 	= [](Cell& cell_data) -> Result::data_type& {
 		return cell_data[Result()];
 	};
+const auto Type_Getter
+	= [](Cell& cell_data) -> Type::data_type& {
+		return cell_data[Type()];
+	};
 
 // returns true on success
 bool check(
@@ -77,61 +87,47 @@ bool check(
 	const std::array<std::array<double, 3>, 7>& init_cond,
 	const std::array<double, 3>& reference_result
 ) {
-	auto cells = grid.get_cells();
-	for (const auto& cell: cells) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
-		}
-		(*cell_data)[Result()] = {0, 0, 0};
+	for (const auto& cell: grid.local_cells) {
+		(*cell.data)[Result()] = {0, 0, 0};
+		(*cell.data)[Type()] = 0;
 
-		switch(cell) {
+		switch(cell.id) {
 		case 5:
-			(*cell_data)[Vector()] = init_cond[0];
+			(*cell.data)[Vector()] = init_cond[0];
 			break;
 		case 11:
-			(*cell_data)[Vector()] = init_cond[1];
+			(*cell.data)[Vector()] = init_cond[1];
 			break;
 		case 13:
-			(*cell_data)[Vector()] = init_cond[2];
+			(*cell.data)[Vector()] = init_cond[2];
 			break;
 		case 14:
-			(*cell_data)[Vector()] = init_cond[3];
+			(*cell.data)[Type()] = 1;
+			(*cell.data)[Vector()] = init_cond[3];
 			break;
 		case 15:
-			(*cell_data)[Vector()] = init_cond[4];
+			(*cell.data)[Vector()] = init_cond[4];
 			break;
 		case 17:
-			(*cell_data)[Vector()] = init_cond[5];
+			(*cell.data)[Vector()] = init_cond[5];
 			break;
 		case 23:
-			(*cell_data)[Vector()] = init_cond[6];
+			(*cell.data)[Vector()] = init_cond[6];
 			break;
 		default:
-			(*cell_data)[Vector()] = {0, 0, 0};
+			(*cell.data)[Vector()] = {0, 0, 0};
 			break;
 		}
 	}
 	grid.update_copies_of_remote_neighbors();
 
-	if (grid.is_local(14)) {
-		pamhd::divergence::get_curl_curl(
-			{14},
-			grid,
-			Vector_Getter,
-			Result_Getter
-		);
-	} else {
-		pamhd::divergence::get_curl_curl(
-			{},
-			grid,
-			Vector_Getter,
-			Result_Getter
-		);
-	}
+	pamhd::divergence::get_curl_curl(
+		grid.local_cells,
+		grid,
+		Vector_Getter,
+		Result_Getter,
+		Type_Getter
+	);
 
 	int failure = 0;
 	if (grid.is_local(14)) {
@@ -208,21 +204,13 @@ int main(int argc, char* argv[])
 	std::array<uint64_t, 3> grid_size{3, 3, 3};
 	const auto init_grid
 		= [&](Grid& grid){
-			if (
-				not grid.initialize(
-					grid_size,
-					comm,
-					"RANDOM",
-					neighborhood_size,
-					max_refinement_level,
-					false, false, false
-				)
-			) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": Couldn't initialize grid."
-					<< std::endl;
-					abort();
-			}
+			grid
+				.set_load_balancing_method("RANDOM")
+				.set_initial_length(grid_size)
+				.set_neighborhood_length(neighborhood_size)
+				.set_maximum_refinement_level(max_refinement_level)
+				.initialize(comm)
+				.balance_load();
 		};
 
 	const std::array<double, 3> cell_length{1, 2, 3}, grid_start{3, 2, 1};
@@ -231,10 +219,7 @@ int main(int argc, char* argv[])
 			dccrg::Cartesian_Geometry::Parameters geom_params;
 			geom_params.start = grid_start;
 			geom_params.level_0_cell_length = cell_length;
-			if (not grid.set_geometry(geom_params)) {
-				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
+			grid.set_geometry(geom_params);
 		};
 
 	// only Vx components

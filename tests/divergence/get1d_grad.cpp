@@ -2,6 +2,7 @@
 Tests scalar field gradient calculation of PAMHD in 1d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -65,47 +66,47 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Scalar,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0
 */
-template<class Grid_T> double get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto center = grid.geometry.get_center(cell);
+		const auto center = grid.geometry.get_center(cell.id);
 
 		if (p == 0) {
 			local_norm = std::max(
 				local_norm,
 				std::fabs(
-					(*cell_data)[Gradient()][dimension]
+					(*cell.data)[Gradient()][dimension]
 					- grad_of_function(center[dimension])
 				)
 			);
 		} else {
 			local_norm += std::pow(
 				std::fabs(
-					(*cell_data)[Gradient()][dimension]
+					(*cell.data)[Gradient()][dimension]
 					- grad_of_function(center[dimension])
 				),
 				p
@@ -170,18 +171,27 @@ int main(int argc, char* argv[])
 			grid_size_y{{1, nr_of_cells + 2, 1}},
 			grid_size_z{{1, 1, nr_of_cells + 2}};
 
-		if (not grid_x.initialize(grid_size_x,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.initialize(grid_size_y,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.initialize(grid_size_z,comm,"RANDOM",0,0,false,false,false)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
+		grid_x
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_x)
+			.set_neighborhood_length(0)
+			.set_maximum_refinement_level(0)
+			.initialize(comm)
+			.balance_load();
+		grid_y
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_y)
+			.set_neighborhood_length(0)
+			.set_maximum_refinement_level(0)
+			.initialize(comm)
+			.balance_load();
+		grid_z
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size_z)
+			.set_neighborhood_length(0)
+			.set_maximum_refinement_level(0)
+			.initialize(comm)
+			.balance_load();
 
 		const std::array<double, 3>
 			cell_length_x{{2 * M_PI / (grid_size_x[0] - 2), 1, 1}},
@@ -201,20 +211,9 @@ int main(int argc, char* argv[])
 		geom_params_y.level_0_cell_length = cell_length_y;
 		geom_params_z.start = grid_start_z;
 		geom_params_z.level_0_cell_length = cell_length_z;
-
-
-		if (not grid_x.set_geometry(geom_params_x)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_y.set_geometry(geom_params_y)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
-		if (not grid_z.set_geometry(geom_params_z)) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
+		grid_x.set_geometry(geom_params_x);
+		grid_y.set_geometry(geom_params_y);
+		grid_z.set_geometry(geom_params_z);
 
 		const auto all_cells = grid_x.get_cells();
 		for (const auto& cell: all_cells) {
@@ -253,21 +252,24 @@ int main(int argc, char* argv[])
 		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
 			return cell_data[Gradient()];
 		};
+		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
+		};
 		pamhd::divergence::get_gradient(
-			solve_cells, grid_x, Scalar_Getter, Gradient_Getter
+			grid_x.local_cells, grid_x, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 		pamhd::divergence::get_gradient(
-			solve_cells, grid_y, Scalar_Getter, Gradient_Getter
+			grid_y.local_cells, grid_y, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 		pamhd::divergence::get_gradient(
-			solve_cells, grid_z, Scalar_Getter, Gradient_Getter
+			grid_z.local_cells, grid_z, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 
 		const double
 			p_of_norm = 2,
-			norm_x = get_diff_lp_norm(solve_cells, grid_x, p_of_norm, cell_volume, 0),
-			norm_y = get_diff_lp_norm(solve_cells, grid_y, p_of_norm, cell_volume, 1),
-			norm_z = get_diff_lp_norm(solve_cells, grid_z, p_of_norm, cell_volume, 2);
+			norm_x = get_diff_lp_norm(grid_x, p_of_norm, cell_volume, 0),
+			norm_y = get_diff_lp_norm(grid_y, p_of_norm, cell_volume, 1),
+			norm_z = get_diff_lp_norm(grid_z, p_of_norm, cell_volume, 2);
 
 		if (norm_x > old_norm_x) {
 			if (grid_x.get_rank() == 0) {

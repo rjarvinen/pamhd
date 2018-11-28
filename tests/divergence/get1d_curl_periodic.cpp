@@ -2,6 +2,7 @@
 Tests vector field curl calculation of PAMHD in 1d.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -64,42 +65,42 @@ struct Curl {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector,
-	Curl
+	Curl,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0.
 */
-template<class Grid_T> double get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const double curl_of = curl_of_function(grid.geometry.get_center(cell)[2]);
+		const double curl_of = curl_of_function(grid.geometry.get_center(cell.id)[2]);
 
 		if (p == 0) {
 			local_norm = std::max(
 				local_norm,
-				std::fabs((*cell_data)[Curl()][1] - curl_of)
+				std::fabs((*cell.data)[Curl()][1] - curl_of)
 			);
 		} else {
 			local_norm += std::pow(
-				std::fabs((*cell_data)[Curl()][1] - curl_of),
+				std::fabs((*cell.data)[Curl()][1] - curl_of),
 				p
 			);
 		}
@@ -159,65 +160,41 @@ int main(int argc, char* argv[])
 
 		const std::array<uint64_t, 3> grid_size{{1, 1, nr_of_cells}};
 
-		if (
-			not grid.initialize(
-				grid_size,
-				comm,
-				"RANDOM",
-				neighborhood_size,
-				max_refinement_level,
-				true,
-				false,
-				false
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grid."
-				<< std::endl;
-			abort();
-		}
+		grid
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size)
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(max_refinement_level)
+			.initialize(comm)
+			.balance_load();
 
 		dccrg::Cartesian_Geometry::Parameters geom_params;
 		geom_params.start = {{0, 0, 0}};
 		geom_params.level_0_cell_length = {{1, 1, 2 * M_PI / nr_of_cells}};
+		grid.set_geometry(geom_params);
 
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't set grid geometry."
-				<< std::endl;
-			abort();
-		}
-
-		grid.balance_load();
-
-		const auto cells = grid.get_cells();
-		for (const auto& cell: cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": No data for cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			(*cell_data)[Vector()][0] = function(grid.geometry.get_center(cell)[2]);
+		for (const auto& cell: grid.local_cells) {
+			(*cell.data)[Vector()][0] = function(grid.geometry.get_center(cell.id)[2]);
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		pamhd::divergence::get_curl(
-			cells,
+			grid.local_cells,
 			grid,
 			[](Cell& cell_data) -> Vector::data_type& {
 				return cell_data[Vector()];
 			},
 			[](Cell& cell_data) -> Curl::data_type& {
 				return cell_data[Curl()];
+			},
+			[](Cell& cell_data) -> Type::data_type& {
+				return cell_data[Type()];
 			}
 		);
 
 		const double
 			p_of_norm = 0,
-			norm = get_diff_lp_norm(cells, grid, p_of_norm, 2 * M_PI / nr_of_cells);
+			norm = get_diff_lp_norm(grid, p_of_norm, 2 * M_PI / nr_of_cells);
 
 		if (norm > old_norm) {
 			if (grid.get_rank() == 0) {

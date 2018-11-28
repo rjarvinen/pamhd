@@ -2,6 +2,7 @@
 Tests vector field curl calculation of PAMHD in 3d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -75,43 +76,43 @@ struct Curl {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector,
-	Curl
+	Curl,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0.
 */
-template<class Grid_T> double get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto curl_of = curl_of_function(grid.geometry.get_center(cell));
+		const auto curl_of = curl_of_function(grid.geometry.get_center(cell.id));
 
 		if (p == 0) {
 			local_norm = std::max(
 				local_norm,
-				std::fabs((*cell_data)[Curl()][dimension] - curl_of[dimension])
+				std::fabs((*cell.data)[Curl()][dimension] - curl_of[dimension])
 			);
 		} else {
 			local_norm += std::pow(
-				std::fabs((*cell_data)[Curl()][dimension] - curl_of[dimension]),
+				std::fabs((*cell.data)[Curl()][dimension] - curl_of[dimension]),
 				p
 			);
 		}
@@ -173,23 +174,13 @@ int main(int argc, char* argv[])
 
 		const std::array<uint64_t, 3> grid_size{{nr_of_cells + 2, nr_of_cells + 2, nr_of_cells + 2}};
 
-		if (
-			not grid.initialize(
-				grid_size,
-				comm,
-				"RANDOM",
-				neighborhood_size,
-				max_refinement_level,
-				false,
-				false,
-				false
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grid."
-				<< std::endl;
-			abort();
-		}
+		grid
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size)
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(max_refinement_level)
+			.initialize(comm)
+			.balance_load();
 
 		const std::array<double, 3>
 			cell_length{{
@@ -209,33 +200,15 @@ int main(int argc, char* argv[])
 		dccrg::Cartesian_Geometry::Parameters geom_params;
 		geom_params.start = grid_start;
 		geom_params.level_0_cell_length = cell_length;
+		grid.set_geometry(geom_params);
 
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't set grid geometry."
-				<< std::endl;
-			abort();
-		}
-
-		grid.balance_load();
-
-		const auto all_cells = grid.get_cells();
-		for (const auto& cell: all_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": No data for cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			(*cell_data)[Vector()] = function(grid.geometry.get_center(cell));
+		for (const auto& cell: grid.local_cells) {
+			(*cell.data)[Vector()] = function(grid.geometry.get_center(cell.id));
 		}
 		grid.update_copies_of_remote_neighbors();
 
-		std::vector<uint64_t> solve_cells;
-		for (const auto& cell: all_cells) {
-			const auto index = grid.mapping.get_indices(cell);
+		for (const auto& cell: grid.local_cells) {
+			const auto index = grid.mapping.get_indices(cell.id);
 			if (
 				index[0] > 0
 				and index[0] < grid_size[0] - 1
@@ -244,26 +217,31 @@ int main(int argc, char* argv[])
 				and index[2] > 0
 				and index[2] < grid_size[2] - 1
 			) {
-				solve_cells.push_back(cell);
+				(*cell.data)[Type()] = 1;
+			} else {
+				(*cell.data)[Type()] = 0;
 			}
 		}
 
 		pamhd::divergence::get_curl(
-			solve_cells,
+			grid.local_cells,
 			grid,
 			[](Cell& cell_data) -> Vector::data_type& {
 				return cell_data[Vector()];
 			},
 			[](Cell& cell_data) -> Curl::data_type& {
 				return cell_data[Curl()];
+			},
+			[](Cell& cell_data) -> Type::data_type& {
+				return cell_data[Type()];
 			}
 		);
 
 		const double
 			p_of_norm = 2,
-			norm_x = get_diff_lp_norm(solve_cells, grid, p_of_norm, cell_volume, 0),
-			norm_y = get_diff_lp_norm(solve_cells, grid, p_of_norm, cell_volume, 1),
-			norm_z = get_diff_lp_norm(solve_cells, grid, p_of_norm, cell_volume, 2);
+			norm_x = get_diff_lp_norm(grid, p_of_norm, cell_volume, 0),
+			norm_y = get_diff_lp_norm(grid, p_of_norm, cell_volume, 1),
+			norm_z = get_diff_lp_norm(grid, p_of_norm, cell_volume, 2);
 
 		if (norm_x > old_norm_x) {
 			if (grid.get_rank() == 0) {

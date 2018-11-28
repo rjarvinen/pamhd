@@ -2,6 +2,7 @@
 Tests scalar field gradient calculation of PAMHD in 1d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -65,37 +66,37 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Scalar,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0
 */
-template<class Grid_T> double get_max_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_max_norm(
+	const Grid& grid,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto center = grid.geometry.get_center(cell);
+		const auto center = grid.geometry.get_center(cell.id);
 
 		local_norm = std::max(
 			local_norm,
 			std::fabs(
-				(*cell_data)[Gradient()][dimension]
+				(*cell.data)[Gradient()][dimension]
 				- grad_of_function(center[dimension])
 			)
 		);
@@ -154,19 +155,12 @@ int main(int argc, char* argv[])
 
 		const int max_ref_lvl = 2;
 		for (size_t dim = 0; dim < 3; dim++) {
-			if (
-				not grids[dim].initialize(
-					grid_sizes[dim],
-					comm,
-					"RANDOM",
-					0,
-					max_ref_lvl,
-					false, false, false
-				)
-			) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-				abort();
-			}
+			grids[dim]
+				.set_load_balancing_method("RANDOM")
+				.set_initial_length(grid_sizes[dim])
+				.set_neighborhood_length(0)
+				.set_maximum_refinement_level(max_ref_lvl)
+				.initialize(comm);
 		}
 
 		const std::array<std::array<double, 3>, 3>
@@ -185,10 +179,7 @@ int main(int argc, char* argv[])
 		for (size_t dim = 0; dim < 3; dim++) {
 			geom_params[dim].start = grid_starts[dim];
 			geom_params[dim].level_0_cell_length = cell_lengths[dim];
-			if (not grids[dim].set_geometry(geom_params[dim])) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-				abort();
-			}
+			grids[dim].set_geometry(geom_params[dim]);
 		}
 
 		for (size_t dim = 0; dim < 3; dim++) {
@@ -250,17 +241,20 @@ int main(int argc, char* argv[])
 		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
 			return cell_data[Gradient()];
 		};
+		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
+		};
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			pamhd::divergence::get_gradient(
-				solve_cells[dim], grids[dim], Scalar_Getter, Gradient_Getter
+				grids[dim].local_cells, grids[dim], Scalar_Getter, Gradient_Getter, Type_Getter
 			);
 		}
 
 		const std::array<double, 3> norms{{
-			get_max_norm(solve_cells[0], grids[0], 0),
-			get_max_norm(solve_cells[1], grids[1], 1),
-			get_max_norm(solve_cells[2], grids[2], 2)
+			get_max_norm(grids[0], 0),
+			get_max_norm(grids[1], 1),
+			get_max_norm(grids[2], 2)
 		}};
 
 		for (size_t dim = 0; dim < 3; dim++) {

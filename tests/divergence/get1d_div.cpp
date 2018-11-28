@@ -228,8 +228,8 @@ int main(int argc, char* argv[])
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
 		};
-		auto Type_Getter = [](Cell& cell_data) -> bool {
-			return cell_data[Type()] == 1;
+		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
 		};
 		pamhd::divergence::get_divergence(
 			grid_x.local_cells, grid_x, Vector_Getter, Divergence_Getter, Type_Getter

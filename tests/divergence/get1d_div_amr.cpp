@@ -242,8 +242,8 @@ int main(int argc, char* argv[])
 		auto Divergence_Getter = [](Cell& cell_data) -> Divergence::data_type& {
 			return cell_data[Divergence()];
 		};
-		auto Type_Getter = [](Cell& cell_data) -> bool {
-			return cell_data[Type()] == 1;
+		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
 		};
 
 		for (size_t dim = 0; dim < 3; dim++) {

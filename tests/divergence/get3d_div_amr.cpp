@@ -233,8 +233,8 @@ int main(int argc, char* argv[])
 			[](Cell& cell_data) -> Divergence::data_type& {
 				return cell_data[Divergence()];
 			},
-			[](Cell& cell_data) -> bool {
-				return cell_data[Type()] == 1;
+			[](Cell& cell_data) -> Type::data_type& {
+				return cell_data[Type()];
 			}
 		);
 

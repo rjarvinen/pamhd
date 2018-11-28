@@ -2,6 +2,7 @@
 Tests scalar field gradient calculation of PAMHD in 3d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -75,19 +76,23 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Scalar,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
 /*!
 Returns maximum norm if p == 0
 */
-template<class Grid_T> std::array<double, 3> get_diff_lp_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> std::array<double, 3> get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume
 ) {
@@ -95,16 +100,12 @@ template<class Grid_T> std::array<double, 3> get_diff_lp_norm(
 		local_norm{{0, 0, 0}},
 		global_norm{{0, 0, 0}};
 
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == NULL) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
-		const auto center = grid.geometry.get_center(cell);
+		const auto center = grid.geometry.get_center(cell.id);
 
 		const auto grad_of = grad_of_function(center);
 
@@ -112,13 +113,13 @@ template<class Grid_T> std::array<double, 3> get_diff_lp_norm(
 			for (size_t i = 0; i < 3; i++) {
 				local_norm[i] = std::max(
 					local_norm[i],
-					std::fabs((*cell_data)[Gradient()][i] - grad_of[i])
+					std::fabs((*cell.data)[Gradient()][i] - grad_of[i])
 				);
 			}
 		} else {
 			for (size_t i = 0; i < 3; i++) {
 				local_norm[i] += std::pow(
-					std::fabs((*cell_data)[Gradient()][i] - grad_of[i]),
+					std::fabs((*cell.data)[Gradient()][i] - grad_of[i]),
 					p
 				);
 			}
@@ -205,23 +206,13 @@ int main(int argc, char* argv[])
 			nr_of_cells + 2
 		}};
 
-		if (
-			not grid.initialize(
-				grid_size,
-				comm,
-				"RANDOM",
-				neighborhood_size,
-				max_refinement_level,
-				false,
-				false,
-				false
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grid."
-				<< std::endl;
-			abort();
-		}
+		grid
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size)
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(max_refinement_level)
+			.initialize(comm)
+			.balance_load();
 
 		const std::array<double, 3>
 			cell_length{{
@@ -237,35 +228,17 @@ int main(int argc, char* argv[])
 		dccrg::Cartesian_Geometry::Parameters geom_params;
 		geom_params.start = grid_start;
 		geom_params.level_0_cell_length = cell_length;
+		grid.set_geometry(geom_params);
 
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't set grid geometry."
-				<< std::endl;
-			abort();
-		}
-
-		grid.balance_load();
-
-		const auto all_cells = grid.get_cells();
-		for (const auto& cell: all_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": No data for cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			const auto center = grid.geometry.get_center(cell);
-
-			(*cell_data)[Scalar()] = function(center);
+		for (const auto& cell: grid.local_cells) {
+			const auto center = grid.geometry.get_center(cell.id);
+			(*cell.data)[Scalar()] = function(center);
 		}
 		grid.update_copies_of_remote_neighbors();
 
-		std::vector<uint64_t> solve_cells;
-		for (const auto& cell: all_cells) {
-			const auto index = grid.mapping.get_indices(cell);
+		uint64_t solve_cells_local = 0, solve_cells_global = 0;
+		for (const auto& cell: grid.local_cells) {
+			const auto index = grid.mapping.get_indices(cell.id);
 			if (
 				index[0] > 0
 				and index[0] < grid_size[0] - 1
@@ -274,10 +247,12 @@ int main(int argc, char* argv[])
 				and index[2] > 0
 				and index[2] < grid_size[2] - 1
 			) {
-				solve_cells.push_back(cell);
+				(*cell.data)[Type()] = 1;
+				solve_cells_local++;
+			} else {
+				(*cell.data)[Type()] = 0;
 			}
 		}
-		uint64_t solve_cells_local = solve_cells.size(), solve_cells_global = 0;
 		if (
 			MPI_Allreduce(
 				&solve_cells_local,
@@ -293,18 +268,21 @@ int main(int argc, char* argv[])
 		}
 
 		pamhd::divergence::get_gradient(
-			solve_cells,
+			grid.local_cells,
 			grid,
 			[](Cell& cell_data) -> Scalar::data_type& {
 				return cell_data[Scalar()];
 			},
 			[](Cell& cell_data) -> Gradient::data_type& {
 				return cell_data[Gradient()];
+			},
+			[](Cell& cell_data) -> Type::data_type& {
+				return cell_data[Type()];
 			}
 		);
 
 		const double p_of_norm = 2;
-		const auto norm = get_diff_lp_norm(solve_cells, grid, p_of_norm, cell_volume);
+		const auto norm = get_diff_lp_norm(grid, p_of_norm, cell_volume);
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			if (norm[dim] > old_norm[dim]) {
