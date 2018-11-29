@@ -2,6 +2,7 @@
 Tests vector field divergence removal of PAMHD in 1d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -70,35 +71,35 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector_Field,
 	Divergence,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
 /*!
 Returns maximum norm.
 */
-template<class Grid_T> double get_max_norm(
-	const std::vector<uint64_t>& cells,
-	const Grid_T& grid,
+template<class Grid> double get_max_norm(
+	const Grid& grid,
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: cells) {
-		const auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": No data for cell " << cell
-				<< std::endl;
-			abort();
+	for (const auto& cell: grid.local_cells) {
+		if ((*cell.data)[Type()] != 1) {
+			continue;
 		}
 
 		local_norm = std::max(
 			local_norm,
-			std::fabs((*cell_data)[Vector_Field()][dimension] - div_removed_function())
+			std::fabs((*cell.data)[Vector_Field()][dimension] - div_removed_function())
 		);
 	}
 
@@ -155,19 +156,13 @@ int main(int argc, char* argv[])
 
 		const int max_ref_lvl = 1;
 		for (size_t dim = 0; dim < 3; dim++) {
-			if (
-				not grids[dim].initialize(
-					grid_sizes[dim],
-					comm,
-					"RANDOM",
-					0,
-					max_ref_lvl,
-					false, false, false
-				)
-			) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-				abort();
-			}
+			grids[dim]
+				.set_load_balancing_method("RANDOM")
+				.set_initial_length(grid_sizes[dim])
+				.set_maximum_refinement_level(max_ref_lvl)
+				.set_neighborhood_length(0)
+				.initialize(comm)
+				.balance_load();
 		}
 
 		const std::array<std::array<double, 3>, 3>
@@ -186,11 +181,7 @@ int main(int argc, char* argv[])
 		for (size_t dim = 0; dim < 3; dim++) {
 			geom_params[dim].start = grid_starts[dim];
 			geom_params[dim].level_0_cell_length = cell_lengths[dim];
-
-			if (not grids[dim].set_geometry(geom_params[dim])) {
-				std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-				abort();
-			}
+			grids[dim].set_geometry(geom_params[dim]);
 		}
 
 		for (size_t dim = 0; dim < 3; dim++) {
@@ -208,30 +199,25 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		std::array<std::vector<uint64_t>, 3> solve_cells, boundary_cells;
+		std::array<uint64_t, 3>
+			solve_cells_local{0, 0, 0},
+			solve_cells_global{0, 0, 0};
 		for (size_t dim = 0; dim < 3; dim++) {
-			for (const auto& cell: grids[dim].get_cells()) {
-				const auto center = grids[dim].geometry.get_center(cell);
+			for (const auto& cell: grids[dim].local_cells) {
+				const auto center = grids[dim].geometry.get_center(cell.id);
 				if (center[dim] > 0 and center[dim] < 2 * M_PI) {
-					solve_cells[dim].push_back(cell);
+					(*cell.data)[Type()] = 1;
+					solve_cells_local[dim]++;
 				} else {
-					boundary_cells[dim].push_back(cell);
+					(*cell.data)[Type()] = 0;
 				}
 
-				auto* const cell_data = grids[dim][cell];
-				if (cell_data == nullptr) {
-					std::cerr << __FILE__ << ":" << __LINE__ << " " << dim << std::endl;
-					abort();
-				}
-				auto& vec = (*cell_data)[Vector_Field()];
+				auto& vec = (*cell.data)[Vector_Field()];
 				vec[0] = vec[1] = vec[2] = 0;
 				vec[dim] = function(center[dim]);
 			}
 			grids[dim].update_copies_of_remote_neighbors();
 		}
-		std::array<uint64_t, 3>
-			solve_cells_local{solve_cells[0].size(), solve_cells[1].size(), solve_cells[2].size()},
-			solve_cells_global{0, 0, 0};
 		if (
 			MPI_Allreduce(
 				solve_cells_local.data(),
@@ -255,24 +241,26 @@ int main(int argc, char* argv[])
 		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
 			return cell_data[Gradient()];
 		};
+		auto Cell_Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
+		};
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			pamhd::divergence::remove(
-				solve_cells[dim],
-				boundary_cells[dim],
-				{},
+				grids[dim].local_cells,
 				grids[dim],
 				Vector_Getter,
 				Divergence_Getter,
 				Gradient_Getter,
+				Cell_Type_Getter,
 				1000, 0, 1e-15, 2, 100, 5, false, false
 			);
 		}
 
 		const std::array<double, 3> norms{{
-			get_max_norm(solve_cells[0], grids[0], 0),
-			get_max_norm(solve_cells[1], grids[1], 1),
-			get_max_norm(solve_cells[2], grids[2], 2)
+			get_max_norm(grids[0], 0),
+			get_max_norm(grids[1], 1),
+			get_max_norm(grids[2], 2)
 		}};
 
 		for (size_t dim = 0; dim < 3; dim++) {

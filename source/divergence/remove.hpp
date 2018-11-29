@@ -699,6 +699,10 @@ template <
 
 	// store phi (solution) in divergence variable
 	for (const auto& cell: cells) {
+		if (Cell_Type(*cell.data) != 1) {
+			continue;
+		}
+
 		auto* const poisson_data = poisson_grid[cell.id];
 		if (poisson_data == nullptr) {
 			std::cerr <<  __FILE__ << "(" << __LINE__<< "): "
@@ -721,7 +725,9 @@ template <
 	);
 
 	for (const auto& cell: grid.local_cells) {
-		const auto x = grid.geometry.get_center(cell.id)[0];
+		if (Cell_Type(*cell.data) != 1) {
+			continue;
+		}
 		for (size_t dim = 0; dim < 3; dim++) {
 			Vector(*cell.data)[dim] -= Gradient(*cell.data)[dim];
 		}

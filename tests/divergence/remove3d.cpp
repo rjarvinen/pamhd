@@ -2,6 +2,7 @@
 Tests vector field divergence removal of PAMHD in 3d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -76,12 +77,17 @@ struct Gradient {
 	using data_type = std::array<double, 3>;
 };
 
+struct Type {
+	using data_type = int;
+};
+
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector_Field,
 	Divergence_Before,
 	Divergence_After,
-	Gradient
+	Gradient,
+	Type
 >;
 
 
@@ -127,23 +133,13 @@ int main(int argc, char* argv[])
 			nr_of_cells + 2
 		}};
 
-		if (
-			not grid.initialize(
-				grid_size,
-				comm,
-				"RANDOM",
-				neighborhood_size,
-				max_refinement_level,
-				false,
-				false,
-				false
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grid."
-				<< std::endl;
-			abort();
-		}
+		grid
+			.set_load_balancing_method("RANDOM")
+			.set_initial_length(grid_size)
+			.set_maximum_refinement_level(max_refinement_level)
+			.set_neighborhood_length(neighborhood_size)
+			.initialize(comm)
+			.balance_load();
 
 		const std::array<double, 3>
 			cell_length{{
@@ -158,37 +154,17 @@ int main(int argc, char* argv[])
 		dccrg::Cartesian_Geometry::Parameters geom_params;
 		geom_params.start = grid_start;
 		geom_params.level_0_cell_length = cell_length;
+		grid.set_geometry(geom_params);
 
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't set grid geometry."
-				<< std::endl;
-			abort();
-		}
-
-		grid.balance_load();
-
-		const auto all_cells = grid.get_cells();
-		for (const auto& cell: all_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__
-					<< ": No data for cell " << cell
-					<< std::endl;
-				abort();
-			}
-
-			const auto center = grid.geometry.get_center(cell);
-			(*cell_data)[Vector_Field()] = function(center);
+		for (const auto& cell: grid.local_cells) {
+			const auto center = grid.geometry.get_center(cell.id);
+			(*cell.data)[Vector_Field()] = function(center);
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		// classify cells
-		std::vector<uint64_t>
-			solve_cells,
-			boundary_cells;
-		for (const auto& cell: all_cells) {
-			const auto index = grid.mapping.get_indices(cell);
+		for (const auto& cell: grid.local_cells) {
+			const auto index = grid.mapping.get_indices(cell.id);
 			if (
 				index[0] > 0
 				and index[0] < grid_size[0] - 1
@@ -197,15 +173,19 @@ int main(int argc, char* argv[])
 				and index[2] > 0
 				and index[2] < grid_size[2] - 1
 			) {
-				solve_cells.push_back(cell);
+				(*cell.data)[Type()] = 1;
 			} else {
-				boundary_cells.push_back(cell);
+				(*cell.data)[Type()] = 0;
 			}
 		}
 
 		// apply copy boundaries
-		for (const auto& cell: boundary_cells) {
-			const auto index = grid.mapping.get_indices(cell);
+		for (const auto& cell: grid.local_cells) {
+			if ((*cell.data)[Type()] != 0) {
+				continue;
+			}
+
+			const auto index = grid.mapping.get_indices(cell.id);
 			auto neighbor_index = index;
 
 			if (index[0] == 0) {
@@ -224,13 +204,12 @@ int main(int argc, char* argv[])
 			const auto neighbor = grid.mapping.get_cell_from_indices(neighbor_index, 0);
 
 			const auto* const neighbor_data = grid[neighbor];
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL or neighbor_data == NULL) {
+			if (neighbor_data == nullptr) {
 				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
 
-			(*cell_data)[Vector_Field()] = (*neighbor_data)[Vector_Field()];
+			(*cell.data)[Vector_Field()] = (*neighbor_data)[Vector_Field()];
 		}
 		grid.update_copies_of_remote_neighbors();
 
@@ -240,32 +219,39 @@ int main(int argc, char* argv[])
 		auto Div_After_Getter = [](Cell& cell_data) -> Divergence_After::data_type& {
 			return cell_data[Divergence_After()];
 		};
+		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
+		};
 		const double div_before = pamhd::divergence::get_divergence(
-			solve_cells,
+			grid.local_cells,
 			grid,
 			Vector_Getter,
 			[](Cell& cell_data) -> Divergence_Before::data_type& {
 				return cell_data[Divergence_Before()];
-			}
+			},
+			Type_Getter
 		);
 
 		pamhd::divergence::remove(
-			solve_cells,
-			boundary_cells,
-			{},
+			grid.local_cells,
 			grid,
 			Vector_Getter,
 			Div_After_Getter,
 			[](Cell& cell_data) -> Gradient::data_type& {
 				return cell_data[Gradient()];
 			},
+			Type_Getter,
 			1000, 0, 1e-2, 2, 10, 0, false, false
 		);
 		grid.update_copies_of_remote_neighbors();
 
 		// update copy boundaries to correspond to removed divergence
-		for (const auto& cell: boundary_cells) {
-			const auto index = grid.mapping.get_indices(cell);
+		for (const auto& cell: grid.local_cells) {
+			if ((*cell.data)[Type()] != 0) {
+				continue;
+			}
+
+			const auto index = grid.mapping.get_indices(cell.id);
 			auto neighbor_index = index;
 
 			if (index[0] == 0) {
@@ -284,21 +270,21 @@ int main(int argc, char* argv[])
 			const auto neighbor = grid.mapping.get_cell_from_indices(neighbor_index, 0);
 
 			const auto* const neighbor_data = grid[neighbor];
-			auto* const cell_data = grid[cell];
-			if (cell_data == NULL or neighbor_data == NULL) {
+			if (neighbor_data == nullptr) {
 				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
 				abort();
 			}
 
-			(*cell_data)[Vector_Field()] = (*neighbor_data)[Vector_Field()];
+			(*cell.data)[Vector_Field()] = (*neighbor_data)[Vector_Field()];
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		const double div_after = pamhd::divergence::get_divergence(
-			solve_cells,
+			grid.local_cells,
 			grid,
 			Vector_Getter,
-			Div_After_Getter
+			Div_After_Getter,
+			Type_Getter
 		);
 
 		if (div_after > div_before) {

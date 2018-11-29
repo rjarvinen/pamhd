@@ -87,8 +87,8 @@ using Cell = gensimcell::Cell<
 /*!
 Use p == 1 to get maximum norm.
 */
-template<class Grid_T> double get_diff_lp_norm(
-	const Grid_T& grid,
+template<class Grid> double get_diff_lp_norm(
+	const Grid& grid,
 	const double p,
 	const double cell_volume,
 	const size_t dimension
@@ -311,14 +311,11 @@ int main(int argc, char* argv[])
 		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
 			return cell_data[Gradient()];
 		};
-		auto Cell_Type_Getter = [](Cell& cell_data) -> Type::data_type {
-			if (cell_data[Type()] > 0) {
-				return true;
-			} else {
-				return false;
-			}
+		auto Cell_Type_Getter = [](Cell& cell_data) -> Type::data_type& {
+			return cell_data[Type()];
 		};
 		pamhd::divergence::remove(
+			grid_x.local_cells,
 			grid_x,
 			Vector_Getter,
 			Divergence_Getter,
@@ -327,6 +324,7 @@ int main(int argc, char* argv[])
 			2000, 0, 1e-15, 2, 100, false, false
 		);
 		pamhd::divergence::remove(
+			grid_y.local_cells,
 			grid_y,
 			Vector_Getter,
 			Divergence_Getter,
@@ -335,6 +333,7 @@ int main(int argc, char* argv[])
 			2000, 0, 1e-15, 2, 100, false, false
 		);
 		pamhd::divergence::remove(
+			grid_z.local_cells,
 			grid_z,
 			Vector_Getter,
 			Divergence_Getter,
