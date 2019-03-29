@@ -2,6 +2,7 @@
 Two-population version of PAMHD MHD initialization.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -63,6 +64,7 @@ template <
 	class Geometries,
 	class Init_Cond,
 	class Background_Magnetic_Field,
+	class Cell_Iterator,
 	class Cell,
 	class Geometry,
 	class Mass_Density_Getter1,
@@ -86,8 +88,8 @@ template <
 	const Geometries& geometries,
 	Init_Cond& initial_conditions,
 	const Background_Magnetic_Field& bg_B,
+	const Cell_Iterator& cells,
 	dccrg::Dccrg<Cell, Geometry>& grid,
-	const std::vector<uint64_t>& cells,
 	const double time,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -116,31 +118,23 @@ template <
 		std::cout.flush();
 	}
 	// set default state
-	for (const auto cell_id: cells) {
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
-			abort();
-		}
-
+	for (const auto& cell: cells) {
 		// zero fluxes and background fields
-		Mas_f1(*cell_data)         =
-		Mas_f2(*cell_data)         =
-		Nrj_f1(*cell_data)         =
-		Nrj_f2(*cell_data)         =
-		Mom_f1(*cell_data)[0]      =
-		Mom_f1(*cell_data)[1]      =
-		Mom_f1(*cell_data)[2]      =
-		Mom_f2(*cell_data)[0]      =
-		Mom_f2(*cell_data)[1]      =
-		Mom_f2(*cell_data)[2]      =
-		Mag_f(*cell_data)[0]       =
-		Mag_f(*cell_data)[1]       =
-		Mag_f(*cell_data)[2]       = 0;
+		Mas_f1(*cell.data)         =
+		Mas_f2(*cell.data)         =
+		Nrj_f1(*cell.data)         =
+		Nrj_f2(*cell.data)         =
+		Mom_f1(*cell.data)[0]      =
+		Mom_f1(*cell.data)[1]      =
+		Mom_f1(*cell.data)[2]      =
+		Mom_f2(*cell.data)[0]      =
+		Mom_f2(*cell.data)[1]      =
+		Mom_f2(*cell.data)[2]      =
+		Mag_f(*cell.data)[0]       =
+		Mag_f(*cell.data)[1]       =
+		Mag_f(*cell.data)[2]       = 0;
 
-		const auto c = grid.geometry.get_center(cell_id);
+		const auto c = grid.geometry.get_center(cell.id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 		const auto
 			lat = asin(c[2] / r),
@@ -202,13 +196,13 @@ template <
 				r, lat, lon
 			);
 
-		Mas1(*cell_data) = mass_density1;
-		Mas2(*cell_data) = mass_density2;
-		Mom1(*cell_data) = mass_density1 * velocity1;
-		Mom2(*cell_data) = mass_density2 * velocity2;
-		Mag(*cell_data) = magnetic_field;
+		Mas1(*cell.data) = mass_density1;
+		Mas2(*cell.data) = mass_density2;
+		Mom1(*cell.data) = mass_density1 * velocity1;
+		Mom2(*cell.data) = mass_density2 * velocity2;
+		Mag(*cell.data) = magnetic_field;
 		if (mass_density1 > 0 and pressure1 > 0) {
-			Nrj1(*cell_data) = get_total_energy_density(
+			Nrj1(*cell.data) = get_total_energy_density(
 				mass_density1,
 				velocity1,
 				pressure1,
@@ -217,10 +211,10 @@ template <
 				vacuum_permeability
 			);
 		} else {
-			Nrj1(*cell_data) = 0;
+			Nrj1(*cell.data) = 0;
 		}
 		if (mass_density2 > 0 and pressure2 > 0) {
-			Nrj2(*cell_data) = get_total_energy_density(
+			Nrj2(*cell.data) = get_total_energy_density(
 				mass_density2,
 				velocity2,
 				pressure2,
@@ -229,19 +223,19 @@ template <
 				vacuum_permeability
 			);
 		} else {
-			Nrj2(*cell_data) = 0;
+			Nrj2(*cell.data) = 0;
 		}
 
-		const auto cell_end = grid.geometry.get_max(cell_id);
-		Bg_B_Pos_X(*cell_data) = bg_B.get_background_field(
+		const auto cell_end = grid.geometry.get_max(cell.id);
+		Bg_B_Pos_X(*cell.data) = bg_B.get_background_field(
 			{cell_end[0], c[1], c[2]},
 			vacuum_permeability
 		);
-		Bg_B_Pos_Y(*cell_data) = bg_B.get_background_field(
+		Bg_B_Pos_Y(*cell.data) = bg_B.get_background_field(
 			{c[0], cell_end[1], c[2]},
 			vacuum_permeability
 		);
-		Bg_B_Pos_Z(*cell_data) = bg_B.get_background_field(
+		Bg_B_Pos_Z(*cell.data) = bg_B.get_background_field(
 			{c[0], c[1], cell_end[2]},
 			vacuum_permeability
 		);
@@ -529,18 +523,13 @@ template <
 	}
 
 	// add magnetic field contribution to total energy densities
-	for (const auto& cell_id: cells) {
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-			abort();
-		}
+	for (const auto& cell: cells) {
 		const auto
-			total_mass = Mas1(*cell_data) + Mas2(*cell_data),
-			mass_frac1 = Mas1(*cell_data) / total_mass,
-			mass_frac2 = Mas2(*cell_data) / total_mass;
-		Nrj1(*cell_data) += mass_frac1 * 0.5 * Mag(*cell_data).squaredNorm() / vacuum_permeability;
-		Nrj2(*cell_data) += mass_frac2 * 0.5 * Mag(*cell_data).squaredNorm() / vacuum_permeability;
+			total_mass = Mas1(*cell.data) + Mas2(*cell.data),
+			mass_frac1 = Mas1(*cell.data) / total_mass,
+			mass_frac2 = Mas2(*cell.data) / total_mass;
+		Nrj1(*cell.data) += mass_frac1 * 0.5 * Mag(*cell.data).squaredNorm() / vacuum_permeability;
+		Nrj2(*cell.data) += mass_frac2 * 0.5 * Mag(*cell.data).squaredNorm() / vacuum_permeability;
 	}
 }
 

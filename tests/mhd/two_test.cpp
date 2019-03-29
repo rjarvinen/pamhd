@@ -2,6 +2,7 @@
 Two-fluid MHD test program of PAMHD.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -402,29 +403,21 @@ int main(int argc, char* argv[])
 	/*
 	Initialize simulation grid
 	*/
-	Grid grid;
-
 	pamhd::grid::Options grid_options;
 	grid_options.set(document);
 
 	const unsigned int neighborhood_size = 0;
 	const auto& number_of_cells = grid_options.get_number_of_cells();
 	const auto& periodic = grid_options.get_periodic();
-	if (not grid.initialize(
-		number_of_cells,
-		comm,
-		options_sim.lb_name.c_str(),
-		neighborhood_size,
-		0,
-		periodic[0],
-		periodic[1],
-		periodic[2]
-	)) {
-		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Couldn't initialize grid."
-			<< std::endl;
-		abort();
-	}
+
+	Grid grid; grid
+		.set_neighborhood_length(neighborhood_size)
+		.set_maximum_refinement_level(0)
+		.set_load_balancing_method(options_sim.lb_name.c_str())
+		.set_initial_length(number_of_cells)
+		.set_periodic(periodic[0], periodic[1], periodic[2])
+		.initialize(comm)
+		.balance_load();
 
 	// set grid geometry
 	const std::array<double, 3>
@@ -440,38 +433,19 @@ int main(int argc, char* argv[])
 	geom_params.start = grid_options.get_start();
 	geom_params.level_0_cell_length = cell_volume;
 
-	if (not grid.set_geometry(geom_params)) {
-		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Couldn't set grid geometry."
-			<< std::endl;
-		abort();
-	}
-
-	grid.balance_load();
+	grid.set_geometry(geom_params);
 
 	// update owner process of cells for saving into file
-	for (auto& cell: grid.cells) {
+	for (auto& cell: grid.local_cells()) {
 		(*cell.data)[pamhd::MPI_Rank()] = rank;
 	}
 
 	// assign cells into boundary geometries
-	for (const auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		const auto
 			start = grid.geometry.get_min(cell.id),
 			end = grid.geometry.get_max(cell.id);
 		geometries.overlaps(start, end, cell.id);
-	}
-
-	// pointer to data of every local cell and its neighbor(s)
-	const auto& cell_data_pointers = grid.get_cell_data_pointers();
-
-	// index of first outer cell in dccrg's cell data pointer cache
-	size_t outer_cell_start_i = 0;
-	for (const auto& item: cell_data_pointers) {
-		outer_cell_start_i++;
-		if (get<0>(item) == dccrg::error_cell) {
-			break;
-		}
 	}
 
 
@@ -486,11 +460,6 @@ int main(int argc, char* argv[])
 		next_mhd_save = options_mhd.save_n,
 		next_rem_div_B = options_div_B.remove_n;
 
-	std::vector<uint64_t>
-		cells = grid.get_cells(),
-		inner_cells = grid.get_local_cells_not_on_process_boundary(),
-		outer_cells = grid.get_local_cells_on_process_boundary();
-
 	// initialize MHD
 	if (rank == 0) {
 		cout << "Initializing MHD... " << endl;
@@ -499,8 +468,8 @@ int main(int argc, char* argv[])
 		geometries,
 		initial_conditions,
 		background_B,
+		grid.local_cells(),
 		grid,
-		cells,
 		simulation_time,
 		options_sim.adiabatic_index,
 		options_sim.vacuum_permeability,
@@ -619,28 +588,20 @@ int main(int argc, char* argv[])
 		grid.start_remote_neighbor_copy_updates();
 
 		pamhd::divergence::get_curl(
-			inner_cells,
+			grid.inner_cells(),
 			grid,
 			Mag,
-			Cur
+			Cur,
+			Sol_Info
 		);
-		for (const auto& cell: inner_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			Cur(*cell_data) /= options_sim.vacuum_permeability;
+		for (const auto& cell: grid.inner_cells()) {
+			Cur(*cell.data) /= options_sim.vacuum_permeability;
 		}
 
 		double solve_max_dt = -1;
-		size_t solve_index = 0;
-		std::tie(
-			solve_max_dt,
-			solve_index
-		) = pamhd::mhd::N_solve(
+		solve_max_dt = pamhd::mhd::N_solve(
 			mhd_solver,
-			0,
+			grid.inner_cells(),
 			grid,
 			time_step,
 			options_sim.adiabatic_index,
@@ -660,12 +621,9 @@ int main(int argc, char* argv[])
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
-		std::tie(
-			solve_max_dt,
-			solve_index
-		) = pamhd::mhd::N_solve(
+		solve_max_dt = pamhd::mhd::N_solve(
 			mhd_solver,
-			solve_index + 1,
+			grid.outer_cells(),
 			grid,
 			time_step,
 			options_sim.adiabatic_index,
@@ -684,18 +642,14 @@ int main(int argc, char* argv[])
 		max_dt_mhd = min(solve_max_dt, max_dt_mhd);
 
 		pamhd::divergence::get_curl(
-			outer_cells,
+			grid.outer_cells(),
 			grid,
 			Mag,
-			Cur
+			Cur,
+			Sol_Info
 		);
-		for (const auto& cell: outer_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			Cur(*cell_data) /= options_sim.vacuum_permeability;
+		for (const auto& cell: grid.outer_cells()) {
+			Cur(*cell.data) /= options_sim.vacuum_permeability;
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
@@ -713,60 +667,50 @@ int main(int argc, char* argv[])
 
 		// add contribution to change of B from resistivity
 		pamhd::divergence::get_curl(
-			inner_cells,
+			grid.inner_cells(),
 			grid,
 			Cur,
-			Mag_res
+			Mag_res,
+			Sol_Info
 		);
-		for (const auto& cell: inner_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
-			const auto c = grid.geometry.get_center(cell);
+		for (const auto& cell: grid.inner_cells()) {
+			const auto c = grid.geometry.get_center(cell.id);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 
-			J_val = Cur(*cell_data).norm();
-			Res(*cell_data) = resistivity.evaluate(
+			J_val = Cur(*cell.data).norm();
+			Res(*cell.data) = resistivity.evaluate(
 				simulation_time,
 				c[0], c[1], c[2],
 				r, asin(c[2] / r), atan2(c[1], c[0])
 			);
 
 			//TODO keep pressure/temperature constant despite electric resistivity
-			Mag_res(*cell_data) *= -Res(*cell_data);
-			Mag_f(*cell_data) += Mag_res(*cell_data);
+			Mag_res(*cell.data) *= -Res(*cell.data);
+			Mag_f(*cell.data) += Mag_res(*cell.data);
 		}
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
 		pamhd::divergence::get_curl(
-			outer_cells,
+			grid.outer_cells(),
 			grid,
 			Cur,
-			Mag_res
+			Mag_res,
+			Sol_Info
 		);
-		for (const auto& cell: outer_cells) {
-			auto* const cell_data = grid[cell];
-			if (cell_data == nullptr) {
-				std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-
-			const auto c = grid.geometry.get_center(cell);
+		for (const auto& cell: grid.outer_cells()) {
+			const auto c = grid.geometry.get_center(cell.id);
 			const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 
-			J_val = Cur(*cell_data).norm();
-			Res(*cell_data) = resistivity.evaluate(
+			J_val = Cur(*cell.data).norm();
+			Res(*cell.data) = resistivity.evaluate(
 				simulation_time,
 				c[0], c[1], c[2],
 				r, asin(c[2] / r), atan2(c[1], c[0])
 			);
 
-			Mag_res(*cell_data) *= -Res(*cell_data);
-			Mag_f(*cell_data) += Mag_res(*cell_data);
+			Mag_res(*cell.data) *= -Res(*cell.data);
+			Mag_f(*cell.data) += Mag_res(*cell.data);
 		}
 
 		grid.wait_remote_neighbor_copy_update_sends();
@@ -806,16 +750,8 @@ int main(int argc, char* argv[])
 			}
 
 			// save old B in case div removal fails
-			for (const auto& cell: cells) {
-				auto* const cell_data = grid[cell];
-				if (cell_data == nullptr) {
-					std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-						"No data for cell " << cell
-						<< std::endl;
-					abort();
-				}
-
-				Mag_tmp(*cell_data) = Mag(*cell_data);
+			for (const auto& cell: grid.local_cells()) {
+				Mag_tmp(*cell.data) = Mag(*cell.data);
 			}
 
 			Cell::set_transfer_all(
@@ -826,9 +762,7 @@ int main(int argc, char* argv[])
 
 			const auto div_before
 				= pamhd::divergence::remove(
-					solve_cells,
-					bdy_cells,
-					skip_cells,
+					grid.local_cells(),
 					grid,
 					Mag,
 					Mag_div,
@@ -837,12 +771,14 @@ int main(int argc, char* argv[])
 					{
 						return cell_data[pamhd::Scalar_Potential_Gradient()];
 					},
+					Sol_Info,
 					options_div_B.poisson_iterations_max,
 					options_div_B.poisson_iterations_min,
 					options_div_B.poisson_norm_stop,
 					2,
 					options_div_B.poisson_norm_increase_max,
 					0,
+					false,
 					false
 				);
 			Cell::set_transfer_all(false, pamhd::Magnetic_Field_Divergence());
@@ -851,10 +787,11 @@ int main(int argc, char* argv[])
 			Cell::set_transfer_all(false, pamhd::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
-					solve_cells,
+					grid.local_cells(),
 					grid,
 					Mag,
-					Mag_div
+					Mag_div,
+					Sol_Info
 				);
 
 			// restore old B
@@ -864,16 +801,8 @@ int main(int argc, char* argv[])
 						<< "), restoring previous value (" << div_before << ")."
 						<< endl;
 				}
-				for (const auto& cell: cells) {
-					auto* const cell_data = grid[cell];
-					if (cell_data == nullptr) {
-						std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-							"No data for cell " << cell
-							<< std::endl;
-						abort();
-					}
-
-					Mag(*cell_data) = Mag_tmp(*cell_data);
+				for (const auto& cell: grid.local_cells()) {
+					Mag(*cell.data) = Mag_tmp(*cell.data);
 				}
 
 			} else {
@@ -883,27 +812,19 @@ int main(int argc, char* argv[])
 				}
 
 				// keep pressure/temperature constant over div removal
-				for (auto& cell: cells) {
-					auto* const cell_data = grid[cell];
-					if (cell_data == nullptr) {
-						std::cerr <<  __FILE__ << "(" << __LINE__ << "): "
-							"No data for cell " << cell
-							<< std::endl;
-						abort();
-					}
-
+				for (auto& cell: grid.local_cells()) {
 					const auto mag_nrj_diff
 						= (
-							Mag(*cell_data).squaredNorm()
-							- Mag_tmp(*cell_data).squaredNorm()
+							Mag(*cell.data).squaredNorm()
+							- Mag_tmp(*cell.data).squaredNorm()
 						) / (2 * options_sim.vacuum_permeability);
 
 					const auto
-						total_mass = Mas1(*cell_data) + Mas2(*cell_data),
-						mass_frac1 = Mas1(*cell_data) / total_mass,
-						mass_frac2 = Mas2(*cell_data) / total_mass;
-					Nrj1(*cell_data) += mass_frac1 * mag_nrj_diff;
-					Nrj2(*cell_data) += mass_frac2 * mag_nrj_diff;
+						total_mass = Mas1(*cell.data) + Mas2(*cell.data),
+						mass_frac1 = Mas1(*cell.data) / total_mass,
+						mass_frac2 = Mas2(*cell.data) / total_mass;
+					Nrj1(*cell.data) += mass_frac1 * mag_nrj_diff;
+					Nrj2(*cell.data) += mass_frac2 * mag_nrj_diff;
 				}
 			}
 		}
