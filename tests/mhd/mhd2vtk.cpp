@@ -483,12 +483,12 @@ int main(int argc, char* argv[])
 	}
 
 	if (rank == 0) {
-		std::ofstream visit_file(
+		std::ofstream visit_file{
 			boost::filesystem::path(input_files[0])
 				.parent_path()
 				.append("mhd.visit")
 				.generic_string()
-		);
+		};
 
 		visit_file << "!NBLOCKS 1\n";
 		for (size_t i = 0; i < input_files.size(); i++) {
