@@ -87,7 +87,7 @@ bool check(
 	const std::array<std::array<double, 3>, 7>& init_cond,
 	const std::array<double, 3>& reference_result
 ) {
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		(*cell.data)[Result()] = {0, 0, 0};
 		(*cell.data)[Type()] = 0;
 
@@ -122,7 +122,7 @@ bool check(
 	grid.update_copies_of_remote_neighbors();
 
 	pamhd::divergence::get_curl_curl(
-		grid.local_cells,
+		grid.local_cells(),
 		grid,
 		Vector_Getter,
 		Result_Getter,

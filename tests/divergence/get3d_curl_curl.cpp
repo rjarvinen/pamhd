@@ -99,7 +99,7 @@ Returns maximum norm.
 template<class Grid> double get_diff_max_norm(const Grid& grid) {
 	double local_norm = 0, global_norm = 0;
 	uint64_t nr_cells_local = 0, nr_cells_global = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -183,14 +183,14 @@ int main(int argc, char* argv[])
 		geom_params.level_0_cell_length = cell_length;
 		grid.set_geometry(geom_params);
 
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			(*cell.data)[Vector()] = f(grid.geometry.get_center(cell.id));
 			(*cell.data)[Result()] = {0, 0, 0};
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		pamhd::divergence::get_curl_curl(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			[](Cell& cell_data) -> Vector::data_type& {
 				return cell_data[Vector()];

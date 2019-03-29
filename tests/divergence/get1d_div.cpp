@@ -86,7 +86,7 @@ template<class Grid> double get_diff_lp_norm(
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -161,7 +161,7 @@ template<class Vector, class Type, class Grid> void initialize(
 	geom_params.level_0_cell_length = cell_length;
 	grid.set_geometry(geom_params);
 
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		const auto center = grid.geometry.get_center(cell.id);
 
 		auto& vec = (*cell.data)[Vector()];
@@ -232,13 +232,13 @@ int main(int argc, char* argv[])
 			return cell_data[Type()];
 		};
 		pamhd::divergence::get_divergence(
-			grid_x.local_cells, grid_x, Vector_Getter, Divergence_Getter, Type_Getter
+			grid_x.local_cells(), grid_x, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			grid_y.local_cells, grid_y, Vector_Getter, Divergence_Getter, Type_Getter
+			grid_y.local_cells(), grid_y, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 		pamhd::divergence::get_divergence(
-			grid_z.local_cells, grid_z, Vector_Getter, Divergence_Getter, Type_Getter
+			grid_z.local_cells(), grid_z, Vector_Getter, Divergence_Getter, Type_Getter
 		);
 
 		const auto cell_length = grid_x.geometry.get_level_0_cell_length();

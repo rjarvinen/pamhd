@@ -86,7 +86,7 @@ template<class Grid> double get_max_norm(
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -247,7 +247,7 @@ int main(int argc, char* argv[])
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			pamhd::divergence::get_gradient(
-				grids[dim].local_cells, grids[dim], Scalar_Getter, Gradient_Getter, Type_Getter
+				grids[dim].local_cells(), grids[dim], Scalar_Getter, Gradient_Getter, Type_Getter
 			);
 		}
 

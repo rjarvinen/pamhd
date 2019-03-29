@@ -96,7 +96,7 @@ template<class Grid> std::array<double, 3> get_max_norm(const Grid& grid) {
 		local_norm{{0, 0, 0}},
 		global_norm{{0, 0, 0}};
 
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
 		grid.set_geometry(geom_params);
 
 		for (int i = 0; i < max_refinement_level; i++) {
-			for (const auto& cell: grid.local_cells) {
+			for (const auto& cell: grid.local_cells()) {
 				const auto center = grid.geometry.get_center(cell.id);
 				if (
 					    center[0] > grid_start[0] + cell_length[0] + 5.0*2/4
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
 		}
 
 		uint64_t solve_cells_local = 0, solve_cells_global = 0;
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			const auto center = grid.geometry.get_center(cell.id);
 			(*cell.data)[Scalar()] = function(center);
 
@@ -247,7 +247,7 @@ int main(int argc, char* argv[])
 		}
 
 		pamhd::divergence::get_gradient(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			[](Cell& cell_data) -> Scalar::data_type& {
 				return cell_data[Scalar()];

@@ -157,7 +157,7 @@ int main(int argc, char* argv[])
 		grid.set_geometry(geom_params);
 
 		for (int i = 0; i < max_refinement_level; i++) {
-			for (const auto& cell: grid.local_cells) {
+			for (const auto& cell: grid.local_cells()) {
 				const auto center = grid.geometry.get_center(cell.id);
 				if (
 					center[0] > 3.0/8 and center[0] < 6.0/8
@@ -170,7 +170,7 @@ int main(int argc, char* argv[])
 			grid.stop_refining();
 		}
 
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			const auto center = grid.geometry.get_center(cell.id);
 			(*cell.data)[Vector_Field()] = function(center);
 		}
@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
 
 		// classify cells
 		uint64_t solve_cells_local = 0, solve_cells_global = 0;
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			const auto center = grid.geometry.get_center(cell.id);
 			if (
 				center[0] > 0 and center[0] < 1
@@ -206,7 +206,7 @@ int main(int argc, char* argv[])
 		}
 
 		// apply copy boundaries
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			if ((*cell.data)[Type()] != 0) {
 				continue;
 			}
@@ -252,7 +252,7 @@ int main(int argc, char* argv[])
 			return cell_data[Type()];
 		};
 		const double div_before = pamhd::divergence::get_divergence(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			Vector_Getter,
 			[](Cell& cell_data) -> Divergence_Before::data_type& {
@@ -262,7 +262,7 @@ int main(int argc, char* argv[])
 		);
 
 		pamhd::divergence::remove(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			Vector_Getter,
 			Div_After_Getter,
@@ -275,7 +275,7 @@ int main(int argc, char* argv[])
 		grid.update_copies_of_remote_neighbors();
 
 		// update copy boundaries to correspond to removed divergence
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			if ((*cell.data)[Type()] != 0) {
 				continue;
 			}
@@ -310,7 +310,7 @@ int main(int argc, char* argv[])
 		grid.update_copies_of_remote_neighbors();
 
 		const double div_after = pamhd::divergence::get_divergence(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			Vector_Getter,
 			Div_After_Getter,

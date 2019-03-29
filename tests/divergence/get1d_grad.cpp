@@ -88,7 +88,7 @@ template<class Grid> double get_diff_lp_norm(
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -256,13 +256,13 @@ int main(int argc, char* argv[])
 			return cell_data[Type()];
 		};
 		pamhd::divergence::get_gradient(
-			grid_x.local_cells, grid_x, Scalar_Getter, Gradient_Getter, Type_Getter
+			grid_x.local_cells(), grid_x, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 		pamhd::divergence::get_gradient(
-			grid_y.local_cells, grid_y, Scalar_Getter, Gradient_Getter, Type_Getter
+			grid_y.local_cells(), grid_y, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 		pamhd::divergence::get_gradient(
-			grid_z.local_cells, grid_z, Scalar_Getter, Gradient_Getter, Type_Getter
+			grid_z.local_cells(), grid_z, Scalar_Getter, Gradient_Getter, Type_Getter
 		);
 
 		const double

@@ -91,7 +91,7 @@ template<class Grid> double get_max_norm(
 	const Grid& grid
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -175,7 +175,7 @@ int main(int argc, char* argv[])
 		grid.set_geometry(geom_params);
 
 		for (int i = 0; i < max_refinement_level; i++) {
-			for (const auto& cell: grid.local_cells) {
+			for (const auto& cell: grid.local_cells()) {
 				const auto center = grid.geometry.get_center(cell.id);
 				if (
 					center[0] > grid_start[0] + 3.0 * 1 / 4
@@ -191,13 +191,13 @@ int main(int argc, char* argv[])
 			grid.stop_refining();
 		}
 
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			(*cell.data)[Vector()] = function(grid.geometry.get_center(cell.id));
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		uint64_t solve_cells_local = 0, solve_cells_global = 0;
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			const auto center = grid.geometry.get_center(cell.id);
 			if (
 				center[0] > -1 and center[0] < -1 + 3
@@ -225,7 +225,7 @@ int main(int argc, char* argv[])
 		}
 
 		pamhd::divergence::get_divergence(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			[](Cell& cell_data) -> Vector::data_type& {
 				return cell_data[Vector()];

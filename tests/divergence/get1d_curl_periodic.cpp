@@ -86,7 +86,7 @@ template<class Grid> double get_diff_lp_norm(
 	const double cell_volume
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -173,13 +173,13 @@ int main(int argc, char* argv[])
 		geom_params.level_0_cell_length = {{1, 1, 2 * M_PI / nr_of_cells}};
 		grid.set_geometry(geom_params);
 
-		for (const auto& cell: grid.local_cells) {
+		for (const auto& cell: grid.local_cells()) {
 			(*cell.data)[Vector()][0] = function(grid.geometry.get_center(cell.id)[2]);
 		}
 		grid.update_copies_of_remote_neighbors();
 
 		pamhd::divergence::get_curl(
-			grid.local_cells,
+			grid.local_cells(),
 			grid,
 			[](Cell& cell_data) -> Vector::data_type& {
 				return cell_data[Vector()];

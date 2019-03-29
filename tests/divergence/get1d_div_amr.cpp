@@ -85,7 +85,7 @@ template<class Grid> double get_max_norm(
 	const size_t dimension
 ) {
 	double local_norm = 0, global_norm = 0;
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((*cell.data)[Type()] != 1) {
 			continue;
 		}
@@ -226,7 +226,7 @@ int main(int argc, char* argv[])
 
 		// exclude one layer of boundary cells
 		for (size_t dim = 0; dim < 3; dim++) {
-			for (const auto& cell: grids[dim].local_cells) {
+			for (const auto& cell: grids[dim].local_cells()) {
 				const auto center = grids[dim].geometry.get_center(cell.id)[dim];
 				if (center > 0 and center < 2 * M_PI) {
 					(*cell.data)[Type()] = 1;
@@ -248,7 +248,7 @@ int main(int argc, char* argv[])
 
 		for (size_t dim = 0; dim < 3; dim++) {
 			pamhd::divergence::get_divergence(
-				grids[dim].local_cells,
+				grids[dim].local_cells(),
 				grids[dim],
 				Vector_Getter,
 				Divergence_Getter,
