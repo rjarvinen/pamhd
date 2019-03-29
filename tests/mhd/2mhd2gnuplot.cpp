@@ -2,6 +2,7 @@
 Program for plotting multipopulation MHD output of PAMHD with gnuplot.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -855,7 +856,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"rhotot",
 			"\n" + mass_density_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[HD1][Mas] + cell_data[HD2][Mas];
 			}
 		);
@@ -864,7 +865,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"rho1",
 			"\n" + mass_density_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[HD1][Mas];
 			}
 		);
@@ -873,7 +874,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"rho2",
 			"\n" + mass_density_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[HD2][Mas];
 			}
 		);
@@ -948,7 +949,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Vxtot",
 			"\n" + velocity_cmd + " total 1\"\n",
-			[](const pamhd::mhd::Cell2& cell_data) {
+			[&](const pamhd::mhd::Cell2& cell_data) {
 				const typename std::remove_reference<decltype(cell_data[HD1][Mom])>::type
 					mom
 						= cell_data[HD1][Mom]
@@ -963,7 +964,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Vytot",
 			"\n" + velocity_cmd + " total 2\"\n",
-			[](const pamhd::mhd::Cell2& cell_data) {
+			[&](const pamhd::mhd::Cell2& cell_data) {
 				const typename std::remove_reference<decltype(cell_data[HD1][Mom])>::type
 					mom
 						= cell_data[HD1][Mom]
@@ -978,7 +979,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Vztot",
 			"\n" + velocity_cmd + " total 3\"\n",
-			[](const pamhd::mhd::Cell2& cell_data) {
+			[&](const pamhd::mhd::Cell2& cell_data) {
 				const typename std::remove_reference<decltype(cell_data[HD1][Mom])>::type
 					mom
 						= cell_data[HD1][Mom]
@@ -997,7 +998,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Bx",
 			"\n" + magnetic_field_cmd + " 1\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[Mag][0];
 			}
 		);
@@ -1005,7 +1006,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"By",
 			"\n" + magnetic_field_cmd + " 2\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[Mag][1];
 			}
 		);
@@ -1013,7 +1014,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Bz",
 			"\n" + magnetic_field_cmd + " 3\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[Mag][2];
 			}
 		);
@@ -1024,7 +1025,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Jx",
 			"\n" + current_density_cmd + " 1\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::Electric_Current_Density()][0];
 			}
 		);
@@ -1032,7 +1033,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Jy",
 			"\n" + current_density_cmd + " 2\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::Electric_Current_Density()][1];
 			}
 		);
@@ -1040,7 +1041,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"Jz",
 			"\n" + current_density_cmd + " 3\"\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::Electric_Current_Density()][2];
 			}
 		);
@@ -1051,7 +1052,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"rank",
 			"\n" + rank_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::MPI_Rank()];
 			}
 		);
@@ -1062,7 +1063,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"res",
 			"\n" + resistivity_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::Resistivity()];
 			}
 		);
@@ -1073,7 +1074,7 @@ int plot_2d(
 		write_gnuplot_cmd_current(
 			"bdy",
 			"\n" + bdy_cmd + "\n",
-			[](const pamhd::mhd::Cell2& cell_data){
+			[&](const pamhd::mhd::Cell2& cell_data){
 				return cell_data[pamhd::mhd::Solver_Info()];
 			}
 		);
