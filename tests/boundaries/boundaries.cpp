@@ -2,6 +2,7 @@
 Tests boundaries class for one simulation variable of PAMHD.
 
 Copyright 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -124,22 +125,15 @@ int main(int argc, char* argv[])
 
 	MPI_Init(&argc, &argv);
 
-	dccrg::Dccrg<Cell_Data> grid;
-	if (not grid.initialize(
-		{4, 4, 4},
-		MPI_COMM_WORLD,
-		"RANDOM",
-		0,
-		0,
-		false, false, false
-	)) {
-		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Couldn't initialize grid."
-			<< std::endl;
-		return EXIT_FAILURE;
-	}
+	dccrg::Dccrg<Cell_Data> grid; grid
+		.set_neighborhood_length(0)
+		.set_maximum_refinement_level(0)
+		.set_load_balancing_method("RANDOM")
+		.set_periodic(false, false, false)
+		.set_initial_length({4, 4, 4})
+		.initialize(MPI_COMM_WORLD);
 
-	for (const auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		const auto
 			start = grid.geometry.get_min(cell.id),
 			end = grid.geometry.get_max(cell.id);
