@@ -78,14 +78,14 @@ Example:
 struct Cell_Data {
 	std::array<double, 3> vector_data;
 	double scalar_data;
-	bool calculate_div;
+	int calculate_div;
 	std::tuple<...> get_mpi_datatype() {...}
 };
 
 dccrg::Dccrg<Cell_Data, ...> grid;
 
 pamhd::divergence::get_divergence(
-	grid.local_cells,
+	grid.local_cells(),
 	grid,
 	[](Cell_Data& cell_data)->std::array<double, 3>& {
 		return cell_data.vector_data;
@@ -632,10 +632,6 @@ template <
 
 	// transfer rhs to poisson grid
 	for (const auto& cell: cells) {
-		if (Cell_Type(*cell.data) != 1) {
-			continue;
-		}
-
 		auto* const poisson_data = poisson_grid[cell.id];
 		if (poisson_data == nullptr) {
 			std::cerr <<  __FILE__ << "(" << __LINE__<< "): "
@@ -644,8 +640,14 @@ template <
 			abort();
 		}
 
+		if (Cell_Type(*cell.data) != 1) {
+			poisson_data->cell_type = DCCRG_POISSON_BOUNDARY_CELL;
+			continue;
+		}
+
 		poisson_data->solution = 0;
 		poisson_data->rhs = Divergence(*cell.data);
+		poisson_data->cell_type = DCCRG_POISSON_SOLVE_CELL;
 	}
 
 	Poisson_Solve solver(
@@ -724,7 +726,7 @@ template <
 		Cell_Type
 	);
 
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: cells) {
 		if (Cell_Type(*cell.data) != 1) {
 			continue;
 		}
@@ -734,7 +736,7 @@ template <
 	}
 
 	// clean up divergence variable
-	for (const auto& cell: grid.local_cells) {
+	for (const auto& cell: cells) {
 		if (Cell_Type(*cell.data) == 0) {
 			Divergence(*cell.data) = 0;
 		}

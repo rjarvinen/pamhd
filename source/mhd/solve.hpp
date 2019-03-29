@@ -2,6 +2,7 @@
 Solves the MHD part of PAMHD using an external flux function.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2018, 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -59,6 +60,7 @@ Returns the maximum allowed length of time step for the next step on this proces
 */
 template <
 	class Solver_Info,
+	class Cell_Iter,
 	class Cell,
 	class Geometry,
 	class Mass_Density_Getter,
@@ -73,9 +75,9 @@ template <
 	class Total_Energy_Density_Flux_Getter,
 	class Magnetic_Field_Flux_Getter,
 	class Solver_Info_Getter
-> std::pair<double, size_t> solve(
+> double solve(
 	const Solver solver,
-	const size_t solve_start_index,
+	const Cell_Iter& cells,
 	dccrg::Dccrg<Cell, Geometry>& grid,
 	const double dt,
 	const double adiabatic_index,
@@ -109,26 +111,13 @@ template <
 	// maximum allowed next time step for cells of this process
 	double max_dt = std::numeric_limits<double>::max();
 
-	const auto& cell_data_pointers = grid.get_cell_data_pointers();
-
-	size_t i = solve_start_index;
-	for ( ; i < cell_data_pointers.size(); i++) {
-		const auto& cell_id = get<0>(cell_data_pointers[i]);
-
-		// process only inner xor outer cells
-		if (cell_id == dccrg::error_cell) {
-			break;
+	for (const auto& cell: cells) {
+		if ((Sol_Info(*cell.data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
+			continue;
 		}
-
-		const auto& offset = get<2>(cell_data_pointers[i]);
-		if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-			throw std::runtime_error("Unexpected neighbor cell.");
-		}
-
-		auto* const cell_data = get<1>(cell_data_pointers[i]);
 
 		const std::array<double, 3>
-			cell_length = grid.geometry.get_length(cell_id),
+			cell_length = grid.geometry.get_length(cell.id),
 			// area of cell perpendicular to each dimension
 			cell_area{{
 				cell_length[1] * cell_length[2],
@@ -136,75 +125,47 @@ template <
 				cell_length[0] * cell_length[1]
 			}};
 
-		i++;
-		while (i < cell_data_pointers.size()) {
-			const auto& neighbor_id = get<0>(cell_data_pointers[i]);
-
-			if (neighbor_id == dccrg::error_cell) {
-				i--;
-				break;
-			}
-
-			const auto& neigh_offset = get<2>(cell_data_pointers[i]);
-
-			if (neigh_offset[0] == 0 and neigh_offset[1] == 0 and neigh_offset[2] == 0) {
-				i--;
-				break;
-			}
-
-			// don't solve between dont_solve_cell and any other
-			if ((Sol_Info(*cell_data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
-				i++;
-				continue;
-			}
-
-			int neighbor_dir = 0;
-
+		for (const auto& neighbor: cell.neighbors_of) {
 			// only solve between face neighbors
-			if (neigh_offset[0] == 1 and neigh_offset[1] == 0 and neigh_offset[2] == 0) {
+			int neighbor_dir = 0;
+			if (neighbor.x == 1 and neighbor.y == 0 and neighbor.z == 0) {
 				neighbor_dir = 1;
 			}
-			if (neigh_offset[0] == -1 and neigh_offset[1] == 0 and neigh_offset[2] == 0) {
+			if (neighbor.x == -1 and neighbor.y == 0 and neighbor.z == 0) {
 				neighbor_dir = -1;
 			}
-			if (neigh_offset[0] == 0 and neigh_offset[1] == 1 and neigh_offset[2] == 0) {
+			if (neighbor.x == 0 and neighbor.y == 1 and neighbor.z == 0) {
 				neighbor_dir = 2;
 			}
-			if (neigh_offset[0] == 0 and neigh_offset[1] == -1 and neigh_offset[2] == 0) {
+			if (neighbor.x == 0 and neighbor.y == -1 and neighbor.z == 0) {
 				neighbor_dir = -2;
 			}
-			if (neigh_offset[0] == 0 and neigh_offset[1] == 0 and neigh_offset[2] == 1) {
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == 1) {
 				neighbor_dir = 3;
 			}
-			if (neigh_offset[0] == 0 and neigh_offset[1] == 0 and neigh_offset[2] == -1) {
+			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == -1) {
 				neighbor_dir = -3;
 			}
-
 			if (neighbor_dir == 0) {
-				i++;
 				continue;
 			}
 
-			if (grid.is_local(neighbor_id) and neighbor_dir < 0) {
+			if (grid.is_local(neighbor.id) and neighbor_dir < 0) {
 				/*
 				This case is handled when neighbor is the current cell
 				and current cell is neighbor in positive direction
 				*/
-				i++;
 				continue;
 			}
 
-			auto* const neighbor_data = get<1>(cell_data_pointers[i]);
-
-			if ((Sol_Info(*neighbor_data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
-				i++;
+			if ((Sol_Info(*neighbor.data) & pamhd::mhd::Solver_Info::dont_solve) > 0) {
 				continue;
 			}
 
 			const size_t neighbor_dim = size_t(abs(neighbor_dir) - 1);
 
 			const std::array<double, 3>
-				neighbor_length = grid.geometry.get_length(neighbor_id),
+				neighbor_length = grid.geometry.get_length(neighbor.id),
 				neighbor_area{{
 					neighbor_length[1] * neighbor_length[2],
 					neighbor_length[0] * neighbor_length[2],
@@ -217,8 +178,8 @@ template <
 			if (not std::isnormal(shared_area) or shared_area < 0) {
 				throw std::domain_error(
 					"Invalid area between cells "
-					+ to_string(cell_id) + " and "
-					+ to_string(neighbor_id) + ": "
+					+ to_string(cell.id) + " and "
+					+ to_string(neighbor.id) + ": "
 					+ to_string(shared_area)
 				);
 			}
@@ -227,49 +188,49 @@ template <
 			Magnetic_Field::data_type bg_face_b;
 			// take into account direction of neighbor from cell
 			if (neighbor_dir > 0) {
-				state_neg[mas_int] = Mas(*cell_data);
-				state_neg[mom_int] = get_rotated_vector(Mom(*cell_data), abs(neighbor_dir));
-				state_neg[nrj_int] = Nrj(*cell_data);
-				state_neg[mag_int] = get_rotated_vector(Mag(*cell_data), abs(neighbor_dir));
+				state_neg[mas_int] = Mas(*cell.data);
+				state_neg[mom_int] = get_rotated_vector(Mom(*cell.data), abs(neighbor_dir));
+				state_neg[nrj_int] = Nrj(*cell.data);
+				state_neg[mag_int] = get_rotated_vector(Mag(*cell.data), abs(neighbor_dir));
 
-				state_pos[mas_int] = Mas(*neighbor_data);
-				state_pos[mom_int] = get_rotated_vector(Mom(*neighbor_data), abs(neighbor_dir));
-				state_pos[nrj_int] = Nrj(*neighbor_data);
-				state_pos[mag_int] = get_rotated_vector(Mag(*neighbor_data), abs(neighbor_dir));
+				state_pos[mas_int] = Mas(*neighbor.data);
+				state_pos[mom_int] = get_rotated_vector(Mom(*neighbor.data), abs(neighbor_dir));
+				state_pos[nrj_int] = Nrj(*neighbor.data);
+				state_pos[mag_int] = get_rotated_vector(Mag(*neighbor.data), abs(neighbor_dir));
 
 				switch (neighbor_dir) {
 				case 1:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*cell_data), 1);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*cell.data), 1);
 					break;
 				case 2:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*cell_data), 2);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*cell.data), 2);
 					break;
 				case 3:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*cell_data), 3);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*cell.data), 3);
 					break;
 				default:
 					abort();
 				}
 			} else {
-				state_pos[mas_int] = Mas(*cell_data);
-				state_pos[mom_int] = get_rotated_vector(Mom(*cell_data), abs(neighbor_dir));
-				state_pos[nrj_int] = Nrj(*cell_data);
-				state_pos[mag_int] = get_rotated_vector(Mag(*cell_data), abs(neighbor_dir));
+				state_pos[mas_int] = Mas(*cell.data);
+				state_pos[mom_int] = get_rotated_vector(Mom(*cell.data), abs(neighbor_dir));
+				state_pos[nrj_int] = Nrj(*cell.data);
+				state_pos[mag_int] = get_rotated_vector(Mag(*cell.data), abs(neighbor_dir));
 
-				state_neg[mas_int] = Mas(*neighbor_data);
-				state_neg[mom_int] = get_rotated_vector(Mom(*neighbor_data), abs(neighbor_dir));
-				state_neg[nrj_int] = Nrj(*neighbor_data);
-				state_neg[mag_int] = get_rotated_vector(Mag(*neighbor_data), abs(neighbor_dir));
+				state_neg[mas_int] = Mas(*neighbor.data);
+				state_neg[mom_int] = get_rotated_vector(Mom(*neighbor.data), abs(neighbor_dir));
+				state_neg[nrj_int] = Nrj(*neighbor.data);
+				state_neg[mag_int] = get_rotated_vector(Mag(*neighbor.data), abs(neighbor_dir));
 
 				switch (neighbor_dir) {
 				case -1:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*neighbor_data), 1);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_X(*neighbor.data), 1);
 					break;
 				case -2:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*neighbor_data), 2);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Y(*neighbor.data), 2);
 					break;
 				case -3:
-					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*neighbor_data), 3);
+					bg_face_b = get_rotated_vector(Bg_B_Pos_Z(*neighbor.data), 3);
 					break;
 				default:
 					abort();
@@ -313,22 +274,22 @@ template <
 				#undef SOLVER
 			} catch (const std::domain_error& error) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
-					<< "Solution failed between cells " << cell_id
-					<< " and " << neighbor_id
-					<< " of boundary type " << Sol_Info(*cell_data)
-					<< " and " << Sol_Info(*neighbor_data)
-					<< " at " << grid.geometry.get_center(cell_id)
-					<< " and " << grid.geometry.get_center(neighbor_id)
+					<< "Solution failed between cells " << cell.id
+					<< " and " << neighbor.id
+					<< " of boundary type " << Sol_Info(*cell.data)
+					<< " and " << Sol_Info(*neighbor.data)
+					<< " at " << grid.geometry.get_center(cell.id)
+					<< " and " << grid.geometry.get_center(neighbor.id)
 					<< " in direction " << neighbor_dir
 					<< " with states (mass, momentum, total energy, magnetic field): "
-					<< Mas(*cell_data) << ", "
-					<< Mom(*cell_data) << ", "
-					<< Nrj(*cell_data) << ", "
-					<< Mag(*cell_data) << " and "
-					<< Mas(*neighbor_data) << ", "
-					<< Mom(*neighbor_data) << ", "
-					<< Nrj(*neighbor_data) << ", "
-					<< Mag(*neighbor_data)
+					<< Mas(*cell.data) << ", "
+					<< Mom(*cell.data) << ", "
+					<< Nrj(*cell.data) << ", "
+					<< Mag(*cell.data) << " and "
+					<< Mas(*neighbor.data) << ", "
+					<< Mom(*neighbor.data) << ", "
+					<< Nrj(*neighbor.data) << ", "
+					<< Mag(*neighbor.data)
 					<< " because: " << error.what()
 					<< std::endl;
 				abort();
@@ -341,36 +302,34 @@ template <
 			flux[mag_int] = get_rotated_vector(flux[mag_int], -abs(neighbor_dir));
 
 			if (neighbor_dir > 0) {
-				Mas_f(*cell_data) -= flux[mas_int];
-				Mom_f(*cell_data) -= flux[mom_int];
-				Nrj_f(*cell_data) -= flux[nrj_int];
-				Mag_f(*cell_data) -= flux[mag_int];
+				Mas_f(*cell.data) -= flux[mas_int];
+				Mom_f(*cell.data) -= flux[mom_int];
+				Nrj_f(*cell.data) -= flux[nrj_int];
+				Mag_f(*cell.data) -= flux[mag_int];
 
-				if (grid.is_local(neighbor_id)) {
-					Mas_f(*neighbor_data) += flux[mas_int];
-					Mom_f(*neighbor_data) += flux[mom_int];
-					Nrj_f(*neighbor_data) += flux[nrj_int];
-					Mag_f(*neighbor_data) += flux[mag_int];
+				if (grid.is_local(neighbor.id)) {
+					Mas_f(*neighbor.data) += flux[mas_int];
+					Mom_f(*neighbor.data) += flux[mom_int];
+					Nrj_f(*neighbor.data) += flux[nrj_int];
+					Mag_f(*neighbor.data) += flux[mag_int];
 				}
 			} else {
-				Mas_f(*cell_data) += flux[mas_int];
-				Mom_f(*cell_data) += flux[mom_int];
-				Nrj_f(*cell_data) += flux[nrj_int];
-				Mag_f(*cell_data) += flux[mag_int];
+				Mas_f(*cell.data) += flux[mas_int];
+				Mom_f(*cell.data) += flux[mom_int];
+				Nrj_f(*cell.data) += flux[nrj_int];
+				Mag_f(*cell.data) += flux[mag_int];
 
-				if (grid.is_local(neighbor_id)) {
+				if (grid.is_local(neighbor.id)) {
 					std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 						"Invalid direction for adding flux to local neighbor."
 						<< std::endl;
 					abort();
 				}
 			}
-
-			i++;
 		}
 	}
 
-	return std::make_pair(max_dt, i);
+	return max_dt;
 }
 
 
@@ -408,7 +367,7 @@ template <
 ) {
 	using std::to_string;
 
-	for (auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
 			Mas_f(*cell.data)    =
 			Mom_f(*cell.data)[0] =

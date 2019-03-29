@@ -2,6 +2,7 @@
 Initializes the MHD solution of PAMHD.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -66,7 +67,6 @@ template <
 	Init_Cond& initial_conditions,
 	const Background_Magnetic_Field& bg_B,
 	dccrg::Dccrg<Cell, Geometry>& grid,
-	const std::vector<uint64_t>& cells,
 	const double time,
 	const double vacuum_permeability,
 	const Magnetic_Field_Getter Mag,
@@ -76,20 +76,12 @@ template <
 	const Background_Magnetic_Field_Pos_Z_Getter Bg_B_Pos_Z
 ) {
 	// set default magnetic field
-	for (const auto cell_id: cells) {
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
-			abort();
-		}
+	for (const auto& cell: grid.local_cells()) {
+		Mag_f(*cell.data)[0]      =
+		Mag_f(*cell.data)[1]      =
+		Mag_f(*cell.data)[2]      = 0;
 
-		Mag_f(*cell_data)[0]      =
-		Mag_f(*cell_data)[1]      =
-		Mag_f(*cell_data)[2]      = 0;
-
-		const auto c = grid.geometry.get_center(cell_id);
+		const auto c = grid.geometry.get_center(cell.id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 		const auto
 			lat = asin(c[2] / r),
@@ -103,18 +95,18 @@ template <
 				r, lat, lon
 			);
 
-		Mag(*cell_data) = magnetic_field;
+		Mag(*cell.data) = magnetic_field;
 
-		const auto cell_end = grid.geometry.get_max(cell_id);
-		Bg_B_Pos_X(*cell_data) = bg_B.get_background_field(
+		const auto cell_end = grid.geometry.get_max(cell.id);
+		Bg_B_Pos_X(*cell.data) = bg_B.get_background_field(
 			{cell_end[0], c[1], c[2]},
 			vacuum_permeability
 		);
-		Bg_B_Pos_Y(*cell_data) = bg_B.get_background_field(
+		Bg_B_Pos_Y(*cell.data) = bg_B.get_background_field(
 			{c[0], cell_end[1], c[2]},
 			vacuum_permeability
 		);
-		Bg_B_Pos_Z(*cell_data) = bg_B.get_background_field(
+		Bg_B_Pos_Z(*cell.data) = bg_B.get_background_field(
 			{c[0], c[1], cell_end[2]},
 			vacuum_permeability
 		);
@@ -145,7 +137,7 @@ template <
 			);
 
 			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
+			if (cell_data == nullptr) {
 				std::cerr <<  __FILE__ << "(" << __LINE__
 					<< ") No data for cell: " << cell
 					<< std::endl;
@@ -184,7 +176,6 @@ template <
 	const Geometries& geometries,
 	Init_Cond& initial_conditions,
 	dccrg::Dccrg<Cell, Geometry>& grid,
-	const std::vector<uint64_t>& cells,
 	const double time,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -204,23 +195,15 @@ template <
 	}
 
 	// set default state
-	for (const auto cell_id: cells) {
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
-			abort();
-		}
-
+	for (const auto& cell: grid.local_cells()) {
 		// zero fluxes
-		Mas_f(*cell_data)         =
-		Nrj_f(*cell_data)         =
-		Mom_f(*cell_data)[0]      =
-		Mom_f(*cell_data)[1]      =
-		Mom_f(*cell_data)[2]      = 0;
+		Mas_f(*cell.data)         =
+		Nrj_f(*cell.data)         =
+		Mom_f(*cell.data)[0]      =
+		Mom_f(*cell.data)[1]      =
+		Mom_f(*cell.data)[2]      = 0;
 
-		const auto c = grid.geometry.get_center(cell_id);
+		const auto c = grid.geometry.get_center(cell.id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 		const auto
 			lat = asin(c[2] / r),
@@ -249,19 +232,19 @@ template <
 				r, lat, lon
 			);
 
-		Mas(*cell_data) = mass_density;
-		Mom(*cell_data) = mass_density * velocity;
+		Mas(*cell.data) = mass_density;
+		Mom(*cell.data) = mass_density * velocity;
 		if (mass_density > 0 and pressure > 0) {
-			Nrj(*cell_data) = get_total_energy_density(
+			Nrj(*cell.data) = get_total_energy_density(
 				mass_density,
 				velocity,
 				pressure,
-				Mag(*cell_data),
+				Mag(*cell.data),
 				adiabatic_index,
 				vacuum_permeability
 			);
 		} else {
-			Nrj(*cell_data) = 0;
+			Nrj(*cell.data) = 0;
 		}
 	}
 
@@ -297,7 +280,7 @@ template <
 				);
 
 			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
+			if (cell_data == nullptr) {
 				std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
 				abort();
 			}
@@ -331,7 +314,7 @@ template <
 			);
 
 			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
+			if (cell_data == nullptr) {
 				std::cerr <<  __FILE__ << "(" << __LINE__
 					<< ") No data for cell: " << cell
 					<< std::endl;
@@ -370,7 +353,7 @@ template <
 			);
 
 			auto* const cell_data = grid[cell];
-			if (cell_data == NULL) {
+			if (cell_data == nullptr) {
 				std::cerr <<  __FILE__ << "(" << __LINE__
 					<< ") No data for cell: " << cell
 					<< std::endl;

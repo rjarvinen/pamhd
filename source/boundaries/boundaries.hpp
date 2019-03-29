@@ -2,6 +2,7 @@
 Class for handling boundaries of one simulation variable.
 
 Copyright 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -120,7 +121,7 @@ public:
 			copy_bdy_cell{4};
 
 		// all cells are normal by default
-		for (const auto& cell: grid.cells) {
+		for (const auto& cell: grid.local_cells()) {
 			Cell_Type(*cell.data) = normal_cell;
 		}
 
@@ -156,65 +157,26 @@ public:
 		grid.update_copies_of_remote_neighbors();
 
 		// turn boundary cells without normal neighbors into dont_solve
-		const auto& cell_data_pointers = grid.get_cell_data_pointers();
-		for (size_t i = 0; i < cell_data_pointers.size(); i++) {
-			const auto& cell_id = get<0>(cell_data_pointers[i]);
-
-			// process inner and outer cells
-			if (cell_id == dccrg::error_cell) {
-				continue;
-			}
-
-			const auto& offset = get<2>(cell_data_pointers[i]);
-			// skip rest of neighbor cells
-			if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-				continue;
-			}
-
-			auto* const cell_data = get<1>(cell_data_pointers[i]);
-			if (Cell_Type(*cell_data) == normal_cell) {
+		for (const auto& cell: grid.local_cells()) {
+			if (Cell_Type(*cell.data) == normal_cell) {
 				continue;
 			}
 
 			bool has_normal_neighbor = false;
-			i++;
-			while (i < cell_data_pointers.size()) {
-				const auto& neighbor_id = get<0>(cell_data_pointers[i]);
-
-				// done with neighbors
-				if (neighbor_id == dccrg::error_cell) {
-					i--;
-					break;
-				}
-
-				// ditto
-				const auto& neigh_offset = get<2>(cell_data_pointers[i]);
-				if (
-					neigh_offset[0] == 0
-					and neigh_offset[1] == 0
-					and neigh_offset[2] == 0
-				) {
-					i--;
-					break;
-				}
-
+			for (const auto& neighbor: cell.neighbors_of) {
 				// cell itself doesn't count
-				if (cell_id == neighbor_id) {
-					i++;
+				if (cell.id == neighbor.id) {
 					continue;
 				}
 
-				auto* const neighbor_data = get<1>(cell_data_pointers[i]);
-				if (Cell_Type(*neighbor_data) == normal_cell) {
+				if (Cell_Type(*neighbor.data) == normal_cell) {
 					has_normal_neighbor = true;
 					break;
 				}
-
-				i++;
 			}
 
 			if (not has_normal_neighbor) {
-				Cell_Type(*cell_data) = dont_solve_cell;
+				Cell_Type(*cell.data) = dont_solve_cell;
 			}
 		}
 
@@ -222,54 +184,21 @@ public:
 		grid.update_copies_of_remote_neighbors();
 
 		// get sources of copy boundary cells
-		for (size_t i = 0; i < cell_data_pointers.size(); i++) {
-			const auto& cell_id = get<0>(cell_data_pointers[i]);
-
-			if (cell_id == dccrg::error_cell) {
+		for (const auto& cell: grid.local_cells()) {
+			if (Cell_Type(*cell.data) != copy_bdy_cell) {
 				continue;
 			}
 
-			const auto& offset = get<2>(cell_data_pointers[i]);
-			if (offset[0] != 0 or offset[1] != 0 or offset[2] != 0) {
-				continue;
-			}
-
-			auto* const cell_data = get<1>(cell_data_pointers[i]);
-			if (Cell_Type(*cell_data) != copy_bdy_cell) {
-				continue;
-			}
-
-			std::vector<Cell_Id> source{cell_id};
-			i++;
-			while (i < cell_data_pointers.size()) {
-				const auto& neighbor_id = get<0>(cell_data_pointers[i]);
-
-				if (neighbor_id == dccrg::error_cell) {
-					i--;
-					break;
+			std::vector<Cell_Id> source{cell.id};
+			for (const auto& neighbor: cell.neighbors_of) {
+				if (Cell_Type(*neighbor.data) == normal_cell) {
+					source.push_back(neighbor.id);
 				}
-
-				const auto& neigh_offset = get<2>(cell_data_pointers[i]);
-				if (
-					neigh_offset[0] == 0
-					and neigh_offset[1] == 0
-					and neigh_offset[2] == 0
-				) {
-					i--;
-					break;
-				}
-
-				auto* const neigh_data = get<1>(cell_data_pointers[i]);
-				if (Cell_Type(*neigh_data) == normal_cell) {
-					source.push_back(neighbor_id);
-				}
-
-				i++;
 			}
 
 			// turn copy cell without sources into dont solve
 			if (source.size() < 2) {
-				Cell_Type(*cell_data) = dont_solve_cell;
+				Cell_Type(*cell.data) = dont_solve_cell;
 			} else {
 				this->copy_boundaries.push_back_source(source);
 			}
@@ -278,7 +207,7 @@ public:
 		// tell other processes about newest dont solve cells
 		grid.update_copies_of_remote_neighbors();
 
-		for (const auto& cell: grid.cells) {
+		for (const auto& cell: grid.local_cells()) {
 			switch (Cell_Type(*cell.data)) {
 				case dont_solve_cell:
 					this->dont_solve_cells.push_back(cell.id);
