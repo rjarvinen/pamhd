@@ -2,6 +2,7 @@
 Tests parallel particle solver of PAMHD in 3 dimensions.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -139,52 +140,25 @@ int main(int argc, char* argv[])
 
 	const unsigned int neighborhood_size = 1;
 	const std::array<uint64_t, 3> number_of_cells{{ 10, 10, 10}};
-	if (
-		not grid.initialize(
-			number_of_cells,
-			comm,
-			"RANDOM",
-			neighborhood_size,
-			0,
-			false, false, false
-		)
-	) {
-		std::cerr << __FILE__ << "(" << __LINE__ << "): "
-			<< "Couldn't initialize one or more grids."
-			<< std::endl;
-		abort();
-	}
+	grid
+		.set_neighborhood_length(neighborhood_size)
+		.set_maximum_refinement_level(0)
+		.set_load_balancing_method("RANDOM")
+		.set_periodic(false, false, false)
+		.set_initial_length(number_of_cells)
+		.initialize(comm)
+		.balance_load();
 
 	// set grid geometry
 	dccrg::Cartesian_Geometry::Parameters geom_params;
 	geom_params.start = {{0.0, 0.0, 0.0}};
 	geom_params.level_0_cell_length = {{1.0, 1.0, 1.0}};
 
-	if (not grid.set_geometry(geom_params)) {
-		std::cerr << __FILE__ << "(" << __LINE__ << "): "
-			<< "Couldn't set geometry of one or more grids."
-			<< std::endl;
-		abort();
-	}
-
-	grid.balance_load();
-
-	const auto
-		inner_cell_ids = grid.get_local_cells_not_on_process_boundary(),
-		outer_cell_ids = grid.get_local_cells_on_process_boundary(),
-		remote_cell_ids = grid.get_remote_cells_on_process_boundary(),
-		cell_ids = grid.get_cells();
+	grid.set_geometry(geom_params);
 
 	// initial condition
-	for (const auto& cell_id: cell_ids) {
-		auto* const cell_ptr = grid[cell_id];
-		if (cell_ptr == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		auto& cell_data = *cell_ptr;
-
-		const auto cell_center = grid.geometry.get_center(cell_id);
+	for (const auto& cell: grid.local_cells()) {
+		const auto cell_center = grid.geometry.get_center(cell.id);
 
 		pamhd::particle::Particle_Internal particle;
 		Part_Pos(particle) = {
@@ -197,12 +171,12 @@ int main(int argc, char* argv[])
 		Part_Mas(particle) =
 		Part_C2M(particle) = 0;
 
-		Part_Int(cell_data).push_back(particle);
+		Part_Int(*cell.data).push_back(particle);
 
-		Ele(cell_data) =
-		Mag(cell_data) = {0, 0, 0};
+		Ele(*cell.data) =
+		Mag(*cell.data) = {0, 0, 0};
 
-		Nr_Ext(cell_data) = Part_Ext(cell_data).size();
+		Nr_Ext(*cell.data) = Part_Ext(*cell.data).size();
 	}
 	// allocate copies of remote neighbor cells
 	grid.update_copies_of_remote_neighbors();
@@ -211,14 +185,14 @@ int main(int argc, char* argv[])
 
 	// short hand notation for calling solvers
 	auto solve = [&bg_B](
-		const std::vector<uint64_t>& cell_ids,
+		const auto& cells,
 		Grid& grid
 	) {
 		pamhd::particle::solve<
 			boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
 		>(
 			1.0,
-			cell_ids,
+			cells,
 			grid,
 			bg_B,
 			1,
@@ -237,106 +211,56 @@ int main(int argc, char* argv[])
 		);
 	};
 
-	auto resize_receiving = [](
-		const std::vector<uint64_t>& cell_ids,
-		Grid& grid
-	) {
-		pamhd::particle::resize_receiving_containers<
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_External
-		>(cell_ids, grid);
-	};
-
-	auto incorporate_external = [](
-		const std::vector<uint64_t>& cell_ids,
-		Grid& grid
-	) {
-		pamhd::particle::incorporate_external_particles<
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_Internal,
-			pamhd::particle::Particles_External,
-			pamhd::particle::Destination_Cell
-		>(cell_ids, grid);
-	};
-
-	auto remove_external = [](
-		const std::vector<uint64_t>& cell_ids,
-		Grid& grid
-	) {
-		pamhd::particle::remove_external_particles<
-			pamhd::particle::Nr_Particles_External,
-			pamhd::particle::Particles_External
-		>(cell_ids, grid);
-	};
-
+	using namespace pamhd::particle;
+	using NPE = Nr_Particles_External;
+	using PE = Particles_External;
+	using PI = Particles_Internal;
+	using DC = Destination_Cell;
 
 	for (size_t step = 0; step < 10; step++) {
-		solve(outer_cell_ids, grid);
+		solve(grid.outer_cells(), grid);
 
-		Cell::set_transfer_all(
-			true,
-			pamhd::particle::Electric_Field(),
-			pamhd::Magnetic_Field(),
-			pamhd::particle::Nr_Particles_External()
-		);
+		Cell::set_transfer_all(true, Electric_Field(), pamhd::Magnetic_Field(), NPE());
 		grid.start_remote_neighbor_copy_updates();
 
-		solve(inner_cell_ids, grid);
+		solve(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_receives();
-		resize_receiving(remote_cell_ids, grid);
+		resize_receiving_containers<NPE, PE>(grid.remote_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Electric_Field(),
-			pamhd::Magnetic_Field(),
-			pamhd::particle::Nr_Particles_External()
-		);
-		Cell::set_transfer_all(
-			true,
-			pamhd::particle::Particles_External()
-		);
+		Cell::set_transfer_all(false, Electric_Field(), pamhd::Magnetic_Field(), NPE());
+		Cell::set_transfer_all(true, PE());
 
 		grid.start_remote_neighbor_copy_updates();
 
-		incorporate_external(inner_cell_ids, grid);
+		incorporate_external_particles<NPE, PI, PE, DC>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
-		incorporate_external(outer_cell_ids, grid);
+		incorporate_external_particles<NPE, PI, PE, DC>(grid.outer_cells(), grid);
 
-		remove_external(inner_cell_ids, grid);
+		remove_external_particles<NPE, PE>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
-		Cell::set_transfer_all(
-			false,
-			pamhd::particle::Particles_External()
-		);
+		Cell::set_transfer_all(false, PE());
 
-		remove_external(outer_cell_ids, grid);
+		remove_external_particles<NPE, PE>(grid.outer_cells(), grid);
 
 
 		// check that solution is correct
 		int total_particles_local = 0, total_particles = 0;
 
-		for (const auto& cell_id: cell_ids) {
-			auto* const cell_ptr = grid[cell_id];
-			if (cell_ptr == nullptr) {
-				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			auto& cell_data = *cell_ptr;
-
+		for (const auto& cell: grid.local_cells()) {
 			total_particles_local
-				+= cell_data[pamhd::particle::Particles_Internal()].size()
-				+ cell_data[pamhd::particle::Particles_External()].size();
+				+= (*cell.data)[pamhd::particle::Particles_Internal()].size()
+				+ (*cell.data)[pamhd::particle::Particles_External()].size();
 
-			if (cell_data[pamhd::particle::Particles_Internal()].size() > 1) {
+			if ((*cell.data)[pamhd::particle::Particles_Internal()].size() > 1) {
 				std::cerr << __FILE__ << "(" << __LINE__ << ") "
-					<< "Incorrect number of internal particles in cell " << cell_id
-					<< ": " << cell_data[pamhd::particle::Particles_Internal()].size()
+					<< "Incorrect number of internal particles in cell " << cell.id
+					<< ": " << (*cell.data)[pamhd::particle::Particles_Internal()].size()
 					<< std::endl;
 				abort();
 			}
