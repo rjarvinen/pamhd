@@ -2,6 +2,7 @@
 Particle propagator of PAMHD for DCCRG grid.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -155,9 +156,13 @@ and their neighbors. Particles which propagate outside of the
 cell in which they are stored are moved to the External_Particles_T
 list of their previous cell and added to Particle_Destinations_T
 information.
+
+Assumes grid was initialized with neighbhorhood size of 1 and
+maximum refinement level of 0.
 */
 template<
 	class Stepper,
+	class Cell_Iterator,
 	class Cell,
 	class Background_Magnetic_Field,
 	class Current_Minus_Velocity_Getter,
@@ -173,7 +178,7 @@ template<
 	class Solver_Info_Getter
 > std::pair<double, double> solve(
 	const double dt,
-	const std::vector<uint64_t>& cell_ids,
+	const Cell_Iterator& cells,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
 	const Background_Magnetic_Field& bg_B,
 	const double vacuum_permeability,
@@ -209,76 +214,40 @@ template<
 
 	Stepper stepper;
 	std::pair<double, double> max_time_step{std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
-	for (const auto& cell_id: cell_ids) {
+	for (const auto& cell: cells) {
 
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
-			abort();
-		}
-
-		if ((Sol_Info(*cell_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
-			Part_Int(*cell_data).clear();
-			Part_Ext(*cell_data).clear();
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			Part_Int(*cell.data).clear();
+			Part_Ext(*cell.data).clear();
 			continue;
 		}
 
 		// get field data from neighborhood for interpolation
 		std::array<Eigen::Vector3d, 27> current_minus_velocities, magnetic_fields;
 
-		const auto* const neighbor_ids = grid.get_neighbors_of(cell_id);
-		if (neighbor_ids == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
-			abort();
-		}
-
-		if (neighbor_ids->size() != 26) {
+		const auto neighbors = std::distance(cell.neighbors_of.cbegin(), cell.neighbors_of.cend());
+		if (neighbors != 26) {
 			std::cerr << __FILE__ << "(" << __LINE__ << "): "
-				<< "Unsupported neighborhood: " << neighbor_ids->size()
+				<< "Unsupported neighborhood: " << neighbors
 				<< std::endl;
 			abort();
 		}
 
-		// put current cell's data into middle
-		current_minus_velocities[13] = JmV(*cell_data);
-		magnetic_fields[13] = Mag(*cell_data);
+		// default to current cell's data
+		current_minus_velocities.fill(JmV(*cell.data));
+		magnetic_fields.fill(Mag(*cell.data));
 
-		for (size_t i = 0; i < neighbor_ids->size(); i++) {
-			const auto neighbor_id = (*neighbor_ids)[i];
-
-			// use same values in missing neighbors
-			if (neighbor_id == dccrg::error_cell) {
-				if (i < 13) {
-					current_minus_velocities[i] = current_minus_velocities[13];
-					magnetic_fields[i] = magnetic_fields[13];
-				} else {
-					current_minus_velocities[i + 1] = current_minus_velocities[13];
-					magnetic_fields[i + 1] = magnetic_fields[13];
-				}
-
-				continue;
-			}
-
-			auto* const neighbor_data = grid[neighbor_id];
-			if (neighbor_data == nullptr) {
-				std::cerr << __FILE__ << "(" << __LINE__ << "): " << std::endl;
-				abort();
-			}
-
-			if (i < 13) {
-				current_minus_velocities[i] = JmV(*neighbor_data);
-				magnetic_fields[i] = Mag(*neighbor_data);
-			} else {
-				current_minus_velocities[i + 1] = JmV(*neighbor_data);
-				magnetic_fields[i + 1] = Mag(*neighbor_data);
-			}
+		for (const auto& neighbor: cell.neighbors_of) {
+			const size_t index = (neighbor.z + 1) * 9 + (neighbor.y + 1) * 3 + neighbor.x + 1;
+			current_minus_velocities[index] = JmV(*neighbor.data);
+			magnetic_fields[index] = Mag(*neighbor.data);
 		}
 
 		const auto
-			cell_min = grid.geometry.get_min(cell_id),
-			cell_max = grid.geometry.get_max(cell_id),
-			cell_center = grid.geometry.get_center(cell_id),
-			cell_length = grid.geometry.get_length(cell_id);
+			cell_min = grid.geometry.get_min(cell.id),
+			cell_max = grid.geometry.get_max(cell.id),
+			cell_center = grid.geometry.get_center(cell.id),
+			cell_length = grid.geometry.get_length(cell.id);
 
 		const Eigen::Vector3d
 			interpolation_start{
@@ -295,18 +264,18 @@ template<
 		// calculate max length of time step for next step from cell-centered values
 		const auto E_centered = [&](){
 			if (E_is_derived_quantity) {
-				return JmV(*cell_data).cross(Mag(*cell_data));
+				return JmV(*cell.data).cross(Mag(*cell.data));
 			} else {
-				return JmV(*cell_data);
+				return JmV(*cell.data);
 			}
 		}();
-		const decltype(E_centered) B_centered = Mag(*cell_data) + bg_B.get_background_field(
+		const decltype(E_centered) B_centered = Mag(*cell.data) + bg_B.get_background_field(
 			{cell_center[0], cell_center[1], cell_center[2]},
 			vacuum_permeability
 		);
 
-		for (size_t i = 0; i < Part_Int(*cell_data).size(); i++) {
-			auto particle = Part_Int(*cell_data)[i]; // reference faster?
+		for (size_t i = 0; i < Part_Int(*cell.data).size(); i++) {
+			auto particle = Part_Int(*cell.data)[i]; // reference faster?
 
 			// TODO check accurately only for most restrictive particle(s) in each cell?
 			const auto step_size
@@ -350,7 +319,7 @@ template<
 			for (int i = 0; i < substeps; i++) {
 				stepper.do_step(propagator, state, 0.0, dt / substeps);
 			}
-			Part_Vel(Part_Int(*cell_data)[i]) = state[1];
+			Part_Vel(Part_Int(*cell.data)[i]) = state[1];
 
 			// take into account periodic grid
 			const std::array<double, 3> real_pos
@@ -360,7 +329,7 @@ template<
 					state[0][2]
 				}});
 
-			Part_Pos(Part_Int(*cell_data)[i]) = {
+			Part_Pos(Part_Int(*cell.data)[i]) = {
 				real_pos[0],
 				real_pos[1],
 				real_pos[2]
@@ -373,7 +342,7 @@ template<
 				or isnan(real_pos[2])
 			) {
 
-				Part_Int(*cell_data).erase(Part_Int(*cell_data).begin() + i);
+				Part_Int(*cell.data).erase(Part_Int(*cell.data).begin() + i);
 				i--;
 
 			// move to ext list if particle outside of current cell
@@ -387,14 +356,10 @@ template<
 			) {
 				uint64_t destination = dccrg::error_cell;
 
-				for (const auto& neighbor_id: *neighbor_ids) {
-					if (neighbor_id == dccrg::error_cell) {
-						continue;
-					}
-
+				for (const auto& neighbor: cell.neighbors_of) {
 					const auto
-						neighbor_min = grid.geometry.get_min(neighbor_id),
-						neighbor_max = grid.geometry.get_max(neighbor_id);
+						neighbor_min = grid.geometry.get_min(neighbor.id),
+						neighbor_max = grid.geometry.get_max(neighbor.id);
 
 					if (
 						real_pos[0] >= neighbor_min[0]
@@ -404,23 +369,23 @@ template<
 						and real_pos[2] >= neighbor_min[2]
 						and real_pos[2] <= neighbor_max[2]
 					) {
-						destination = neighbor_id;
+						destination = neighbor.id;
 						break;
 					}
 				}
 
 				if (destination != dccrg::error_cell) {
 
-					const auto index = Part_Ext(*cell_data).size();
+					const auto index = Part_Ext(*cell.data).size();
 
-					Part_Ext(*cell_data).resize(index + 1);
+					Part_Ext(*cell.data).resize(index + 1);
 					assign(
-						Part_Ext(*cell_data)[index],
-						Part_Int(*cell_data)[i]
+						Part_Ext(*cell.data)[index],
+						Part_Int(*cell.data)[i]
 					);
-					Part_Des(Part_Ext(*cell_data)[index]) = destination;
+					Part_Des(Part_Ext(*cell.data)[index]) = destination;
 
-					Part_Int(*cell_data).erase(Part_Int(*cell_data).begin() + i);
+					Part_Int(*cell.data).erase(Part_Int(*cell.data).begin() + i);
 					i--;
 
 				} else {
@@ -429,14 +394,14 @@ template<
 						<< " No destination found for particle at " << real_pos
 						<< " propagated from " << Part_Pos(particle)
 						<< " with dt " << dt
-						<< " in cell " << cell_id
+						<< " in cell " << cell.id
 						<< " of length " << cell_length
 						<< " at " << cell_center
-						<< " with E " << JmV(*cell_data).cross(Mag(*cell_data))
-						<< " and B " << Mag(*cell_data)
+						<< " with E " << JmV(*cell.data).cross(Mag(*cell.data))
+						<< " and B " << Mag(*cell.data)
 						<< " from neighbors ";
-					for (const auto& neighbor_id: *neighbor_ids) {
-						std::cerr << neighbor_id << " ";
+					for (const auto& neighbor: cell.neighbors_of) {
+						std::cerr << neighbor.id << " ";
 					}
 					std::cerr << std::endl;
 					abort();
@@ -444,7 +409,7 @@ template<
 			}
 		}
 
-		Nr_Ext(*cell_data) = Part_Ext(*cell_data).size();
+		Nr_Ext(*cell.data) = Part_Ext(*cell.data).size();
 	}
 
 	return max_time_step;
@@ -454,21 +419,14 @@ template<
 template<
 	class Nr_Particles_T,
 	class Particles_T,
+	class Cell_Iterator,
 	class Cell
 > void resize_receiving_containers(
-	const std::vector<uint64_t>& cell_ids,
+	const Cell_Iterator& cells,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
 ) {
-	for (const auto& cell_id: cell_ids) {
-
-		auto* const cell_ptr = grid[cell_id];
-		if (cell_ptr == NULL) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		auto& cell_data = *cell_ptr;
-
-		cell_data[Particles_T()].resize(cell_data[Nr_Particles_T()]);
+	for (const auto& cell: cells) {
+		(*cell.data)[Particles_T()].resize((*cell.data)[Nr_Particles_T()]);
 	}
 }
 
@@ -478,9 +436,10 @@ template<
 	class Particles_Internal_T,
 	class Particles_External_T,
 	class Particle_Destination_T,
+	class Cell_Iterator,
 	class Cell
 > void incorporate_external_particles(
-	const std::vector<uint64_t>& cell_ids,
+	const Cell_Iterator& cells,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
 ) {
 	constexpr Nr_Particles_Internal_T Nr_Int{};
@@ -488,52 +447,26 @@ template<
 	constexpr Particles_External_T Part_Ext{};
 	constexpr Particle_Destination_T Dest{};
 
-	for (const auto& cell_id: cell_ids) {
-
-		auto* const cell_ptr = grid[cell_id];
-		if (cell_ptr == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		auto& cell_data = *cell_ptr;
-
-		// assign particles from neighbors' external list to this cell
-		const auto* const neighbor_ids = grid.get_neighbors_of(cell_id);
-		if (neighbor_ids == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		for (const auto& neighbor_id: *neighbor_ids) {
-			if (neighbor_id == dccrg::error_cell) {
-				continue;
-			}
-
-			auto* const neighbor_ptr = grid[neighbor_id];
-			if (neighbor_ptr == nullptr) {
-				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			auto& neighbor_data = *neighbor_ptr;
-
-			for (auto& particle: neighbor_data[Part_Ext]) {
+	for (const auto& cell: cells) {
+		for (const auto& neighbor: cell.neighbors_of) {
+			for (auto& particle: (*neighbor.data)[Part_Ext]) {
 				if (particle[Dest] == dccrg::error_cell) {
 					continue;
 				}
 
-				if (particle[Dest] == cell_id) {
+				if (particle[Dest] == cell.id) {
 					particle[Dest] = dccrg::error_cell;
 
-					const auto index = cell_data[Part_Int].size();
+					const auto index = (*cell.data)[Part_Int].size();
 
-					cell_data[Part_Int].resize(index + 1);
+					(*cell.data)[Part_Int].resize(index + 1);
 
-					assign(cell_data[Part_Int][index], particle);
+					assign((*cell.data)[Part_Int][index], particle);
 				}
 			}
 		}
 
-		cell_data[Nr_Int] = cell_data[Part_Int].size();
+		(*cell.data)[Nr_Int] = (*cell.data)[Part_Int].size();
 	}
 }
 
@@ -541,21 +474,15 @@ template<
 template<
 	class Nr_Particles_External_T,
 	class Particles_External_T,
+	class Cell_Iterator,
 	class Cell
 > void remove_external_particles(
-	const std::vector<uint64_t>& cell_ids,
+	const Cell_Iterator& cells,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
 ) {
-	for (auto cell_id: cell_ids) {
-
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		(*cell_data)[Nr_Particles_External_T()] = 0;
-		(*cell_data)[Particles_External_T()].clear();
+	for (const auto& cell: cells) {
+		(*cell.data)[Nr_Particles_External_T()] = 0;
+		(*cell.data)[Particles_External_T()].clear();
 	}
 }
 
