@@ -2,6 +2,7 @@
 Tests parallel particle solver of PAMHD in dipole field.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 This program is free software: you can redistribute it and/or modify
@@ -135,41 +136,20 @@ int main(int argc, char* argv[])
 
 	const unsigned int neighborhood_size = 1;
 	const std::array<uint64_t, 3> number_of_cells{{25, 25, 6}};
-	if (
-		not grid.initialize(
-			number_of_cells,
-			comm,
-			"RANDOM",
-			neighborhood_size,
-			0,
-			false, false, false
-		)
-	) {
-		std::cerr << __FILE__ << "(" << __LINE__ << "): "
-			<< "Couldn't initialize one or more grids."
-			<< std::endl;
-		abort();
-	}
+	grid
+		.set_neighborhood_length(neighborhood_size)
+		.set_maximum_refinement_level(0)
+		.set_load_balancing_method("RANDOM")
+		.set_initial_length(number_of_cells)
+		.initialize(comm)
+		.balance_load();
 
 	// set grid geometry
 	dccrg::Cartesian_Geometry::Parameters geom_params;
 	geom_params.start = {{-6.0 * Re, -6.0 * Re, -0.6 * Re}};
 	geom_params.level_0_cell_length = {{Re / 5, Re / 5, Re / 5}};
 
-	if (not grid.set_geometry(geom_params)) {
-		std::cerr << __FILE__ << "(" << __LINE__ << "): "
-			<< "Couldn't set geometry of one or more grids."
-			<< std::endl;
-		abort();
-	}
-
-	grid.balance_load();
-
-	const auto
-		inner_cells = grid.get_local_cells_not_on_process_boundary(),
-		outer_cells = grid.get_local_cells_on_process_boundary(),
-		remote_cells = grid.get_remote_cells_on_process_boundary(),
-		cells = grid.get_cells();
+	grid.set_geometry(geom_params);
 
 	pamhd::Background_Magnetic_Field<double, Eigen::Vector3d> bg_B;
 
@@ -195,15 +175,8 @@ int main(int argc, char* argv[])
 
 	// create particles at equator 5 Re from origin
 	int initial_particles_local = 0, initial_particles = 0;
-	for (const auto& cell_id: cells) {
-		auto* const cell_ptr = grid[cell_id];
-		if (cell_ptr == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		auto& cell_data = *cell_ptr;
-
-		const auto cell_center = grid.geometry.get_center(cell_id);
+	for (const auto& cell: grid.local_cells()) {
+		const auto cell_center = grid.geometry.get_center(cell.id);
 		const Eigen::Vector3d r{
 			cell_center[0],
 			cell_center[1],
@@ -211,8 +184,8 @@ int main(int argc, char* argv[])
 		};
 		const auto distance = r.norm();
 
-		Ele(cell_data) = {0, 0, 0};
-		Mag(cell_data)
+		Ele(*cell.data) = {0, 0, 0};
+		Mag(*cell.data)
 			= bg_B.get_background_field(
 				Eigen::Vector3d{cell_center[0], cell_center[1], cell_center[2]},
 				1.257e-06
@@ -231,15 +204,15 @@ int main(int argc, char* argv[])
 		Part_Vel(particle) = 2e6 * r / r.norm(); // m / s
 		Part_Mas(particle) = 0;
 		Part_C2M(particle) = 95788335.8;
-		Part_Int(cell_data).push_back(particle);
+		Part_Int(*cell.data).push_back(particle);
 
 		Part_Pos(particle) += Eigen::Vector3d{0.05 * Re, 0.05 * Re, 0.05 * Re};
 		Part_C2M(particle) += 1e6;
-		Part_Int(cell_data).push_back(particle);
+		Part_Int(*cell.data).push_back(particle);
 
-		Nr_Ext(cell_data) = Part_Ext(cell_data).size();
+		Nr_Ext(*cell.data) = Part_Ext(*cell.data).size();
 
-		initial_particles_local += Part_Int(cell_data).size();
+		initial_particles_local += Part_Int(*cell.data).size();
 	}
 	// allocate copies of remote neighbor cells
 	grid.update_copies_of_remote_neighbors();
@@ -300,7 +273,7 @@ int main(int argc, char* argv[])
 				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
 			>(
 				time_step,
-				outer_cells,
+				grid.outer_cells(),
 				grid,
 				bg_B,
 				1.2566370614359173e-06,
@@ -332,7 +305,7 @@ int main(int argc, char* argv[])
 				boost::numeric::odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>
 			>(
 				time_step,
-				inner_cells,
+				grid.inner_cells(),
 				grid,
 				bg_B,
 				1.2566370614359173e-06,
@@ -357,7 +330,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(remote_cells, grid);
+		>(grid.remote_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 
@@ -379,7 +352,7 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(inner_cells, grid);
+		>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
@@ -388,12 +361,12 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(outer_cells, grid);
+		>(grid.outer_cells(), grid);
 
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(inner_cells, grid);
+		>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(
@@ -404,7 +377,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(outer_cells, grid);
+		>(grid.outer_cells(), grid);
 
 
 		if (
@@ -446,17 +419,10 @@ int main(int argc, char* argv[])
 		// check for errors
 		int total_particles_local = 0, total_particles = 0;
 
-		for (const auto& cell_id: cells) {
-			auto* const cell_ptr = grid[cell_id];
-			if (cell_ptr == nullptr) {
-				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			auto& cell_data = *cell_ptr;
-
+		for (const auto& cell: grid.local_cells()) {
 			total_particles_local
-				+= cell_data[pamhd::particle::Particles_Internal()].size()
-				+ cell_data[pamhd::particle::Particles_External()].size();
+				+= (*cell.data)[pamhd::particle::Particles_Internal()].size()
+				+ (*cell.data)[pamhd::particle::Particles_External()].size();
 		}
 
 		MPI_Allreduce(
