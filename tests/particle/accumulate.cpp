@@ -108,7 +108,7 @@ int main()
 			<< "Invalid value volume not caught."
 			<< std::endl;
 		abort();
-	} catch(std::out_of_range e) {}
+	} catch(const std::out_of_range& e) {}
 
 	try {
 		value_min = Vector3d(0, 0, 0);
@@ -127,7 +127,7 @@ int main()
 			<< "Invalid cell volume not caught."
 			<< std::endl;
 		abort();
-	} catch(std::out_of_range e) {}
+	} catch(const std::out_of_range& e) {}
 
 	// test regular accumulation
 	const auto accu1
