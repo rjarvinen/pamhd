@@ -341,6 +341,21 @@ using Cell_hyb_particle = gensimcell::Cell<
 	pamhd::Magnetic_Field_Flux
 >;
 
+
+// Save this info in every neighbor iterator of every cell.
+// Updated automatically by dccrg.
+struct Is_Local {
+	bool is_local = false;
+	template<
+		class Grid, class Cell_Item, class Neighbor_Item
+	> void update(
+		const Grid& grid, const Cell_Item&, const Neighbor_Item& neighbor, const int&, const Is_Local&
+	) {
+		is_local = grid.is_local(neighbor.id);
+	}
+};
+
+
 }} // namespaces
 
 #endif // ifndef PAMHD_PARTICLE_VARIABLES_HPP

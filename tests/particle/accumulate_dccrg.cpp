@@ -2,6 +2,7 @@
 Test for particle accumulator of PAMHD built on top of DCCRG.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -75,7 +76,12 @@ using Cell = gensimcell::Cell<
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	Accumulated_To_Cells
 >;
-using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
+using Grid = dccrg::Dccrg<
+	Cell,
+	dccrg::Cartesian_Geometry,
+	std::tuple<>,
+	std::tuple<pamhd::particle::Is_Local>
+>;
 
 
 // returns a reference to data accumulated from particles in given cell
@@ -294,37 +300,59 @@ int main(int argc, char* argv[])
 
 		Grid grid_x, grid_x_np, grid_y, grid_y_np, grid_z, grid_z_np;
 
-		if (
-			not grid_x.initialize(
-				nr_of_cells_x, comm, "RANDOM", neighborhood_size, 0,
-				periodic_x[0], periodic_x[1], periodic_x[2]
-			)
-			or not grid_x_np.initialize(
-				nr_of_cells_x, comm, "RANDOM", neighborhood_size, 0,
-				non_periodic[0], non_periodic[1], non_periodic[2]
-			)
-			or not grid_y.initialize(
-				nr_of_cells_y, comm, "RANDOM", neighborhood_size, 0,
-				periodic_y[0], periodic_y[1], periodic_y[2]
-			)
-			or not grid_y_np.initialize(
-				nr_of_cells_y, comm, "RANDOM", neighborhood_size, 0,
-				non_periodic[0], non_periodic[1], non_periodic[2]
-			)
-			or not grid_z.initialize(
-				nr_of_cells_z, comm, "RANDOM", neighborhood_size, 0,
-				periodic_z[0], periodic_z[1], periodic_z[2]
-			)
-			or not grid_z_np.initialize(
-				nr_of_cells_z, comm, "RANDOM", neighborhood_size, 0,
-				non_periodic[0], non_periodic[1], non_periodic[2]
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize some of the grids."
-				<< std::endl;
-			abort();
-		}
+		grid_x
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(periodic_x[0], periodic_x[1], periodic_x[2])
+			.set_initial_length(nr_of_cells_x)
+			.initialize(comm)
+			.balance_load();
+
+		grid_x_np
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(non_periodic[0], non_periodic[1], non_periodic[2])
+			.set_initial_length(nr_of_cells_x)
+			.initialize(comm)
+			.balance_load();
+
+		grid_y
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(periodic_y[0], periodic_y[1], periodic_y[2])
+			.set_initial_length(nr_of_cells_y)
+			.initialize(comm)
+			.balance_load();
+
+		grid_y_np
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(non_periodic[0], non_periodic[1], non_periodic[2])
+			.set_initial_length(nr_of_cells_y)
+			.initialize(comm)
+			.balance_load();
+
+		grid_z
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(periodic_z[0], periodic_z[1], periodic_z[2])
+			.set_initial_length(nr_of_cells_z)
+			.initialize(comm)
+			.balance_load();
+
+		grid_z_np
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(non_periodic[0], non_periodic[1], non_periodic[2])
+			.set_initial_length(nr_of_cells_z)
+			.initialize(comm)
+			.balance_load();
 
 		dccrg::Cartesian_Geometry::Parameters
 			geom_params_x, geom_params_y, geom_params_z;
@@ -335,26 +363,13 @@ int main(int argc, char* argv[])
 		geom_params_y.level_0_cell_length = {{  1, 9.0 / nr_of_cells_y[1],   1}};
 		geom_params_z.level_0_cell_length = {{  1,   1, 9.0 / nr_of_cells_z[2]}};
 
-		if (
-			not grid_x.set_geometry(geom_params_x)
-			or not grid_x_np.set_geometry(geom_params_x)
-			or not grid_y.set_geometry(geom_params_y)
-			or not grid_y_np.set_geometry(geom_params_y)
-			or not grid_z.set_geometry(geom_params_z)
-			or not grid_z_np.set_geometry(geom_params_z)
-		) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't set geometry of some of the grids."
-				<< std::endl;
-			abort();
-		}
+		grid_x.set_geometry(geom_params_x);
+		grid_x_np.set_geometry(geom_params_x);
+		grid_y.set_geometry(geom_params_y);
+		grid_y_np.set_geometry(geom_params_y);
+		grid_z.set_geometry(geom_params_z);
+		grid_z_np.set_geometry(geom_params_z);
 
-		grid_x.balance_load();
-		grid_x_np.balance_load();
-		grid_y.balance_load();
-		grid_y_np.balance_load();
-		grid_z.balance_load();
-		grid_z_np.balance_load();
 		// create copies of remote neighbors
 		grid_x.update_copies_of_remote_neighbors();
 		grid_x_np.update_copies_of_remote_neighbors();

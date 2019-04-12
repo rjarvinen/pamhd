@@ -2,6 +2,7 @@
 Particle data accumulator of PAMHD built on top of DCCRG.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -201,10 +202,11 @@ template<
 	class Accumulation_List_Length_Getter,
 	class Accumulation_List_Getter,
 	class Solver_Info_Getter,
-	class Cell
+	class Cell_Iterator,
+	class Cell_Data
 > void accumulate(
-	const std::vector<uint64_t>& cell_ids,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	const Cell_Iterator& cells,
+	dccrg::Dccrg<Cell_Data, dccrg::Cartesian_Geometry>& grid,
 	Particles_Getter Part,
 	Particle_Position_Getter Part_Pos,
 	Particle_Value_Getter Part_Val,
@@ -216,38 +218,21 @@ template<
 	Solver_Info_Getter Sol_Info,
 	const bool clear_at_start = true
 ) {
-	for (const auto& cell_id: cell_ids) {
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		if ((Sol_Info(*cell_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
-			Bulk_Val(*cell_data) = {};
+	for (const auto& cell: cells) {
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			Bulk_Val(*cell.data) = {};
 			continue;
 		}
 
 		Eigen::Vector3d cell_min, cell_max, cell_length, cell_center;
-		std::tie(cell_min, cell_max, cell_length, cell_center) = get_cell_geometry(cell_id, grid.geometry);
+		std::tie(cell_min, cell_max, cell_length, cell_center) = get_cell_geometry(cell.id, grid.geometry);
 
 		if (clear_at_start) {
-			Accu_List(*cell_data).clear();
+			Accu_List(*cell.data).clear();
 		}
 
-		std::vector<bool> is_locals;
-		std::vector<uint64_t> neighbor_ids;
-		std::vector<Cell*> neighbor_datas;
-		std::vector<Eigen::Vector3d> neighbor_mins, neighbor_maxs;
-		std::tie(
-			is_locals,
-			neighbor_ids,
-			neighbor_datas,
-			neighbor_mins,
-			neighbor_maxs
-		) = cache_neighbor_data(cell_id, grid);
-
-		for (auto& particle: Part(*cell_data)) {
+		// TODO: faster to iterate over neighbors first?
+		for (auto& particle: Part(*cell.data)) {
 			auto& position = Part_Pos(particle);
 			const Eigen::Vector3d
 				value_box_min{
@@ -262,9 +247,9 @@ template<
 				};
 
 			// accumulate to current cell
-			Bulk_Val(*cell_data)
+			Bulk_Val(*cell.data)
 				+= get_accumulated_value(
-					Part_Val(*cell_data, particle),
+					Part_Val(*cell.data, particle),
 					value_box_min,
 					value_box_max,
 					cell_min,
@@ -272,51 +257,52 @@ template<
 				);
 
 			// accumulate to neighbors
-			for (size_t i = 0; i < is_locals.size(); i++) {
+			for (const auto& neighbor: cell.neighbors_of) {
 
+				Eigen::Vector3d neigh_min, neigh_max, neigh_length, neigh_center;
+				std::tie(neigh_min, neigh_max, neigh_length, neigh_center) = get_cell_geometry(neighbor.id, grid.geometry);
 				if (
-					value_box_min[0] > neighbor_maxs[i][0]
-					or value_box_min[1] > neighbor_maxs[i][1]
-					or value_box_min[2] > neighbor_maxs[i][2]
-					or value_box_max[0] < neighbor_mins[i][0]
-					or value_box_max[1] < neighbor_mins[i][1]
-					or value_box_max[2] < neighbor_mins[i][2]
+					value_box_min[0] > neigh_max[0]
+					or value_box_min[1] > neigh_max[1]
+					or value_box_min[2] > neigh_max[2]
+					or value_box_max[0] < neigh_min[0]
+					or value_box_max[1] < neigh_min[1]
+					or value_box_max[2] < neigh_min[2]
 				) {
 					continue;
 				}
 
 				// don't accumulate into dont_solve cells
-				if ((Sol_Info(*(neighbor_datas[i])) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+				if ((Sol_Info(*neighbor.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
 					continue;
 				}
 
 				const auto accumulated_value
 					= get_accumulated_value(
-						Part_Val(*(neighbor_datas[i]), particle),
+						Part_Val(*neighbor.data, particle),
 						value_box_min,
 						value_box_max,
-						neighbor_mins[i],
-						neighbor_maxs[i]
+						neigh_min,
+						neigh_max
 					);
 
 				// same as for current cell above
-				if (is_locals[i]) {
-					Bulk_Val(*(neighbor_datas[i])) += accumulated_value;
+				if (neighbor.is_local) {
+					Bulk_Val(*neighbor.data) += accumulated_value;
 				// accumulate values to a list in current cell
 				} else {
 					// use this index in the list
 					size_t accumulation_index = 0;
 
 					// find the index of target neighbor
-					const auto neighbor_id = neighbor_ids[i];
 					auto iter
 						= std::find_if(
-							Accu_List(*cell_data).begin(),
-							Accu_List(*cell_data).end(),
-							[&neighbor_id, &List_Target](
-								const decltype(*Accu_List(*cell_data).begin()) candidate_item
+							Accu_List(*cell.data).begin(),
+							Accu_List(*cell.data).end(),
+							[&neighbor, &List_Target](
+								const decltype(*Accu_List(*cell.data).begin()) candidate_item
 							) {
-								if (List_Target(candidate_item) == neighbor_id) {
+								if (List_Target(candidate_item) == neighbor.id) {
 									return true;
 								} else {
 									return false;
@@ -325,21 +311,21 @@ template<
 						);
 
 					// found
-					if (iter != Accu_List(*cell_data).end()) {
+					if (iter != Accu_List(*cell.data).end()) {
 						List_Bulk_Val(*iter) += accumulated_value;
 					// create the item
 					} else {
-						const auto old_size = Accu_List(*cell_data).size();
-						Accu_List(*cell_data).resize(old_size + 1);
-						auto& new_item = Accu_List(*cell_data)[old_size];
-						List_Target(new_item) = neighbor_id;
+						const auto old_size = Accu_List(*cell.data).size();
+						Accu_List(*cell.data).resize(old_size + 1);
+						auto& new_item = Accu_List(*cell.data)[old_size];
+						List_Target(new_item) = neighbor.id;
 						List_Bulk_Val(new_item) = accumulated_value;
 					}
 				}
 			}
 		}
 
-		List_Len(*cell_data) = Accu_List(*cell_data).size();
+		List_Len(*cell.data) = Accu_List(*cell.data).size();
 	}
 }
 
