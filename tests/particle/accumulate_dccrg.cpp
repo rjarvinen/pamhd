@@ -150,22 +150,15 @@ Creates evenly spaced particles in given cells.
 void create_particles(
 	const size_t values_per_cell,
 	const size_t dimension,
-	const std::vector<uint64_t>& cell_ids,
 	Grid& grid
 ) {
-	for (const auto& cell_id: cell_ids) {
+	for (const auto& cell: grid.local_cells()) {
 		const auto
-			cell_min = grid.geometry.get_min(cell_id),
-			cell_length = grid.geometry.get_length(cell_id),
-			cell_center = grid.geometry.get_center(cell_id);
+			cell_min = grid.geometry.get_min(cell.id),
+			cell_length = grid.geometry.get_length(cell.id),
+			cell_center = grid.geometry.get_center(cell.id);
 
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		solver_info_getter(*cell_data) = 0;
+		solver_info_getter(*cell.data) = 0;
 
 		for (size_t i = 0; i < values_per_cell; i++) {
 			pamhd::particle::Particle_Internal new_particle;
@@ -187,7 +180,7 @@ void create_particles(
 				= f(new_particle[pamhd::particle::Position()])[dimension]
 				/ values_per_cell;
 
-			(*cell_data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
+			(*cell.data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
 		}
 	}
 }
@@ -196,31 +189,24 @@ void create_particles(
 // returns infinite norm between analytic results and that in given cells
 double get_norm(
 	const size_t dimension,
-	const std::vector<uint64_t>& cell_ids,
 	const Grid& grid,
 	MPI_Comm& comm
 ) {
 	double
 		norm_local = 0,
 		norm_global = 0;
-	for (const auto& cell_id: cell_ids) {
-		const auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
+	for (const auto& cell: grid.local_cells()) {
 		const Eigen::Vector3d cell_center{
-			grid.geometry.get_center(cell_id)[0],
-			grid.geometry.get_center(cell_id)[1],
-			grid.geometry.get_center(cell_id)[2]
+			grid.geometry.get_center(cell.id)[0],
+			grid.geometry.get_center(cell.id)[1],
+			grid.geometry.get_center(cell.id)[2]
 		};
 
 		norm_local
 			= std::max(
 				norm_local,
 				std::fabs(
-					(*cell_data)[Count()]
+					(*cell.data)[Count()]
 					- f(cell_center)[dimension]
 				)
 			);
@@ -378,29 +364,18 @@ int main(int argc, char* argv[])
 		grid_z.update_copies_of_remote_neighbors();
 		grid_z_np.update_copies_of_remote_neighbors();
 
-		const auto
-			cell_ids_x = grid_x.get_cells(),
-			cell_ids_x_np = grid_x_np.get_cells(),
-			cell_ids_y = grid_y.get_cells(),
-			cell_ids_y_np = grid_y_np.get_cells(),
-			cell_ids_z = grid_z.get_cells(),
-			cell_ids_z_np = grid_z_np.get_cells();
-
 		const size_t values_per_cell = nr_of_values / nr_of_cells;
-		create_particles(values_per_cell, 0, cell_ids_x   , grid_x);
-		create_particles(values_per_cell, 0, cell_ids_x_np, grid_x_np);
-		create_particles(values_per_cell, 1, cell_ids_y   , grid_y);
-		create_particles(values_per_cell, 1, cell_ids_y_np, grid_y_np);
-		create_particles(values_per_cell, 2, cell_ids_z   , grid_z);
-		create_particles(values_per_cell, 2, cell_ids_z_np, grid_z_np);
+		create_particles(values_per_cell, 0, grid_x);
+		create_particles(values_per_cell, 0, grid_x_np);
+		create_particles(values_per_cell, 1, grid_y);
+		create_particles(values_per_cell, 1, grid_y_np);
+		create_particles(values_per_cell, 2, grid_z);
+		create_particles(values_per_cell, 2, grid_z_np);
 
 		const auto accumulate_particles
-			= [](
-				const std::vector<uint64_t>& cell_ids,
-				Grid& grid
-			) {
+			= [](Grid& grid) {
 				pamhd::particle::accumulate(
-					cell_ids,
+					grid.local_cells(),
 					grid,
 					[](Cell& cell)->pamhd::particle::Particles_Internal::data_type&{
 						return cell[pamhd::particle::Particles_Internal()];
@@ -420,16 +395,17 @@ int main(int argc, char* argv[])
 					list_target_getter,
 					accumulation_list_length_getter,
 					accumulation_list_getter,
-					solver_info_getter
+					solver_info_getter,
+					true
 				);
 			};
 
-		accumulate_particles(cell_ids_x   , grid_x);
-		accumulate_particles(cell_ids_x_np, grid_x_np);
-		accumulate_particles(cell_ids_y   , grid_y);
-		accumulate_particles(cell_ids_y_np, grid_y_np);
-		accumulate_particles(cell_ids_z   , grid_z);
-		accumulate_particles(cell_ids_z_np, grid_z_np);
+		accumulate_particles(grid_x);
+		accumulate_particles(grid_x_np);
+		accumulate_particles(grid_y);
+		accumulate_particles(grid_y_np);
+		accumulate_particles(grid_z);
+		accumulate_particles(grid_z_np);
 
 		// transfer number accumulated values between processes
 		Cell::set_transfer_all(true, pamhd::particle::Nr_Accumulated_To_Cells());
@@ -466,12 +442,12 @@ int main(int argc, char* argv[])
 		accumulate_from_remote_neighbors(grid_z_np);
 
 		const double
-			norm_x = get_norm(0, cell_ids_x, grid_x, comm) / nr_of_cells,
-			norm_x_np = get_norm(0, cell_ids_x_np, grid_x_np, comm) / nr_of_cells,
-			norm_y = get_norm(1, cell_ids_y, grid_y, comm) / nr_of_cells,
-			norm_y_np = get_norm(1, cell_ids_y_np, grid_y_np, comm) / nr_of_cells,
-			norm_z = get_norm(2, cell_ids_z, grid_z, comm) / nr_of_cells,
-			norm_z_np = get_norm(2, cell_ids_z_np, grid_z_np, comm) / nr_of_cells;
+			norm_x = get_norm(0, grid_x, comm) / nr_of_cells,
+			norm_x_np = get_norm(0, grid_x_np, comm) / nr_of_cells,
+			norm_y = get_norm(1, grid_y, comm) / nr_of_cells,
+			norm_y_np = get_norm(1, grid_y_np, comm) / nr_of_cells,
+			norm_z = get_norm(2, grid_z, comm) / nr_of_cells,
+			norm_z_np = get_norm(2, grid_z_np, comm) / nr_of_cells;
 
 		if (old_nr_of_cells > 0) {
 			const double
