@@ -2,6 +2,7 @@
 Propagates test particles (0 mass) in prescribed electric and magnetic fields.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -356,21 +357,14 @@ int main(int argc, char* argv[])
 	const unsigned int neighborhood_size = 1;
 	const auto& number_of_cells = grid_options.get_number_of_cells();
 	const auto& periodic = grid_options.get_periodic();
-	if (not grid.initialize(
-		number_of_cells,
-		comm,
-		options_sim.lb_name.c_str(),
-		neighborhood_size,
-		0,
-		periodic[0],
-		periodic[1],
-		periodic[2]
-	)) {
-		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Couldn't initialize grid."
-			<< std::endl;
-		abort();
-	}
+	grid
+		.set_neighborhood_length(neighborhood_size)
+		.set_maximum_refinement_level(0)
+		.set_load_balancing_method(options_sim.lb_name.c_str())
+		.set_periodic(periodic[0], periodic[1], periodic[2])
+		.set_initial_length(number_of_cells)
+		.initialize(comm)
+		.balance_load();
 
 	// set grid geometry
 	const std::array<double, 3>
@@ -386,38 +380,19 @@ int main(int argc, char* argv[])
 	geom_params.start = grid_options.get_start();
 	geom_params.level_0_cell_length = cell_volume;
 
-	if (not grid.set_geometry(geom_params)) {
-		std::cerr << __FILE__ << ":" << __LINE__
-			<< ": Couldn't set grid geometry."
-			<< std::endl;
-		abort();
-	}
-
-	grid.balance_load();
+	grid.set_geometry(geom_params);
 
 	// update owner process of cells for saving into file
-	for (auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		(*cell.data)[pamhd::MPI_Rank()] = rank;
 	}
 
 	// assign cells into boundary geometries
-	for (const auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		const auto
 			start = grid.geometry.get_min(cell.id),
 			end = grid.geometry.get_max(cell.id);
 		geometries.overlaps(start, end, cell.id);
-	}
-
-	// pointer to data of every local cell and its neighbor(s)
-	const auto& cell_data_pointers = grid.get_cell_data_pointers();
-
-	// index of first outer cell in dccrg's cell data pointer cache
-	size_t outer_cell_start_i = 0;
-	for (const auto& item: cell_data_pointers) {
-		outer_cell_start_i++;
-		if (get<0>(item) == dccrg::error_cell) {
-			break;
-		}
 	}
 
 
@@ -432,12 +407,6 @@ int main(int argc, char* argv[])
 		simulation_time = options_sim.time_start,
 		next_particle_save = options_particle.save_n;
 
-	std::vector<uint64_t>
-		cells = grid.get_cells(),
-		inner_cells = grid.get_local_cells_not_on_process_boundary(),
-		outer_cells = grid.get_local_cells_on_process_boundary(),
-		remote_cells = grid.get_remote_cells_on_process_boundary();
-
 	// set initial condition
 	std::mt19937_64 random_source;
 
@@ -446,7 +415,6 @@ int main(int argc, char* argv[])
 		initial_conditions,
 		background_B,
 		grid,
-		cells,
 		simulation_time,
 		options_sim.vacuum_permeability,
 		Mag, Mag_f,
@@ -457,7 +425,6 @@ int main(int argc, char* argv[])
 		geometries,
 		initial_conditions,
 		simulation_time,
-		cells,
 		grid,
 		Ele
 	);
@@ -475,7 +442,6 @@ int main(int argc, char* argv[])
 			geometries,
 			initial_conditions,
 			simulation_time,
-			cells,
 			grid,
 			random_source,
 			options_particle.boltzmann,
@@ -508,7 +474,6 @@ int main(int argc, char* argv[])
 			boundaries,
 			simulation_time,
 			0,
-			cells,
 			grid,
 			random_source,
 			options_particle.boltzmann,
@@ -636,19 +601,19 @@ int main(int argc, char* argv[])
 
 		switch (particle_stepper) {
 		case 0:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, outer_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, grid.outer_cells());
 			break;
 		case 1:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, outer_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, grid.outer_cells());
 			break;
 		case 2:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, outer_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, grid.outer_cells());
 			break;
 		case 3:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, outer_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, grid.outer_cells());
 			break;
 		case 4:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, outer_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, grid.outer_cells());
 			break;
 		default:
 			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
@@ -662,19 +627,19 @@ int main(int argc, char* argv[])
 
 		switch (particle_stepper) {
 		case 0:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, inner_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::euler<pamhd::particle::state_t>, grid.inner_cells());
 			break;
 		case 1:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, inner_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::modified_midpoint<pamhd::particle::state_t>, grid.inner_cells());
 			break;
 		case 2:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, inner_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta4<pamhd::particle::state_t>, grid.inner_cells());
 			break;
 		case 3:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, inner_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_cash_karp54<pamhd::particle::state_t>, grid.inner_cells());
 			break;
 		case 4:
-			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, inner_cells);
+			particle_max_dt = SOLVE_WITH_STEPPER(odeint::runge_kutta_fehlberg78<pamhd::particle::state_t>, grid.inner_cells());
 			break;
 		default:
 			std::cerr <<  __FILE__ << "(" << __LINE__ << "): " << particle_stepper << std::endl;
@@ -690,7 +655,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::resize_receiving_containers<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(remote_cells, grid);
+		>(grid.remote_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 
@@ -704,7 +669,7 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(inner_cells, grid);
+		>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_receives();
 
@@ -713,12 +678,12 @@ int main(int argc, char* argv[])
 			pamhd::particle::Particles_Internal,
 			pamhd::particle::Particles_External,
 			pamhd::particle::Destination_Cell
-		>(outer_cells, grid);
+		>(grid.outer_cells(), grid);
 
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(inner_cells, grid);
+		>(grid.inner_cells(), grid);
 
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(false, pamhd::particle::Particles_External());
@@ -726,7 +691,7 @@ int main(int argc, char* argv[])
 		pamhd::particle::remove_external_particles<
 			pamhd::particle::Nr_Particles_External,
 			pamhd::particle::Particles_External
-		>(outer_cells, grid);
+		>(grid.outer_cells(), grid);
 
 
 		nr_particles_created
@@ -743,7 +708,6 @@ int main(int argc, char* argv[])
 				boundaries,
 				simulation_time,
 				simulated_steps,
-				cells,
 				grid,
 				random_source,
 				options_particle.boltzmann,

@@ -2,6 +2,7 @@
 Initializes particle solution of PAMHD.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -58,29 +59,20 @@ template<
 	const Sim_Geometries& geometries,
 	Init_Cond& initial_conditions,
 	const double simulation_time,
-	const std::vector<uint64_t>& cells,
 	Grid& grid,
 	const Electric_Field_Getter Ele
 ) {
 	constexpr Boundary_Electric_Field E{};
 
 	// set electric field
-	for (const auto& cell_id: cells) {
-		const auto c = grid.geometry.get_center(cell_id);
+	for (const auto& cell: grid.local_cells()) {
+		const auto c = grid.geometry.get_center(cell.id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 		const auto
 			lat = asin(c[2] / r),
 			lon = atan2(c[1], c[0]);
 
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
-			abort();
-		}
-
-		Ele(*cell_data)
+		Ele(*cell.data)
 			= initial_conditions.get_default_data(
 				E,
 				simulation_time,
@@ -161,7 +153,6 @@ template<
 	const Sim_Geometries& geometries,
 	Init_Cond& initial_conditions,
 	const double simulation_time,
-	const std::vector<uint64_t>& cells,
 	Grid& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
@@ -186,58 +177,50 @@ template<
 	// set default state
 	size_t nr_particles_created = 0;
 	auto current_id_start = first_particle_id;
-	for (const auto cell_id: cells) {
+	for (const auto cell: grid.local_cells()) {
 
-		const auto c = grid.geometry.get_center(cell_id);
+		const auto c = grid.geometry.get_center(cell.id);
 		const auto r = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
 		const auto
 			lat = asin(c[2] / r),
 			lon = atan2(c[1], c[0]);
 
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ") No data for cell: "
-				<< cell_id
-				<< std::endl;
-			abort();
-		}
-
-		Bdy_N(*cell_data)
+		Bdy_N(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Number_Density(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		Bdy_V(*cell_data)
+		Bdy_V(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Velocity(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		Bdy_T(*cell_data)
+		Bdy_T(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Temperature(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		Bdy_Nr_Par(*cell_data)
+		Bdy_Nr_Par(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Nr_Particles_In_Cell(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		Bdy_C2M(*cell_data)
+		Bdy_C2M(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Charge_Mass_Ratio(),
 				simulation_time,
 				c[0], c[1], c[2],
 				r, lat, lon
 			);
-		Bdy_SpM(*cell_data)
+		Bdy_SpM(*cell.data)
 			= initial_conditions.get_default_data(
 				pamhd::particle::Bdy_Species_Mass(),
 				simulation_time,
@@ -478,23 +461,17 @@ template<
 		}
 	}
 
-	for (const auto& cell: cells) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << std::endl;
-			abort();
-		}
-
-		if ((Sol_Info(*cell_data) & Solver_Info::dont_solve) > 0) {
+	for (const auto& cell: grid.local_cells()) {
+		if ((Sol_Info(*cell.data) & Solver_Info::dont_solve) > 0) {
 			continue;
 		}
 
-		random_source.seed(cell);
+		random_source.seed(cell.id);
 
 		const auto
-			cell_start = grid.geometry.get_min(cell),
-			cell_end = grid.geometry.get_max(cell),
-			cell_length = grid.geometry.get_length(cell);
+			cell_start = grid.geometry.get_min(cell.id),
+			cell_end = grid.geometry.get_max(cell.id),
+			cell_length = grid.geometry.get_length(cell.id);
 
 		auto new_particles
 			= create_particles<
@@ -506,14 +483,14 @@ template<
 				Particle_ID_T,
 				Particle_Species_Mass_T
 			>(
-				Bdy_V(*cell_data),
+				Bdy_V(*cell.data),
 				Eigen::Vector3d{cell_start[0], cell_start[1], cell_start[2]},
 				Eigen::Vector3d{cell_end[0], cell_end[1], cell_end[2]},
-				Eigen::Vector3d{Bdy_T(*cell_data), Bdy_T(*cell_data), Bdy_T(*cell_data)},
-				Bdy_Nr_Par(*cell_data),
-				Bdy_C2M(*cell_data),
-				Bdy_SpM(*cell_data) * Bdy_N(*cell_data) * cell_length[0] * cell_length[1] * cell_length[2],
-				Bdy_SpM(*cell_data),
+				Eigen::Vector3d{Bdy_T(*cell.data), Bdy_T(*cell.data), Bdy_T(*cell.data)},
+				Bdy_Nr_Par(*cell.data),
+				Bdy_C2M(*cell.data),
+				Bdy_SpM(*cell.data) * Bdy_N(*cell.data) * cell_length[0] * cell_length[1] * cell_length[2],
+				Bdy_SpM(*cell.data),
 				particle_temp_nrj_ratio,
 				random_source,
 				current_id_start,
@@ -523,10 +500,10 @@ template<
 		current_id_start += new_particles.size() * particle_id_increase;
 
 		if (replace) {
-			Par(*cell_data) = std::move(new_particles);
+			Par(*cell.data) = std::move(new_particles);
 		} else {
-			Par(*cell_data).insert(
-				Par(*cell_data).end(),
+			Par(*cell.data).insert(
+				Par(*cell.data).end(),
 				new_particles.begin(),
 				new_particles.end()
 			);

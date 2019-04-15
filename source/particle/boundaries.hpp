@@ -2,6 +2,7 @@
 Handles boundary logic of particle part of PAMHD.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -74,7 +75,7 @@ template<
 	const Solver_Info_Getter Sol_Info
 ) {
 	if (boundaries.size() == 0) {
-		for (const auto& cell: grid.cells) {
+		for (const auto& cell: grid.local_cells()) {
 			Sol_Info(*cell.data) = 0;
 		}
 
@@ -84,7 +85,7 @@ template<
 
 	boundaries[0].classify(grid, geometries, Sol_Info);
 
-	for (const auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		Sol_Info(*cell.data) = 0;
 	}
 
@@ -327,7 +328,7 @@ template<
 ) {
 	boundaries.classify(grid, geometries, Sol_Info);
 
-	for (const auto& cell: grid.cells) {
+	for (const auto& cell: grid.local_cells()) {
 		Sol_Info(*cell.data) = 0;
 	}
 
@@ -391,7 +392,6 @@ template<
 	std::vector<Boundaries>& boundaries,
 	const double simulation_time,
 	const size_t simulation_step,
-	const std::vector<uint64_t>& cells,
 	Grid& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
@@ -869,7 +869,6 @@ template<
 	std::vector<Boundaries>& boundaries,
 	const double simulation_time,
 	const size_t simulation_step,
-	const std::vector<uint64_t>& cells,
 	dccrg::Dccrg<Cell_Data, Geometry>& grid,
 	std::mt19937_64& random_source,
 	const double particle_temp_nrj_ratio,
