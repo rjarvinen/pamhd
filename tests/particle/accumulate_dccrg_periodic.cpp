@@ -2,6 +2,7 @@
 Tests particle accumulator of PAMHD with periodic grid.
 
 Copyright 2015, 2016, 2017 Ilja Honkonen
+Copyright 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -71,7 +72,12 @@ using Cell = gensimcell::Cell<
 	pamhd::particle::Nr_Accumulated_To_Cells,
 	Accumulated_To_Cells
 >;
-using Grid = dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>;
+using Grid = dccrg::Dccrg<
+	Cell,
+	dccrg::Cartesian_Geometry,
+	std::tuple<>,
+	std::tuple<pamhd::particle::Is_Local>
+>;
 
 
 /*
@@ -79,27 +85,20 @@ Creates evenly spaced particles in given cells.
 */
 void create_particles(
 	const size_t values_per_cell,
-	const std::vector<uint64_t>& cell_ids,
 	Grid& grid
 ) {
 	const pamhd::particle::Velocity Vel{};
 	const pamhd::particle::Position Pos{};
 
 	std::mt19937_64 random_source;
-	for (const auto& cell_id: cell_ids) {
-		random_source.seed(cell_id);
+	for (const auto& cell: grid.local_cells()) {
+		random_source.seed(cell.id);
 
 		const auto
-			cell_min = grid.geometry.get_min(cell_id),
-			cell_max = grid.geometry.get_max(cell_id),
-			cell_length = grid.geometry.get_length(cell_id);
+			cell_min = grid.geometry.get_min(cell.id),
+			cell_max = grid.geometry.get_max(cell.id),
+			cell_length = grid.geometry.get_length(cell.id);
 		const auto volume = cell_length[0] * cell_length[1] * cell_length[2];
-
-		auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
 
 		std::uniform_real_distribution<>
 			position_generator_x(cell_min[0], cell_max[0]),
@@ -120,7 +119,7 @@ void create_particles(
 			new_particle[pamhd::particle::Mass()]
 				= mass_density() * volume / values_per_cell;
 
-			(*cell_data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
+			(*cell.data)[pamhd::particle::Particles_Internal()].push_back(new_particle);
 		}
 	}
 }
@@ -187,20 +186,14 @@ const auto allocate_accumulation_lists
 
 // returns infinite norm between analytic results and that in given cells
 double get_norm(
-	const std::vector<uint64_t>& cell_ids,
 	const Grid& grid,
 	MPI_Comm& comm
 ) {
 	double
 		density_local = 0,
 		density_global = 0;
-	for (const auto& cell_id: cell_ids) {
-		const auto* const cell_data = grid[cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		density_local += (*cell_data)[Mass_Density()];
+	for (const auto& cell: grid.local_cells()) {
+		density_local += (*cell.data)[Mass_Density()];
 	}
 	if (
 		MPI_Allreduce(
@@ -219,7 +212,7 @@ double get_norm(
 	}
 
 	size_t
-		cells_local = cell_ids.size(),
+		cells_local = std::distance(grid.local_cells().begin(), grid.local_cells().end()),
 		cells_global = 0;
 	if (
 		MPI_Allreduce(
@@ -281,42 +274,28 @@ int main(int argc, char* argv[])
 	geom_params.level_0_cell_length = {{7,   5,   3}};
 
 	for (size_t nr_cells = 1; nr_cells <= max_nr_of_cells; nr_cells *= 2) {
-		Grid grid;
 		const std::array<uint64_t, 3> nr_of_cells{{nr_cells, 1, 1}};
-		if (
-			not grid.initialize(
-				nr_of_cells, comm, "RANDOM", neighborhood_size, 0,
-				periodic[0], periodic[1], periodic[2]
-			)
-		) {
-			std::cerr << __FILE__ << ":" << __LINE__
-				<< ": Couldn't initialize grids."
-				<< std::endl;
-			abort();
-		}
+		Grid grid; grid
+			.set_neighborhood_length(neighborhood_size)
+			.set_maximum_refinement_level(0)
+			.set_load_balancing_method("RANDOM")
+			.set_periodic(periodic[0], periodic[1], periodic[2])
+			.set_initial_length(nr_of_cells)
+			.initialize(comm)
+			.balance_load();
 
-		if (not grid.set_geometry(geom_params)) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): "
-				<< "Couldn't set geometry of grids."
-				<< std::endl;
-			abort();
-		}
+		grid.set_geometry(geom_params);
 
-		grid.balance_load();
 		grid.update_copies_of_remote_neighbors();
 
-		const auto cell_ids = grid.get_cells();
+		create_particles(nr_of_values, grid);
 
-		create_particles(nr_of_values, cell_ids, grid);
-
-		for (const auto& cell_id: cell_ids) {
-			auto* const cell_data = grid[cell_id];
-			if (cell_data == nullptr) {abort();}
-			bulk_value_getter(*cell_data) = 0;
-			solver_info_getter(*cell_data) = 0;
+		for (const auto& cell: grid.local_cells()) {
+			bulk_value_getter(*cell.data) = 0;
+			solver_info_getter(*cell.data) = 0;
 		}
 		pamhd::particle::accumulate(
-			cell_ids,
+			grid.local_cells(),
 			grid,
 			[](Cell& cell)->pamhd::particle::Particles_Internal::data_type&{
 				return cell[pamhd::particle::Particles_Internal()];
@@ -353,19 +332,13 @@ int main(int argc, char* argv[])
 		accumulate_from_remote_neighbors(grid);
 
 		// transform accumulated mass to mass density
-		for (const auto& cell_id: cell_ids) {
-			const auto cell_length = grid.geometry.get_length(cell_id);
+		for (const auto& cell: grid.local_cells()) {
+			const auto cell_length = grid.geometry.get_length(cell.id);
 			const auto volume = cell_length[0] * cell_length[1] * cell_length[2];
-
-			auto* const cell_data = grid[cell_id];
-			if (cell_data == nullptr) {
-				std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-				abort();
-			}
-			(*cell_data)[Mass_Density()] /= volume;
+			(*cell.data)[Mass_Density()] /= volume;
 		}
 
-		const double norm = get_norm(cell_ids, grid, comm);
+		const double norm = get_norm(grid, comm);
 
 		if (norm > 1e-10) {
 			if (rank == 0) {
