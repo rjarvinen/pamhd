@@ -496,14 +496,8 @@ template<
 	Accumulation_List_Getter Accu_List,
 	Accumulation_List_Length_Getter List_Len
 ) {
-	for (const auto& remote_cell_id: grid.get_remote_cells_on_process_boundary()) {
-		auto* const cell_data = grid[remote_cell_id];
-		if (cell_data == nullptr) {
-			std::cerr << __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		Accu_List(*cell_data).resize(List_Len(*cell_data));
+	for (const auto& cell: grid.remote_cells()) {
+		Accu_List(*cell.data).resize(List_Len(*cell.data));
 	}
 }
 
@@ -626,8 +620,6 @@ template<
 	class Bulk_Velocity_Variable,
 	class Solver_Info_Getter
 > void accumulate_mhd_data(
-	const std::vector<uint64_t>& inner_cell_ids,
-	const std::vector<uint64_t>& outer_cell_ids,
 	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
 	Particles_Getter Particles,
 	Particle_Position_Getter Particle_Position,
@@ -653,23 +645,15 @@ template<
 	Bulk_Velocity_Variable bulk_vel_var,
 	Solver_Info_Getter Sol_Info
 ) {
-	auto cell_ids = inner_cell_ids;
-	cell_ids.insert(cell_ids.end(), outer_cell_ids.cbegin(), outer_cell_ids.cend());
-
-	for (const auto& cell: cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		Bulk_Mass(*cell_data) = 0;
-		Bulk_Momentum(*cell_data) = {0, 0, 0};
-		Bulk_Velocity(*cell_data).first = {0, 0, 0};
-		Bulk_Velocity(*cell_data).second = 0;
+	for (const auto& cell: grid.local_cells()) {
+		Bulk_Mass(*cell.data) = 0;
+		Bulk_Momentum(*cell.data) = {0, 0, 0};
+		Bulk_Velocity(*cell.data).first = {0, 0, 0};
+		Bulk_Velocity(*cell.data).second = 0;
 	}
 
 	accumulate(
-		outer_cell_ids,
+		grid.outer_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -682,7 +666,7 @@ template<
 		Sol_Info
 	);
 	accumulate_weighted(
-		outer_cell_ids,
+		grid.outer_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -701,7 +685,7 @@ template<
 	grid.start_remote_neighbor_copy_updates();
 
 	accumulate(
-		inner_cell_ids,
+		grid.inner_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -715,7 +699,7 @@ template<
 		false
 	);
 	accumulate_weighted(
-		inner_cell_ids,
+		grid.inner_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -766,18 +750,13 @@ template<
 	Cell::set_transfer_all(false, accu_list_var);
 
 	// scale velocities relative to total weights
-	for (const auto& cell: cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		if (Bulk_Velocity(*cell_data).second <= 0) {
-			Bulk_Velocity(*cell_data).first = {0, 0, 0};
+	for (const auto& cell: grid.local_cells()) {
+		if (Bulk_Velocity(*cell.data).second <= 0) {
+			Bulk_Velocity(*cell.data).first = {0, 0, 0};
 		} else {
-			Bulk_Velocity(*cell_data).first /= Bulk_Velocity(*cell_data).second;
+			Bulk_Velocity(*cell.data).first /= Bulk_Velocity(*cell.data).second;
 		}
-		Bulk_Momentum(*cell_data) = Bulk_Velocity(*cell_data).first * Bulk_Mass(*cell_data);
+		Bulk_Momentum(*cell.data) = Bulk_Velocity(*cell.data).first * Bulk_Mass(*cell.data);
 	}
 
 
@@ -789,23 +768,9 @@ template<
 	Cell::set_transfer_all(true, bulk_vel_var);
 	grid.start_remote_neighbor_copy_updates();
 
-	for (const auto& cell: inner_cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Kinetic_Energy(*cell_data) = 0;
-	}
-	for (const auto& cell: outer_cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-		Number_Of_Particles(*cell_data)     =
-		Bulk_Relative_Kinetic_Energy(*cell_data) = 0;
+	for (const auto& cell: grid.local_cells()) {
+		Number_Of_Particles(*cell.data)     =
+		Bulk_Relative_Kinetic_Energy(*cell.data) = 0;
 	}
 
 	grid.wait_remote_neighbor_copy_update_receives();
@@ -824,7 +789,7 @@ template<
 		};
 	// TODO: merge with bulk mass accumulation
 	accumulate(
-		outer_cell_ids,
+		grid.local_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -836,20 +801,6 @@ template<
 		Accu_List,
 		Sol_Info
 	);
-	accumulate(
-		outer_cell_ids,
-		grid,
-		Particles,
-		Particle_Position,
-		Particle_Relative_Kinetic_Energy,
-		Bulk_Relative_Kinetic_Energy,
-		Accu_List_Bulk_Relative_Kinetic_Energy,
-		Accu_List_Target,
-		Accu_List_Length,
-		Accu_List,
-		Sol_Info,
-		false
-	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
 	Cell::set_transfer_all(false, bulk_vel_var);
@@ -859,27 +810,13 @@ template<
 	grid.start_remote_neighbor_copy_updates();
 
 	accumulate(
-		inner_cell_ids,
+		grid.local_cells(),
 		grid,
 		Particles,
 		Particle_Position,
 		particle_counter,
 		Number_Of_Particles,
 		Accu_List_Number_Of_Particles,
-		Accu_List_Target,
-		Accu_List_Length,
-		Accu_List,
-		Sol_Info,
-		false
-	);
-	accumulate(
-		inner_cell_ids,
-		grid,
-		Particles,
-		Particle_Position,
-		Particle_Relative_Kinetic_Energy,
-		Bulk_Relative_Kinetic_Energy,
-		Accu_List_Bulk_Relative_Kinetic_Energy,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
@@ -943,7 +880,6 @@ template<
 	class MHD_Magnetic_Field_Getter,
 	class Solver_Info_Getter
 > void fill_mhd_fluid_values(
-	const std::vector<uint64_t>& cell_ids,
 	dccrg::Dccrg<Cell, Geometry>& grid,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -960,53 +896,47 @@ template<
 	MHD_Magnetic_Field_Getter MHD_Magnetic_Field,
 	Solver_Info_Getter Sol_Info
 ) {
-	for (const auto& cell: cell_ids) {
-		auto* const cell_data = grid[cell];
-		if (cell_data == nullptr) {
-			std::cerr <<  __FILE__ << "(" << __LINE__ << ")" << std::endl;
-			abort();
-		}
-
-		if ((Sol_Info(*cell_data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
-			MHD_Mass(*cell_data) = 0;
-			MHD_Momentum(*cell_data) = {0, 0, 0};
-			MHD_Energy(*cell_data) = 0;
+	for (const auto& cell: grid.local_cells()) {
+		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
+			MHD_Mass(*cell.data) = 0;
+			MHD_Momentum(*cell.data) = {0, 0, 0};
+			MHD_Energy(*cell.data) = 0;
 			continue;
 		}
 
-		if (Particle_Bulk_Mass(*cell_data) <= 0) {
-			MHD_Mass(*cell_data) = 0;
-			MHD_Momentum(*cell_data) = {0, 0, 0};
-			MHD_Energy(*cell_data) = 0;
+		if (Particle_Bulk_Mass(*cell.data) <= 0) {
+			MHD_Mass(*cell.data) = 0;
+			MHD_Momentum(*cell.data) = {0, 0, 0};
+			MHD_Energy(*cell.data) = 0;
 			continue;
 		}
 
 		const auto length = grid.geometry.get_length(cell);
 		const auto volume = length[0] * length[1] * length[2];
 
-		MHD_Mass(*cell_data) = Particle_Bulk_Mass(*cell_data) / volume;
-		MHD_Momentum(*cell_data) = Particle_Bulk_Momentum(*cell_data) / volume;
+		MHD_Mass(*cell.data) = Particle_Bulk_Mass(*cell.data) / volume;
+		MHD_Momentum(*cell.data) = Particle_Bulk_Momentum(*cell.data) / volume;
 
 		const double pressure = [&](){
-			if (Particle_Bulk_Mass(*cell_data) <= 0) {
+			if (Particle_Bulk_Mass(*cell.data) <= 0) {
 				return 0.0;
 			} else {
 				return std::max(
 					minimum_pressure,
-					2 * Particle_Bulk_Relative_Kinetic_Energy(*cell_data) / 3 / volume
+					2 * Particle_Bulk_Relative_Kinetic_Energy(*cell.data) / 3 / volume
 				);
 			}
 		}();
 
-		if (MHD_Mass(*cell_data) <= 0) {
-			MHD_Energy(*cell_data)
+		if (MHD_Mass(*cell.data) <= 0) {
+			MHD_Energy(*cell.data)
 				= pressure / (adiabatic_index - 1)
-				+ MHD_Magnetic_Field(*cell_data).squaredNorm() / vacuum_permeability / 2;
+				+ MHD_Magnetic_Field(*cell.data).squaredNorm() / vacuum_permeability / 2;
 		} else {
-			MHD_Energy(*cell_data)
+			MHD_Energy(*cell.data)
 				= pressure / (adiabatic_index - 1)
-				+ MHD_Momentum(*cell_data).squaredNorm() / MHD_Mass(*cell_data) / 2
-				+ MHD_Magnetic_Field(*cell_data).squaredNorm() / vacuum_permeability / 2;
+				+ MHD_Momentum(*cell.data).squaredNorm() / MHD_Mass(*cell.data) / 2
+				+ MHD_Magnetic_Field(*cell.data).squaredNorm() / vacuum_permeability / 2;
 		}
 	}
 }
