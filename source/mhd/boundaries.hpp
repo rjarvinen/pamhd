@@ -279,13 +279,12 @@ template<
 
 // as apply_boundaries() below but for magnetic field only.
 template<
-	class Cell_Data,
-	class Grid_Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Magnetic_Field_Getter
 > void apply_magnetic_field_boundaries(
-	dccrg::Dccrg<Cell_Data, Grid_Geometry>& grid,
+	Grid& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& bdy_geoms,
 	const double simulation_time,
