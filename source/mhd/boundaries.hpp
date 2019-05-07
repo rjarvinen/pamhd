@@ -56,13 +56,12 @@ namespace mhd {
 // TODO: remove magnetic field from set_solver_info()
 template<
 	class Solver_Info,
-	class Cell_Data,
-	class Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Solver_Info_Getter
 > void set_solver_info_magnetic(
-	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Grid& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
@@ -117,13 +116,12 @@ MPI transfer of Sol_Info variable must be switched on before calling this.
 */
 template<
 	class Solver_Info,
-	class Cell_Data,
-	class Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Solver_Info_Getter
 > void set_solver_info(
-	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Grid& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter& Sol_Info
@@ -365,8 +363,7 @@ neighbor their average is copied, vector
 variables are processed by component.
 */
 template<
-	class Cell_Data,
-	class Grid_Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Mass_Getter,
@@ -374,7 +371,7 @@ template<
 	class Energy_Getter,
 	class Magnetic_Field_Getter
 > void apply_fluid_boundaries(
-	dccrg::Dccrg<Cell_Data, Grid_Geometry>& grid,
+	Grid& grid,
 	Boundaries& boundaries,
 	const Boundary_Geometries& bdy_geoms,
 	const double simulation_time,

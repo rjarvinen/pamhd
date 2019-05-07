@@ -163,7 +163,7 @@ maximum refinement level of 0.
 template<
 	class Stepper,
 	class Cell_Iterator,
-	class Cell,
+	class Grid,
 	class Background_Magnetic_Field,
 	class Current_Minus_Velocity_Getter,
 	class Magnetic_Field_Getter,
@@ -179,7 +179,7 @@ template<
 > std::pair<double, double> solve(
 	const double dt,
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	Grid& grid,
 	const Background_Magnetic_Field& bg_B,
 	const double vacuum_permeability,
 	const bool E_is_derived_quantity,
@@ -420,10 +420,10 @@ template<
 	class Nr_Particles_T,
 	class Particles_T,
 	class Cell_Iterator,
-	class Cell
+	class Grid
 > void resize_receiving_containers(
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+	Grid& grid
 ) {
 	for (const auto& cell: cells) {
 		(*cell.data)[Particles_T()].resize((*cell.data)[Nr_Particles_T()]);
@@ -437,10 +437,10 @@ template<
 	class Particles_External_T,
 	class Particle_Destination_T,
 	class Cell_Iterator,
-	class Cell
+	class Grid
 > void incorporate_external_particles(
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+	Grid& grid
 ) {
 	constexpr Nr_Particles_Internal_T Nr_Int{};
 	constexpr Particles_Internal_T Part_Int{};
@@ -475,10 +475,10 @@ template<
 	class Nr_Particles_External_T,
 	class Particles_External_T,
 	class Cell_Iterator,
-	class Cell
+	class Grid
 > void remove_external_particles(
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+	Grid& grid
 ) {
 	for (const auto& cell: cells) {
 		(*cell.data)[Nr_Particles_External_T()] = 0;

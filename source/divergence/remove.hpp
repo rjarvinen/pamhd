@@ -100,13 +100,13 @@ pamhd::divergence::get_divergence(
 */
 template <
 	class Cell_Iterator,
-	class Cell_Data,
+	class Grid,
 	class Vector_Getter,
 	class Divergence_Getter,
 	class Cell_Type_Getter
 > double get_divergence(
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell_Data, dccrg::Cartesian_Geometry>& grid,
+	Grid& grid,
 	Vector_Getter Vector,
 	Divergence_Getter Divergence,
 	Cell_Type_Getter Cell_Type

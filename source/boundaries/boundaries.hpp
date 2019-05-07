@@ -98,14 +98,12 @@ public:
 	must be enabled during call to this function.
 	*/
 	template<
-		class Cell_Data,
-		class Geometry,
-		class Vector,
-		class Scalar,
+		class Grid,
+		class Geometries,
 		class Cell_Type_Getter
 	> void classify(
-		dccrg::Dccrg<Cell_Data, Geometry>& grid,
-		const Geometries<Geometry_Id, Vector, Scalar, Cell_Id>& geometries,
+		Grid& grid,
+		const Geometries& geometries,
 		const Cell_Type_Getter& Cell_Type
 	) {
 		using std::get;
@@ -189,7 +187,7 @@ public:
 				continue;
 			}
 
-			std::vector<Cell_Id> source{cell.id};
+			std::vector<decltype(cell.id)> source{cell.id};
 			for (const auto& neighbor: cell.neighbors_of) {
 				if (Cell_Type(*neighbor.data) == normal_cell) {
 					source.push_back(neighbor.id);

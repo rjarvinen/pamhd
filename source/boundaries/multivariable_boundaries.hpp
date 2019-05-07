@@ -69,14 +69,12 @@ public:
 	void get_copy_boundary_cells() const {}
 	void set(const rapidjson::Value&) const {}
 	template<
-		class Cell_Data,
-		class Geometry,
-		class Vector,
-		class Scalar,
+		class Grid,
+		class Geoms,
 		class Cell_Type_Getter
 	> void classify(
-		dccrg::Dccrg<Cell_Data, Geometry>&,
-		const Geometries<Geometry_Id, Vector, Scalar, Cell_Id>&,
+		Grid&,
+		const Geoms&,
 		const Cell_Type_Getter&
 	) const {}
 	void get_number_of_value_boundaries() const {}
@@ -138,14 +136,12 @@ public:
 	enabled before calling this function.
 	*/
 	template<
-		class Cell_Data,
-		class Geometry,
-		class Vector,
-		class Scalar,
+		class Grid,
+		class Geoms,
 		class Cell_Type_Getter
 	> void classify(
-		dccrg::Dccrg<Cell_Data, Geometry>& grid,
-		const Geometries<Geometry_Id, Vector, Scalar, Cell_Id>& geometries,
+		Grid& grid,
+		const Geoms& geometries,
 		const Cell_Type_Getter& Cell_Type
 	) {
 		this->boundaries.classify(grid, geometries, Cell_Type);

@@ -61,8 +61,7 @@ Returns the maximum allowed length of time step for the next step on this proces
 template <
 	class Solver_Info,
 	class Cell_Iter,
-	class Cell,
-	class Geometry,
+	class Grid,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -78,7 +77,7 @@ template <
 > double solve(
 	const Solver solver,
 	const Cell_Iter& cells,
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double dt,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -338,8 +337,7 @@ Applies the MHD solution to normal cells of \p grid.
 */
 template <
 	class Solver_Info,
-	class Cell_Data,
-	class Geometry,
+	class Grid,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -350,7 +348,7 @@ template <
 	class Magnetic_Field_Flux_Getter,
 	class Solver_Info_Getter
 > void apply_fluxes(
-	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Grid& grid,
 	const double min_pressure,
 	const double adiabatic_index,
 	const double vacuum_permeability,

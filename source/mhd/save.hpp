@@ -57,12 +57,11 @@ Transfer of variables in MHD_T must be switched on.
 Return true on success, false otherwise.
 */
 template <
-	class Cell,
-	class Geometry,
+	class Grid,
 	class... Variables
 > bool save(
 	const std::string& path_name_prefix,
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const uint64_t file_version,
 	const double simulation_time,
 	const double adiabatic_index,
@@ -113,13 +112,13 @@ template <
 		<< std::setprecision(3)
 		<< simulation_time;
 
-	Cell::set_transfer_all(true, variables...);
+	Grid::cell_data_type::set_transfer_all(true, variables...);
 	const bool ret_val = grid.save_grid_data(
 		path_name_prefix + time_string.str() + "_s.dc",
 		0,
 		header
 	);
-	Cell::set_transfer_all(false, variables...);
+	Grid::cell_data_type::set_transfer_all(false, variables...);
 
 	return ret_val;
 }

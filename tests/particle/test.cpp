@@ -1288,7 +1288,7 @@ int main(int argc, char* argv[])
 			Cell::set_transfer_all(false, pamhd::Magnetic_Field());
 			const double div_after
 				= pamhd::divergence::get_divergence(
-					solve_cells,
+					grid.local_cells(),
 					grid,
 					Mag,
 					Mag_div,
@@ -1377,7 +1377,6 @@ int main(int argc, char* argv[])
 				boundaries_particles,
 				simulation_time,
 				simulated_steps,
-				grid.local_cells(),
 				grid,
 				random_source,
 				options_particle.boltzmann,

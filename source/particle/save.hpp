@@ -65,11 +65,10 @@ template <
 	class Electric_Current_Density_T,
 	class Nr_Particles_T,
 	class Particles_T,
-	class Cell,
-	class Geometry
+	class Grid
 > bool save(
 	const std::string& file_name_prefix,
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double simulation_time,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -104,7 +103,7 @@ template <
 			= (*cell_data)[Particles_T()].size();
 	}
 
-	Cell::set_transfer_all(
+	Grid::cell_data_type::set_transfer_all(
 		true,
 		Electric_Field_T(),
 		Magnetic_Field_T(),
@@ -117,7 +116,7 @@ template <
 		0,
 		header
 	);
-	Cell::set_transfer_all(
+	Grid::cell_data_type::set_transfer_all(
 		false,
 		Electric_Field_T(),
 		Magnetic_Field_T(),

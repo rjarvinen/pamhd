@@ -78,19 +78,19 @@ template<class Geometry> std::tuple<
 }
 
 
-template<class Cell> std::tuple<
+template<class Grid> std::tuple<
 	std::vector<bool>,
 	std::vector<uint64_t>,
-	std::vector<Cell*>,
+	std::vector<typename Grid::cell_data_type*>,
 	std::vector<Eigen::Vector3d>,
 	std::vector<Eigen::Vector3d>
 > cache_neighbor_data(
 	const uint64_t cell_id,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid
+	Grid& grid
 ) {
 	std::vector<bool> is_locals;
 	std::vector<uint64_t> neighbor_ids;
-	std::vector<Cell*> neighbor_datas;
+	std::vector<typename Grid::cell_data_type*> neighbor_datas;
 	std::vector<Eigen::Vector3d> neighbor_mins, neighbor_maxs;
 
 	Eigen::Vector3d cell_min, cell_max, cell_length, cell_center;
@@ -595,7 +595,7 @@ template<
 Updates Bulk_Momentum.
 */
 template<
-	class Cell,
+	class Grid,
 	class Particles_Getter,
 	class Particle_Position_Getter,
 	class Particle_Mass_Getter,
@@ -620,7 +620,7 @@ template<
 	class Bulk_Velocity_Variable,
 	class Solver_Info_Getter
 > void accumulate_mhd_data(
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	Grid& grid,
 	Particles_Getter Particles,
 	Particle_Position_Getter Particle_Position,
 	Particle_Mass_Getter Particle_Mass,
@@ -681,7 +681,7 @@ template<
 		false // keep previous data in accumulation lists
 	);
 
-	Cell::set_transfer_all(true, accu_list_len_var);
+	Grid::cell_data_type::set_transfer_all(true, accu_list_len_var);
 	grid.start_remote_neighbor_copy_updates();
 
 	accumulate(
@@ -723,9 +723,9 @@ template<
 	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
-	Cell::set_transfer_all(false, accu_list_len_var);
+	Grid::cell_data_type::set_transfer_all(false, accu_list_len_var);
 
-	Cell::set_transfer_all(true, accu_list_var);
+	Grid::cell_data_type::set_transfer_all(true, accu_list_var);
 	grid.start_remote_neighbor_copy_updates();
 	grid.wait_remote_neighbor_copy_update_receives();
 
@@ -747,7 +747,7 @@ template<
 	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
-	Cell::set_transfer_all(false, accu_list_var);
+	Grid::cell_data_type::set_transfer_all(false, accu_list_var);
 
 	// scale velocities relative to total weights
 	for (const auto& cell: grid.local_cells()) {
@@ -765,7 +765,7 @@ template<
 	*/
 
 	// needs remote neighbors' bulk velocity
-	Cell::set_transfer_all(true, bulk_vel_var);
+	Grid::cell_data_type::set_transfer_all(true, bulk_vel_var);
 	grid.start_remote_neighbor_copy_updates();
 
 	for (const auto& cell: grid.local_cells()) {
@@ -781,7 +781,7 @@ template<
 			&Particle_Mass,
 			&Particle_Species_Mass
 		](
-			Cell& cell,
+			typename Grid::cell_data_type& cell,
 			// TODO:switch to auto in c++17
 			decltype(*Particles(*(grid[0])).begin())& particle
 		) ->double {
@@ -803,10 +803,10 @@ template<
 	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
-	Cell::set_transfer_all(false, bulk_vel_var);
+	Grid::cell_data_type::set_transfer_all(false, bulk_vel_var);
 
 
-	Cell::set_transfer_all(true, accu_list_len_var);
+	Grid::cell_data_type::set_transfer_all(true, accu_list_len_var);
 	grid.start_remote_neighbor_copy_updates();
 
 	accumulate(
@@ -833,9 +833,9 @@ template<
 	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
-	Cell::set_transfer_all(false, accu_list_len_var);
+	Grid::cell_data_type::set_transfer_all(false, accu_list_len_var);
 
-	Cell::set_transfer_all(true, accu_list_var);
+	Grid::cell_data_type::set_transfer_all(true, accu_list_var);
 	grid.start_remote_neighbor_copy_updates();
 	grid.wait_remote_neighbor_copy_update_receives();
 
@@ -857,7 +857,7 @@ template<
 	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
-	Cell::set_transfer_all(false, accu_list_var);
+	Grid::cell_data_type::set_transfer_all(false, accu_list_var);
 }
 
 
@@ -867,8 +867,7 @@ Converts bulk particle data to conservative MHD form.
 Skips a cell if it doesn't have particles and no_particles_allowed == true.
 */
 template<
-	class Cell,
-	class Geometry,
+	class Grid,
 	class Number_Of_Particles_Getter,
 	class Particle_Bulk_Mass_Getter,
 	class Particle_Bulk_Momentum_Getter,
@@ -880,7 +879,7 @@ template<
 	class MHD_Magnetic_Field_Getter,
 	class Solver_Info_Getter
 > void fill_mhd_fluid_values(
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double adiabatic_index,
 	const double vacuum_permeability,
 	const double particle_temp_nrj_ratio,
@@ -911,7 +910,7 @@ template<
 			continue;
 		}
 
-		const auto length = grid.geometry.get_length(cell);
+		const auto length = grid.geometry.get_length(cell.id);
 		const auto volume = length[0] * length[1] * length[2];
 
 		MHD_Mass(*cell.data) = Particle_Bulk_Mass(*cell.data) / volume;

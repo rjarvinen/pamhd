@@ -165,7 +165,7 @@ Splits random particles in normal cells until given minimum exist.
 Every split preserves center of mass, other parameters also unchanged.
 */
 template<
-	class Cell,
+	class Grid,
 	class Particles_Getter,
 	class Particle_Position_Getter,
 	class Particle_Mass_Getter,
@@ -173,7 +173,7 @@ template<
 > void split_particles(
 	const size_t min_particles,
 	std::mt19937_64& random_source,
-	dccrg::Dccrg<Cell, dccrg::Cartesian_Geometry>& grid,
+	Grid& grid,
 	const Particles_Getter Particles,
 	const Particle_Position_Getter Part_Pos,
 	const Particle_Mass_Getter Part_Mas,

@@ -63,13 +63,12 @@ Only uses boundary info of first particle population.
 */
 template<
 	class Solver_Info,
-	class Cell_Data,
-	class Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Solver_Info_Getter
 > void set_solver_info(
-	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Grid& grid,
 	std::vector<Boundaries>& boundaries,
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter Sol_Info
@@ -315,13 +314,12 @@ template<
 //! As set_solver_info but for electric field only
 template<
 	class Solver_Info,
-	class Cell_Data,
-	class Geometry,
+	class Grid,
 	class Boundaries,
 	class Boundary_Geometries,
 	class Solver_Info_Getter
 > void set_solver_info_electric(
-	dccrg::Dccrg<Cell_Data, Geometry>& grid,
+	Grid& grid,
 	std::vector<Boundaries>& boundaries,
 	const Boundary_Geometries& geometries,
 	const Solver_Info_Getter Sol_Info
