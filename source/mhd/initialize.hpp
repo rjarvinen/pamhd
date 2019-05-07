@@ -162,8 +162,7 @@ when given a simulation cell's data.
 template <
 	class Geometries,
 	class Init_Cond,
-	class Cell,
-	class Geometry,
+	class Grid,
 	class Mass_Density_Getter,
 	class Momentum_Density_Getter,
 	class Total_Energy_Density_Getter,
@@ -174,7 +173,7 @@ template <
 > void initialize_fluid(
 	const Geometries& geometries,
 	Init_Cond& initial_conditions,
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double time,
 	const double adiabatic_index,
 	const double vacuum_permeability,

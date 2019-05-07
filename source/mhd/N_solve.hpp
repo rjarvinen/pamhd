@@ -65,8 +65,7 @@ Returns the maximum allowed length of time step for the next step on this proces
 template <
 	class Solver,
 	class Cell_Iterator,
-	class Cell,
-	class Geometry,
+	class Grid,
 	class Mass_Density_Getters,
 	class Momentum_Density_Getters,
 	class Total_Energy_Density_Getters,
@@ -82,7 +81,7 @@ template <
 > double N_solve(
 	const Solver solver,
 	const Cell_Iterator& cells,
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double dt,
 	const double adiabatic_index,
 	const double vacuum_permeability,
@@ -203,7 +202,7 @@ template <
 
 			// returns total plasma state with rotated vectors for solver
 			const auto get_total_state
-				= [&](Cell& cell_data) {
+				= [&](typename Grid::cell_data_type& cell_data) {
 					detail::MHD state;
 					state[mas_int] = Mas.first(cell_data) + Mas.second(cell_data);
 					const typename std::remove_reference<
@@ -461,8 +460,7 @@ Applies the MHD solution to given cells.
 Returns 1 + last index where solution was applied.
 */
 template <
-	class Cell,
-	class Geometry,
+	class Grid,
 	class Mass_Density_Getters,
 	class Momentum_Density_Getters,
 	class Total_Energy_Density_Getters,
@@ -473,7 +471,7 @@ template <
 	class Magnetic_Field_Flux_Getter,
 	class Solver_Info_Getter
 > void apply_fluxes_N(
-	dccrg::Dccrg<Cell, Geometry>& grid,
+	Grid& grid,
 	const double min_pressure,
 	const double adiabatic_index,
 	const double vacuum_permeability,
