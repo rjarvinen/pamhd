@@ -572,7 +572,7 @@ int main(int argc, char* argv[])
 
 		solve_max_dt = pamhd::mhd::solve<pamhd::mhd::Solver_Info>(
 			mhd_solver,
-			grid.inner_cells(),
+			grid.outer_cells(),
 			grid,
 			time_step,
 			options_sim.adiabatic_index,
