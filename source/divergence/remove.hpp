@@ -2,7 +2,7 @@
 Functions for working with divergence of vector field.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
-Copyright 2018 Finnish Meteorological Institute
+Copyright 2018, 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -128,30 +128,42 @@ template <
 		std::array<size_t, 3> nr_neighbors{{0, 0, 0}};
 
 		const auto cell_length = grid.geometry.get_length(cell.id);
+		const int cell_size = grid.mapping.get_cell_length_in_indices(cell.id);
 		for (const auto& neighbor: cell.neighbors_of) {
 			if (Cell_Type(*cell.data) < 0) {
 				continue;
 			}
 
 			// only calculate between face neighbors
-			int neighbor_dir = 0;
-			if (neighbor.x == 1 and neighbor.y == 0 and neighbor.z == 0) {
+			int overlaps = 0, neighbor_dir = 0;
+
+			const int neigh_size = grid.mapping.get_cell_length_in_indices(neighbor.id);
+			if (neighbor.x < cell_size and neighbor.x > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.x == cell_size) {
 				neighbor_dir = 1;
-			}
-			if (neighbor.x == -1 and neighbor.y == 0 and neighbor.z == 0) {
+			} else if (neighbor.x == -neigh_size) {
 				neighbor_dir = -1;
 			}
-			if (neighbor.x == 0 and neighbor.y == 1 and neighbor.z == 0) {
+
+			if (neighbor.y < cell_size and neighbor.y > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.y == cell_size) {
 				neighbor_dir = 2;
-			}
-			if (neighbor.x == 0 and neighbor.y == -1 and neighbor.z == 0) {
+			} else if (neighbor.y == -neigh_size) {
 				neighbor_dir = -2;
 			}
-			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == 1) {
+
+			if (neighbor.z < cell_size and neighbor.z > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.z == cell_size) {
 				neighbor_dir = 3;
-			}
-			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == -1) {
+			} else if (neighbor.z == -neigh_size) {
 				neighbor_dir = -3;
+			}
+
+			if (overlaps < 2) {
+				continue;
 			}
 			if (neighbor_dir == 0) {
 				continue;
@@ -198,24 +210,35 @@ template <
 
 		for (const auto& neighbor: cell.neighbors_of) {
 
-			int neighbor_dir = 0;
-			if (neighbor.x == 1 and neighbor.y == 0 and neighbor.z == 0) {
+			int overlaps = 0, neighbor_dir = 0;
+
+			const int neigh_size = grid.mapping.get_cell_length_in_indices(neighbor.id);
+			if (neighbor.x < cell_size and neighbor.x > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.x == cell_size) {
 				neighbor_dir = 1;
-			}
-			if (neighbor.x == -1 and neighbor.y == 0 and neighbor.z == 0) {
+			} else if (neighbor.x == -neigh_size) {
 				neighbor_dir = -1;
 			}
-			if (neighbor.x == 0 and neighbor.y == 1 and neighbor.z == 0) {
+
+			if (neighbor.y < cell_size and neighbor.y > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.y == cell_size) {
 				neighbor_dir = 2;
-			}
-			if (neighbor.x == 0 and neighbor.y == -1 and neighbor.z == 0) {
+			} else if (neighbor.y == -neigh_size) {
 				neighbor_dir = -2;
 			}
-			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == 1) {
+
+			if (neighbor.z < cell_size and neighbor.z > -neigh_size) {
+				overlaps++;
+			} else if (neighbor.z == cell_size) {
 				neighbor_dir = 3;
-			}
-			if (neighbor.x == 0 and neighbor.y == 0 and neighbor.z == -1) {
+			} else if (neighbor.z == -neigh_size) {
 				neighbor_dir = -3;
+			}
+
+			if (overlaps < 2) {
+				continue;
 			}
 			if (neighbor_dir == 0) {
 				continue;
