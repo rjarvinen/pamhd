@@ -86,16 +86,12 @@ using Cell = gensimcell::Cell<
 >;
 
 
-/*!
-Returns maximum norm.
-*/
 template<class Grid> double get_max_norm(const Grid& grid) {
 	double local_norm = 0, global_norm = 0;
 	for (const auto& cell: grid.local_cells()) {
 		const auto c = grid.geometry.get_center(cell.id);
 		const auto l = grid.geometry.get_length(cell.id);
 		if (
-			//c[1] < M_PI/4 or c[1] > 1.75 * M_PI
 			std::abs(c[1] - M_PI) > l[1]
 			or std::abs(c[2] - M_PI) > l[2]
 		) {
