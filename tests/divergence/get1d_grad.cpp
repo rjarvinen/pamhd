@@ -215,34 +215,45 @@ int main(int argc, char* argv[])
 		grid_y.set_geometry(geom_params_y);
 		grid_z.set_geometry(geom_params_z);
 
-		const auto all_cells = grid_x.get_cells();
-		for (const auto& cell: all_cells) {
-			auto
-				*const cell_data_x = grid_x[cell],
-				*const cell_data_y = grid_y[cell],
-				*const cell_data_z = grid_z[cell];
-
-			if (cell_data_x == NULL or cell_data_y == NULL or cell_data_z == NULL) {
-				std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-				abort();
-			}
-
-			const auto center = grid_x.geometry.get_center(cell);
-
-			(*cell_data_x)[Scalar()] = function(center[0]);
-			(*cell_data_y)[Scalar()] = function(center[0]);
-			(*cell_data_z)[Scalar()] = function(center[0]);
+		for (const auto& cell: grid_x.local_cells()) {
+			const auto center = grid_x.geometry.get_center(cell.id);
+			(*cell.data)[Scalar()] = function(center[0]);
+		}
+		for (const auto& cell: grid_y.local_cells()) {
+			const auto center = grid_y.geometry.get_center(cell.id);
+			(*cell.data)[Scalar()] = function(center[0]);
+		}
+		for (const auto& cell: grid_z.local_cells()) {
+			const auto center = grid_z.geometry.get_center(cell.id);
+			(*cell.data)[Scalar()] = function(center[0]);
 		}
 		grid_x.update_copies_of_remote_neighbors();
 		grid_y.update_copies_of_remote_neighbors();
 		grid_z.update_copies_of_remote_neighbors();
 
 		// exclude one layer of boundary cells
-		std::vector<uint64_t> solve_cells;
-		for (const auto& cell: all_cells) {
-			const auto index = grid_x.mapping.get_indices(cell);
+		for (const auto& cell: grid_x.local_cells()) {
+			const auto index = grid_x.mapping.get_indices(cell.id);
 			if (index[0] > 0 and index[0] < grid_size_x[0] - 1) {
-				solve_cells.push_back(cell);
+				(*cell.data)[Type()] = 1;
+			} else {
+				(*cell.data)[Type()] = 0;
+			}
+		}
+		for (const auto& cell: grid_y.local_cells()) {
+			const auto index = grid_y.mapping.get_indices(cell.id);
+			if (index[0] > 0 and index[0] < grid_size_y[0] - 1) {
+				(*cell.data)[Type()] = 1;
+			} else {
+				(*cell.data)[Type()] = 0;
+			}
+		}
+		for (const auto& cell: grid_z.local_cells()) {
+			const auto index = grid_z.mapping.get_indices(cell.id);
+			if (index[0] > 0 and index[0] < grid_size_z[0] - 1) {
+				(*cell.data)[Type()] = 1;
+			} else {
+				(*cell.data)[Type()] = 0;
 			}
 		}
 
