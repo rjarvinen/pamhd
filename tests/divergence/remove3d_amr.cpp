@@ -2,7 +2,7 @@
 Tests vector field divergence removal of PAMHD in 3d.
 
 Copyright 2014, 2015, 2016, 2017 Ilja Honkonen
-Copyright 2018 Finnish Meteorological Institute
+Copyright 2018, 2019 Finnish Meteorological Institute
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -52,12 +52,12 @@ int Poisson_Cell::transfer_switch = Poisson_Cell::INIT;
 
 std::array<double, 3> function(const std::array<double, 3>& r)
 {
-	return {{0.1 * r[0], 1 + 0.1 * std::sin(r[1]), 1 - 0.1 * std::cos(r[2])}};
+	return {0, 0, 1 + 0.1 * std::sin(r[2])};
 }
 
-double div_of_function(const std::array<double, 3>& r)
+double div_removed_function()
 {
-	return 0.1 * (1 + std::cos(r[1]) + std::sin(r[2]));
+	return 1;
 }
 
 
@@ -65,11 +65,7 @@ struct Vector_Field {
 	using data_type = std::array<double, 3>;
 };
 
-struct Divergence_Before {
-	using data_type = double;
-};
-
-struct Divergence_After {
+struct Divergence {
 	using data_type = double;
 };
 
@@ -84,11 +80,37 @@ struct Type {
 using Cell = gensimcell::Cell<
 	gensimcell::Always_Transfer,
 	Vector_Field,
-	Divergence_Before,
-	Divergence_After,
+	Divergence,
 	Gradient,
 	Type
 >;
+
+
+template<class Grid> double get_max_norm(const Grid& grid)
+{
+	double local_norm = 0, global_norm = 0;
+	for (const auto& cell: grid.local_cells()) {
+		const auto c = grid.geometry.get_center(cell.id);
+		const auto l = grid.geometry.get_length(cell.id);
+		if (
+			std::abs(c[0] - M_PI) > l[0]
+			or std::abs(c[1] - M_PI) > l[1]
+			or std::abs(c[2] - M_PI) > l[2]
+		) {
+			continue;
+		}
+
+		local_norm = std::max(
+			local_norm,
+			std::fabs((*cell.data)[Vector_Field()][2] - div_removed_function())
+		);
+	}
+
+	MPI_Comm comm = grid.get_communicator();
+	MPI_Allreduce(&local_norm, &global_norm, 1, MPI_DOUBLE, MPI_MAX, comm);
+	MPI_Comm_free(&comm);
+	return global_norm;
+}
 
 
 int main(int argc, char* argv[])
@@ -121,7 +143,7 @@ int main(int argc, char* argv[])
 	const unsigned int neighborhood_size = 0;
 	const int max_refinement_level = 1;
 
-	double old_div = std::numeric_limits<double>::max();
+	double old_norm = std::numeric_limits<double>::max();
 	size_t old_nr_of_cells = 0;
 	for (size_t nr_of_cells = 8; nr_of_cells <= 32; nr_of_cells *= 2) {
 
@@ -143,7 +165,7 @@ int main(int argc, char* argv[])
 
 		const std::array<double, 3>
 			cell_length{{
-				double(1) / (grid_size[0] - 2),
+				2 * M_PI / (grid_size[0] - 2),
 				2 * M_PI / (grid_size[1] - 2),
 				2 * M_PI / (grid_size[2] - 2)
 			}},
@@ -160,7 +182,7 @@ int main(int argc, char* argv[])
 			for (const auto& cell: grid.local_cells()) {
 				const auto center = grid.geometry.get_center(cell.id);
 				if (
-					center[0] > 3.0/8 and center[0] < 6.0/8
+					center[0] > 2.0*M_PI*3/8 and center[0] < 2.0*M_PI*6/8
 					and center[1] > 2.0*M_PI*3/8 and center[1] < 2.0*M_PI*6/8
 					and center[2] > 2.0*M_PI*3/8 and center[2] < 2.0*M_PI*6/8
 				) {
@@ -181,7 +203,7 @@ int main(int argc, char* argv[])
 		for (const auto& cell: grid.local_cells()) {
 			const auto center = grid.geometry.get_center(cell.id);
 			if (
-				center[0] > 0 and center[0] < 1
+				center[0] > 0 and center[0] < 2 * M_PI
 				and center[1] > 0 and center[1] < 2 * M_PI
 				and center[2] > 0 and center[2] < 2 * M_PI
 			) {
@@ -245,8 +267,11 @@ int main(int argc, char* argv[])
 		auto Vector_Getter = [](Cell& cell_data) -> Vector_Field::data_type& {
 			return cell_data[Vector_Field()];
 		};
-		auto Div_After_Getter = [](Cell& cell_data) -> Divergence_After::data_type& {
-			return cell_data[Divergence_After()];
+		auto Div_Getter = [](Cell& cell_data) -> Divergence::data_type& {
+			return cell_data[Divergence()];
+		};
+		auto Gradient_Getter = [](Cell& cell_data) -> Gradient::data_type& {
+			return cell_data[Gradient()];
 		};
 		auto Type_Getter = [](Cell& cell_data) -> Type::data_type& {
 			return cell_data[Type()];
@@ -255,9 +280,7 @@ int main(int argc, char* argv[])
 			grid.local_cells(),
 			grid,
 			Vector_Getter,
-			[](Cell& cell_data) -> Divergence_Before::data_type& {
-				return cell_data[Divergence_Before()];
-			},
+			Div_Getter,
 			Type_Getter
 		);
 
@@ -265,15 +288,14 @@ int main(int argc, char* argv[])
 			grid.local_cells(),
 			grid,
 			Vector_Getter,
-			Div_After_Getter,
-			[](Cell& cell_data) -> Gradient::data_type& {
-				return cell_data[Gradient()];
-			},
+			Div_Getter,
+			Gradient_Getter,
 			Type_Getter,
 			2000, 0, 1e-10, 2, 100, 10, false, false
 		);
 		grid.update_copies_of_remote_neighbors();
 
+		const double norm = get_max_norm(grid);
 		// update copy boundaries to correspond to removed divergence
 		for (const auto& cell: grid.local_cells()) {
 			if ((*cell.data)[Type()] != 0) {
@@ -313,7 +335,7 @@ int main(int argc, char* argv[])
 			grid.local_cells(),
 			grid,
 			Vector_Getter,
-			Div_After_Getter,
+			Div_Getter,
 			Type_Getter
 		);
 
@@ -328,18 +350,20 @@ int main(int argc, char* argv[])
 			abort();
 		}
 
+		std::cout << solve_cells_global << ": " << norm << std::endl;
 		if (old_nr_of_cells > 0) {
 			const double
 				order_of_accuracy
-					= -log(div_after / old_div)
+					= -log(norm / old_norm)
 					/ log(double(solve_cells_global) / old_nr_of_cells);
 
-			if (order_of_accuracy < 0.03) {
+			if (order_of_accuracy < 0.3) {
 				if (grid.get_rank() == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy from "
 						<< old_nr_of_cells << " to " << solve_cells_global
 						<< " is too low: " << order_of_accuracy
+						<< "  " << old_norm << "->" << norm
 						<< std::endl;
 				}
 				abort();
@@ -347,7 +371,7 @@ int main(int argc, char* argv[])
 		}
 
 		old_nr_of_cells = solve_cells_global;
-		old_div = div_after;
+		old_norm = norm;
 	}
 
 	MPI_Finalize();
