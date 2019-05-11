@@ -350,7 +350,6 @@ int main(int argc, char* argv[])
 			abort();
 		}
 
-		std::cout << solve_cells_global << ": " << norm << std::endl;
 		if (old_nr_of_cells > 0) {
 			const double
 				order_of_accuracy
