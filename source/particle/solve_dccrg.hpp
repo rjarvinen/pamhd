@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAMHD_PARTICLE_SOLVE_DCCRG_HPP
 
 
+#include "exception"
 #include "type_traits"
 #include "utility"
 
@@ -197,6 +198,7 @@ template<
 	const Solver_Info_Getter Sol_Info
 ) {
 	namespace odeint = boost::numeric::odeint;
+	using std::abs;
 	using std::isnan;
 	using std::is_same;
 	using std::max;
@@ -210,6 +212,9 @@ template<
 		or is_same<Stepper, odeint::runge_kutta_fehlberg78<state_t>>::value,
 		"Only odeint steppers without internal state are supported."
 	);
+	if (grid.get_maximum_refinement_level() > 0) {
+		throw std::runtime_error("Only maximum refinement level 0 supported.");
+	}
 
 
 	Stepper stepper;
@@ -225,19 +230,19 @@ template<
 		// get field data from neighborhood for interpolation
 		std::array<Eigen::Vector3d, 27> current_minus_velocities, magnetic_fields;
 
-		const auto neighbors = std::distance(cell.neighbors_of.cbegin(), cell.neighbors_of.cend());
-		if (neighbors != 26) {
-			std::cerr << __FILE__ << "(" << __LINE__ << "): "
-				<< "Unsupported neighborhood: " << neighbors
-				<< std::endl;
-			abort();
-		}
-
 		// default to current cell's data
 		current_minus_velocities.fill(JmV(*cell.data));
 		magnetic_fields.fill(Mag(*cell.data));
 
 		for (const auto& neighbor: cell.neighbors_of) {
+			if (
+				abs(neighbor.x) > 1
+				or abs(neighbor.y) > 1
+				or abs(neighbor.z) > 1
+			) {
+				continue;
+			}
+
 			const size_t index = (neighbor.z + 1) * 9 + (neighbor.y + 1) * 3 + neighbor.x + 1;
 			current_minus_velocities[index] = JmV(*neighbor.data);
 			magnetic_fields[index] = Mag(*neighbor.data);
