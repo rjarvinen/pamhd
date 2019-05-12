@@ -470,7 +470,7 @@ int main(int argc, char* argv[])
 					= -log(norm_z_np / old_norm_z_np)
 					/ log(double(nr_of_cells) / old_nr_of_cells);
 
-			if (order_of_accuracy_x < 2.9) {
+			if (order_of_accuracy_x < 1.9) {
 				if (rank == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy in x dimension from "
@@ -493,7 +493,7 @@ int main(int argc, char* argv[])
 				return EXIT_FAILURE;
 			}
 
-			if (order_of_accuracy_y < 2.9) {
+			if (order_of_accuracy_y < 1.9) {
 				if (rank == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy in y dimension from "
@@ -516,7 +516,7 @@ int main(int argc, char* argv[])
 				return EXIT_FAILURE;
 			}
 
-			if (order_of_accuracy_z < 2.9) {
+			if (order_of_accuracy_z < 1.9) {
 				if (rank == 0) {
 					std::cerr << __FILE__ << ":" << __LINE__
 						<< ": Order of accuracy in z dimension from "
