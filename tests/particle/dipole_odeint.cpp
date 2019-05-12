@@ -519,7 +519,7 @@ bool check_result(
 
 		if (initial_angle == 90) {
 
-			if (step_divisor < 256 and order_of_accuracy < 6) {
+			if (step_divisor < 256 and order_of_accuracy < 5) {
 				return false;
 			}
 			if (step_divisor >= 8 and nrj_error > 1e-3) {
