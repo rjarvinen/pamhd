@@ -7,6 +7,8 @@
 	"load-balancer": "RANDOM",
 	"save-particle-n": 0.01,
 	"minimum-particles": 0,
+	"minimum-pressure": 0,
+	"mhd-time-step-factor": 0.5,
 	"adiabatic-index": 1.6666666666666667,
 	"vacuum-permeability": 1,
 	"proton-mass": 1,

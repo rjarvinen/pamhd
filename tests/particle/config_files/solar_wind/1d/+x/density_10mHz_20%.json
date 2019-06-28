@@ -4,6 +4,8 @@
 	"time-start": 0,
 	"time-length": 1000,
 	"minimum-particles": 0,
+	"minimum-pressure": 0,
+	"mhd-time-step-factor": 0.5,
 	"resistivity": "0",
 	"solver-particle": "midpoint",
 	"solver-mhd": "roe-athena",
