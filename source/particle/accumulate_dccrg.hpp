@@ -119,6 +119,15 @@ template<
 	Solver_Info_Getter Sol_Info,
 	const bool clear_at_start = true
 ) {
+	const auto
+		grid_start = grid.geometry.get_start(),
+		grid_end = grid.geometry.get_end();
+	const Eigen::Vector3d grid_len{
+		grid_end[0] - grid_start[0],
+		grid_end[1] - grid_start[1],
+		grid_end[2] - grid_start[2]
+	};
+
 	for (const auto& cell: cells) {
 		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
 			Bulk_Val(*cell.data) = {};
@@ -162,6 +171,30 @@ template<
 
 				Eigen::Vector3d neigh_min, neigh_max, neigh_length, neigh_center;
 				std::tie(neigh_min, neigh_max, neigh_length, neigh_center) = get_cell_geometry(neighbor.id, grid.geometry);
+
+				// handle periodic grid
+				if (neighbor.x < 0 and neigh_center[0] > cell_min[0]) {
+					neigh_min[0] -= grid_len[0];
+					neigh_max[0] -= grid_len[0];
+				} else if (neighbor.x > 0 and neigh_center[0] < cell_max[0]) {
+					neigh_min[0] += grid_len[0];
+					neigh_max[0] += grid_len[0];
+				}
+				if (neighbor.y < 0 and neigh_center[1] > cell_min[1]) {
+					neigh_min[1] -= grid_len[1];
+					neigh_max[1] -= grid_len[1];
+				} else if (neighbor.y > 0 and neigh_center[1] < cell_max[1]) {
+					neigh_min[1] += grid_len[1];
+					neigh_max[1] += grid_len[1];
+				}
+				if (neighbor.z < 0 and neigh_center[2] > cell_min[2]) {
+					neigh_min[2] -= grid_len[2];
+					neigh_max[2] -= grid_len[2];
+				} else if (neighbor.z > 0 and neigh_center[2] < cell_max[2]) {
+					neigh_min[2] += grid_len[2];
+					neigh_max[2] += grid_len[2];
+				}
+
 				if (
 					value_box_min[0] > neigh_max[0]
 					or value_box_min[1] > neigh_max[1]
@@ -263,6 +296,15 @@ template<
 	Solver_Info_Getter Sol_Info,
 	const bool clear_at_start = true
 ) {
+	const auto
+		grid_start = grid.geometry.get_start(),
+		grid_end = grid.geometry.get_end();
+	const Eigen::Vector3d grid_len{
+		grid_end[0] - grid_start[0],
+		grid_end[1] - grid_start[1],
+		grid_end[2] - grid_start[2]
+	};
+
 	for (const auto& cell: cells) {
 		if ((Sol_Info(*cell.data) & pamhd::particle::Solver_Info::dont_solve) > 0) {
 			Bulk_Val(*cell.data) = {};
@@ -309,6 +351,29 @@ template<
 
 				Eigen::Vector3d neigh_min, neigh_max, neigh_length, neigh_center;
 				std::tie(neigh_min, neigh_max, neigh_length, neigh_center) = get_cell_geometry(neighbor.id, grid.geometry);
+
+				// handle periodic grid
+				if (neighbor.x < 0 and neigh_center[0] > cell_min[0]) {
+					neigh_min[0] -= grid_len[0];
+					neigh_max[0] -= grid_len[0];
+				} else if (neighbor.x > 0 and neigh_center[0] < cell_max[0]) {
+					neigh_min[0] += grid_len[0];
+					neigh_max[0] += grid_len[0];
+				}
+				if (neighbor.y < 0 and neigh_center[1] > cell_min[1]) {
+					neigh_min[1] -= grid_len[1];
+					neigh_max[1] -= grid_len[1];
+				} else if (neighbor.y > 0 and neigh_center[1] < cell_max[1]) {
+					neigh_min[1] += grid_len[1];
+					neigh_max[1] += grid_len[1];
+				}
+				if (neighbor.z < 0 and neigh_center[2] > cell_min[2]) {
+					neigh_min[2] -= grid_len[2];
+					neigh_max[2] -= grid_len[2];
+				} else if (neighbor.z > 0 and neigh_center[2] < cell_max[2]) {
+					neigh_min[2] += grid_len[2];
+					neigh_max[2] += grid_len[2];
+				}
 
 				if (
 					value_box_min[0] > neigh_max[0]
@@ -668,7 +733,7 @@ template<
 	grid.start_remote_neighbor_copy_updates();
 
 	for (const auto& cell: grid.local_cells()) {
-		Number_Of_Particles(*cell.data)     =
+		Number_Of_Particles(*cell.data)          =
 		Bulk_Relative_Kinetic_Energy(*cell.data) = 0;
 	}
 
@@ -688,7 +753,7 @@ template<
 		};
 	// TODO: merge with bulk mass accumulation
 	accumulate(
-		grid.local_cells(),
+		grid.outer_cells(),
 		grid,
 		Particles,
 		Particle_Position,
@@ -700,6 +765,20 @@ template<
 		Accu_List,
 		Sol_Info
 	);
+	accumulate(
+		grid.outer_cells(),
+		grid,
+		Particles,
+		Particle_Position,
+		Particle_Relative_Kinetic_Energy,
+		Bulk_Relative_Kinetic_Energy,
+		Accu_List_Bulk_Relative_Kinetic_Energy,
+		Accu_List_Target,
+		Accu_List_Length,
+		Accu_List,
+		Sol_Info,
+		false
+	);
 
 	grid.wait_remote_neighbor_copy_update_sends();
 	Grid::cell_data_type::set_transfer_all(false, bulk_vel_var);
@@ -709,13 +788,27 @@ template<
 	grid.start_remote_neighbor_copy_updates();
 
 	accumulate(
-		grid.local_cells(),
+		grid.inner_cells(),
 		grid,
 		Particles,
 		Particle_Position,
 		particle_counter,
 		Number_Of_Particles,
 		Accu_List_Number_Of_Particles,
+		Accu_List_Target,
+		Accu_List_Length,
+		Accu_List,
+		Sol_Info,
+		false
+	);
+	accumulate(
+		grid.inner_cells(),
+		grid,
+		Particles,
+		Particle_Position,
+		Particle_Relative_Kinetic_Energy,
+		Bulk_Relative_Kinetic_Energy,
+		Accu_List_Bulk_Relative_Kinetic_Energy,
 		Accu_List_Target,
 		Accu_List_Length,
 		Accu_List,
