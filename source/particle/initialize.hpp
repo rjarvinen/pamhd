@@ -496,12 +496,14 @@ template<
 				current_id_start,
 				particle_id_increase
 			);
-		nr_particles_created += new_particles.size();
 		current_id_start += new_particles.size() * particle_id_increase;
 
 		if (replace) {
+			nr_particles_created -= Par(*cell.data).size();
+			nr_particles_created += new_particles.size();
 			Par(*cell.data) = std::move(new_particles);
 		} else {
+			nr_particles_created += new_particles.size();
 			Par(*cell.data).insert(
 				Par(*cell.data).end(),
 				new_particles.begin(),
