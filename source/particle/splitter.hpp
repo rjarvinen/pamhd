@@ -49,7 +49,7 @@ namespace particle {
 
 
 /*
-Splits given particle and return one of the new ones.
+Splits given particle and returns newly created one.
 
 Given particle is modified in-place:
   -moved to random position within a cube fitting within
