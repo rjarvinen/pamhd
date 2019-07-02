@@ -328,6 +328,8 @@ template <
 				std::cerr <<  __FILE__ << "(" << __LINE__ << ") "
 					<< "Solution failed between cells " << cell.id
 					<< " and " << neighbor.id
+					<< " of boundary type " << Sol_Info(*cell.data)
+					<< " and " << Sol_Info(*neighbor.data)
 					<< " at " << grid.geometry.get_center(cell.id)
 					<< " and " << grid.geometry.get_center(neighbor.id)
 					<< " in direction " << direction
