@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cmath"
 #include "stdexcept"
+#include "sstream"
 #include "string"
 
 
@@ -336,17 +337,16 @@ template <
 			vacuum_permeability
 		);
 	if (not isnormal(pressure) or pressure < 0) {
-		throw std::domain_error(
-			std::string("Non-positive pressure given to ")
-			+ __func__
-			+ std::string(": ")
-			+ to_string(pressure)
-			+ ", from mass, momentum, energy and field: "
-			+ to_string(mass_density) + "; "
-			+ to_string(mom[0]) + ", " + to_string(mom[1]) + ", " + to_string(mom[2]) + "; "
-			+ to_string(total_energy_density) + "; "
-			+ to_string(mag[0]) + ", " + to_string(mag[1]) + ", " + to_string(mag[2])
-		);
+		std::ostringstream error;
+		error << std::scientific;
+		error << "Non-positive pressure given to " << __func__;
+		error << ": " << pressure;
+		error << ", from mass, momentum, energy and field: ";
+		error << mass_density;
+		error << ", [" << mom[0] << ", " << mom[1] << ", " << mom[2] << "], ";
+		error << total_energy_density;
+		error << ", [" << mag[0] << ", " << mag[1] << ", " << mag[2] << "]";
+		throw std::domain_error(error.str());
 	}
 
 	return std::sqrt(adiabatic_index * pressure / mass_density);
