@@ -42,9 +42,9 @@ namespace particle {
 
 
 /*!
-Returns new position an velocity for given particle after given length of time.
+Returns new position and velocity for given particle after given length of time.
 
-Assumes Vector_T provides an API identical to Eigen vectors.
+Assumes Vector provides an API identical to Eigen vectors.
 
 Particle accelerator based on translations and a rotation given in
 equations 25 and 26 of:
@@ -53,11 +53,11 @@ Proceedings of the conference on the numerical simulation of plasmas...,
 available at http://www.dtic.mil/dtic/tr/fulltext/u2/a023511.pdf
 Same notation is used here.
 */
-template<class Vector_T> std::pair<Vector_T, Vector_T> propagate(
-	const Vector_T& position,
-	const Vector_T& velocity,
-	const Vector_T& electric_field,
-	const Vector_T& magnetic_field,
+template<class Vector> std::pair<Vector, Vector> propagate(
+	const Vector& position,
+	const Vector& velocity,
+	const Vector& electric_field,
+	const Vector& magnetic_field,
 	const double charge_mass_ratio,
 	const double time_step
 ) {
@@ -67,11 +67,11 @@ template<class Vector_T> std::pair<Vector_T, Vector_T> propagate(
 	const double
 		coeff = charge_mass_ratio * time_step / 2.0,
 		B_mag = magnetic_field.norm(),
-		B_mag_non_zero = (B_mag != 0) ? B_mag : 1,
+		B_mag_non_zero = [B_mag](){if (B_mag != 0) return B_mag; else return 1.0;}(),
 		f1 = tan(coeff * B_mag) / B_mag_non_zero,
 		f2 = 2 * f1 / (1 + f1*f1 * B_mag*B_mag);
 
-	const Vector_T
+	const Vector
 		new_position = position + time_step * velocity,
 		v1 = velocity + coeff * electric_field,
 		v2 = v1 + f1 * v1.cross(magnetic_field),
