@@ -1495,6 +1495,7 @@ int main(int argc, char* argv[])
 					2,
 					options_div_B.poisson_norm_increase_max,
 					0,
+					false,
 					false
 				);
 			Cell::set_transfer_all(false, pamhd::Magnetic_Field_Divergence());
