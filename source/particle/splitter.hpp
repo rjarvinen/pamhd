@@ -126,14 +126,15 @@ template<
 ) {
 	using std::max;
 	using std::min;
+	using std::to_string;
 
 	const size_t original_nr_particles = particles.size();
 	if (min_particles > 0 and original_nr_particles == 0) {
-		std::cerr << __FILE__ "(" << __LINE__ << "): "
-			<< "No particles in cell " << cell_id
-			<< " starting at " << cell_min
-			<< std::endl;
-		abort();
+		throw std::domain_error(
+			std::string(__FILE__) + "(" + to_string(__LINE__) + "): "
+			+ "No particles in cell " + to_string(cell_id) + " starting at "
+			+ to_string(cell_min[0]) + ", " + to_string(cell_min[1]) + ", " + to_string(cell_min[2])
+		);
 	}
 
 	if (original_nr_particles >= min_particles) {
@@ -180,7 +181,9 @@ template<
 	const Solver_Info_Getter Sol_Info,
 	const unsigned int normal_cell
 ) {
-	for (const auto& cell: grid.cells) {
+	using std::to_string;
+
+	for (const auto& cell: grid.local_cells()) {
 		if (Sol_Info(*cell.data) != normal_cell) {
 			continue;
 		}
@@ -189,17 +192,24 @@ template<
 			cell_min = grid.geometry.get_min(cell.id),
 			cell_max = grid.geometry.get_max(cell.id);
 
-		split(
-			Particles(*cell.data),
-			min_particles,
-			cell.id,
-			cell.data,
-			cell_min,
-			cell_max,
-			random_source,
-			Part_Pos,
-			Part_Mas
-		);
+		try {
+			split(
+				Particles(*cell.data),
+				min_particles,
+				cell.id,
+				cell.data,
+				cell_min,
+				cell_max,
+				random_source,
+				Part_Pos,
+				Part_Mas
+			);
+		} catch (const std::exception& e) {
+			throw std::runtime_error(
+				std::string("Couldn't split particles in normal cell ")
+				+ to_string(cell.id) + ": "
+			);
+		}
 	}
 }
 
