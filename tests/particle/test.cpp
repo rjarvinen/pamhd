@@ -888,51 +888,65 @@ int main(int argc, char* argv[])
 			pamhd::particle::Solver_Info::normal
 		);
 
-		pamhd::particle::accumulate_mhd_data(
-			grid,
-			Part_Int,
-			Part_Pos,
-			Part_Mas_Cell,
-			Part_SpM_Cell,
-			Part_Vel_Cell,
-			Part_Ekin,
-			Nr_Particles,
-			Part_Nr,
-			Bulk_Mass_Getter,
-			Bulk_Momentum_Getter,
-			Bulk_Relative_Velocity2_Getter,
-			Bulk_Velocity_Getter,
-			Accu_List_Number_Of_Particles_Getter,
-			Accu_List_Bulk_Mass_Getter,
-			Accu_List_Bulk_Velocity_Getter,
-			Accu_List_Bulk_Relative_Velocity2_Getter,
-			Accu_List_Target_Getter,
-			Accu_List_Length_Getter,
-			Accu_List_Getter,
-			pamhd::particle::Nr_Accumulated_To_Cells(),
-			pamhd::particle::Accumulated_To_Cells(),
-			pamhd::particle::Bulk_Velocity(),
-			Sol_Info
-		);
+		try {
+			pamhd::particle::accumulate_mhd_data(
+				grid,
+				Part_Int,
+				Part_Pos,
+				Part_Mas_Cell,
+				Part_SpM_Cell,
+				Part_Vel_Cell,
+				Part_Ekin,
+				Nr_Particles,
+				Part_Nr,
+				Bulk_Mass_Getter,
+				Bulk_Momentum_Getter,
+				Bulk_Relative_Velocity2_Getter,
+				Bulk_Velocity_Getter,
+				Accu_List_Number_Of_Particles_Getter,
+				Accu_List_Bulk_Mass_Getter,
+				Accu_List_Bulk_Velocity_Getter,
+				Accu_List_Bulk_Relative_Velocity2_Getter,
+				Accu_List_Target_Getter,
+				Accu_List_Length_Getter,
+				Accu_List_Getter,
+				pamhd::particle::Nr_Accumulated_To_Cells(),
+				pamhd::particle::Accumulated_To_Cells(),
+				pamhd::particle::Bulk_Velocity(),
+				Sol_Info
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "Couldn't accumulate MHD data from particles: " << e.what()
+				<< std::endl;
+			abort();
+		}
 
 		// B required for E calculation
 		Cell::set_transfer_all(true, pamhd::Magnetic_Field());
 		grid.start_remote_neighbor_copy_updates();
 
-		pamhd::particle::fill_mhd_fluid_values(
-			grid,
-			options_sim.adiabatic_index,
-			options_sim.vacuum_permeability,
-			options_particle.boltzmann,
-			options_mhd.min_pressure,
-			Nr_Particles,
-			Bulk_Mass_Getter,
-			Bulk_Momentum_Getter,
-			Bulk_Relative_Velocity2_Getter,
-			Part_Int,
-			Mas, Mom, Nrj, Mag,
-			Sol_Info
-		);
+		try {
+			pamhd::particle::fill_mhd_fluid_values(
+				grid,
+				options_sim.adiabatic_index,
+				options_sim.vacuum_permeability,
+				options_particle.boltzmann,
+				options_mhd.min_pressure,
+				Nr_Particles,
+				Bulk_Mass_Getter,
+				Bulk_Momentum_Getter,
+				Bulk_Relative_Velocity2_Getter,
+				Part_Int,
+				Mas, Mom, Nrj, Mag,
+				Sol_Info
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "Couldn't fill MHD fluid values: " << e.what()
+				<< std::endl;
+			abort();
+		}
 
 		// inner: J for E = (J - V) x B
 		pamhd::divergence::get_curl(
@@ -1048,25 +1062,34 @@ int main(int argc, char* argv[])
 
 		Cell::set_transfer_all(
 			true,
-			pamhd::mhd::HD_State_Conservative(),
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid.start_remote_neighbor_copy_updates();
 
 		// inner MHD
-		double solve_max_dt = pamhd::mhd::solve<pamhd::mhd::Solver_Info>(
-			mhd_solver,
-			grid.inner_cells(),
-			grid,
-			time_step,
-			options_sim.adiabatic_index,
-			options_sim.vacuum_permeability,
-			Mas, Mom, Nrj, Mag,
-			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
-			Mas_f, Mom_f, Nrj_f, Mag_f,
-			Sol_Info
-		);
+		double solve_max_dt = -1;
+
+		try {
+			solve_max_dt = pamhd::mhd::solve<pamhd::mhd::Solver_Info>(
+				mhd_solver,
+				grid.inner_cells(),
+				grid,
+				time_step,
+				options_sim.adiabatic_index,
+				options_sim.vacuum_permeability,
+				Mas, Mom, Nrj, Mag,
+				Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
+				Mas_f, Mom_f, Nrj_f, Mag_f,
+				Sol_Info
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "MHD solution failed in inner cells: " << e.what()
+				<< std::endl;
+			abort();
+		}
 		max_dt_mhd = min(solve_max_dt, max_dt_mhd);
 
 		// inner particles
@@ -1097,18 +1120,25 @@ int main(int argc, char* argv[])
 		grid.wait_remote_neighbor_copy_update_receives();
 
 		// outer MHD
-		solve_max_dt = pamhd::mhd::solve<pamhd::mhd::Solver_Info>(
-			mhd_solver,
-			grid.outer_cells(),
-			grid,
-			time_step,
-			options_sim.adiabatic_index,
-			options_sim.vacuum_permeability,
-			Mas, Mom, Nrj, Mag,
-			Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
-			Mas_f, Mom_f, Nrj_f, Mag_f,
-			Sol_Info
-		);
+		try {
+			solve_max_dt = pamhd::mhd::solve<pamhd::mhd::Solver_Info>(
+				mhd_solver,
+				grid.outer_cells(),
+				grid,
+				time_step,
+				options_sim.adiabatic_index,
+				options_sim.vacuum_permeability,
+				Mas, Mom, Nrj, Mag,
+				Bg_B_Pos_X, Bg_B_Pos_Y, Bg_B_Pos_Z,
+				Mas_f, Mom_f, Nrj_f, Mag_f,
+				Sol_Info
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "MHD solution failed in outer cells: " << e.what()
+				<< std::endl;
+			abort();
+		}
 		max_dt_mhd = min(solve_max_dt, max_dt_mhd);
 
 		pamhd::divergence::get_curl(
@@ -1130,8 +1160,8 @@ int main(int argc, char* argv[])
 		grid.wait_remote_neighbor_copy_update_sends();
 		Cell::set_transfer_all(
 			false,
-			pamhd::mhd::HD_State_Conservative(),
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 
@@ -1193,16 +1223,23 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(true, pamhd::particle::Particles_External());
 		grid.start_remote_neighbor_copy_updates();
 
-		pamhd::mhd::apply_fluxes<pamhd::mhd::Solver_Info>(
-			grid,
-			options_mhd.min_pressure,
-			options_sim.adiabatic_index,
-			options_sim.vacuum_permeability,
-			Mas, Mom, Nrj, Mag,
-			Mas_f, Mom_f, Nrj_f, Mag_f,
-			Sol_Info,
-			false // particles will overwrite negative density
-		);
+		try {
+			pamhd::mhd::apply_fluxes<pamhd::mhd::Solver_Info>(
+				grid,
+				options_mhd.min_pressure,
+				options_sim.adiabatic_index,
+				options_sim.vacuum_permeability,
+				Mas, Mom, Nrj, Mag,
+				Mas_f, Mom_f, Nrj_f, Mag_f,
+				Sol_Info,
+				false // particles will overwrite negative density
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "Couldn't apply fluxes: " << e.what()
+				<< std::endl;
+			abort();
+		}
 
 		pamhd::particle::incorporate_external_particles<
 			pamhd::particle::Nr_Particles_Internal,
@@ -1338,12 +1375,14 @@ int main(int argc, char* argv[])
 		Cell::set_transfer_all(
 			true,
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 		grid.update_copies_of_remote_neighbors();
 		Cell::set_transfer_all(
 			false,
 			pamhd::Magnetic_Field(),
+			pamhd::mhd::HD_State_Conservative(),
 			pamhd::particle::Nr_Particles_External()
 		);
 
@@ -1355,13 +1394,20 @@ int main(int argc, char* argv[])
 		grid.update_copies_of_remote_neighbors();
 		Cell::set_transfer_all(false, pamhd::particle::Particles_Internal());
 
-		pamhd::mhd::apply_magnetic_field_boundaries(
-			grid,
-			boundaries_fields,
-			geometries,
-			simulation_time,
-			Mag
-		);
+		try {
+			pamhd::mhd::apply_magnetic_field_boundaries(
+				grid,
+				boundaries_fields,
+				geometries,
+				simulation_time,
+				Mag
+			);
+		} catch (const std::exception& e) {
+			std::cerr << __FILE__ "(" << __LINE__ << ": "
+				<< "Couldn't apply magnetic field boundaries: " << e.what()
+				<< std::endl;
+			abort();
+		}
 
 		nr_particles_created
 			+= pamhd::particle::apply_boundaries<
