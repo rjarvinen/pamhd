@@ -145,6 +145,7 @@ template <
 	const Total_Energy_Density_Getter Nrj,
 	const Magnetic_Field_Getter Mag
 ) {
+	using std::isfinite;
 	using std::isnormal;
 	using std::to_string;
 
@@ -318,6 +319,7 @@ template <
 	const Scalar adiabatic_index,
 	const Scalar vacuum_permeability
 ) {
+	using std::isnormal;
 	using std::to_string;
 
 	if (not isnormal(mass_density) or mass_density < 0) {
@@ -369,6 +371,7 @@ template <
 	const Vector& bg_mag,
 	const Scalar& vacuum_permeability
 ) {
+	using std::isnormal;
 	using std::pow;
 	using std::sqrt;
 	using std::to_string;
@@ -409,6 +412,7 @@ template <
 	const Scalar& vacuum_permeability
 ) {
 	using std::isfinite;
+	using std::isnormal;
 	using std::pow;
 	using std::sqrt;
 	using std::to_string;
