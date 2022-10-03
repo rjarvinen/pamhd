@@ -690,7 +690,7 @@ template <
 		case 1:
 			solve_cells.push_back(cell.id);
 			break;
-		case -1:
+		case 0:
 			skip_cells.push_back(cell.id);
 			break;
 		default:
