@@ -138,7 +138,7 @@ template <
 			int overlaps = 0, neighbor_dir = 0;
 
 			const int neigh_size = grid.mapping.get_cell_length_in_indices(neighbor.id);
-			if (neighbor.x < cell_size and neighbor.x > -neigh_size) {
+			if ((neighbor.x < cell_size) and neighbor.x > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.x == cell_size) {
 				neighbor_dir = 1;
@@ -146,7 +146,7 @@ template <
 				neighbor_dir = -1;
 			}
 
-			if (neighbor.y < cell_size and neighbor.y > -neigh_size) {
+			if ((neighbor.y < cell_size) and neighbor.y > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.y == cell_size) {
 				neighbor_dir = 2;
@@ -154,7 +154,7 @@ template <
 				neighbor_dir = -2;
 			}
 
-			if (neighbor.z < cell_size and neighbor.z > -neigh_size) {
+			if ((neighbor.z < cell_size) and neighbor.z > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.z == cell_size) {
 				neighbor_dir = 3;
@@ -213,7 +213,7 @@ template <
 			int overlaps = 0, neighbor_dir = 0;
 
 			const int neigh_size = grid.mapping.get_cell_length_in_indices(neighbor.id);
-			if (neighbor.x < cell_size and neighbor.x > -neigh_size) {
+			if ((neighbor.x < cell_size) and neighbor.x > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.x == cell_size) {
 				neighbor_dir = 1;
@@ -221,7 +221,7 @@ template <
 				neighbor_dir = -1;
 			}
 
-			if (neighbor.y < cell_size and neighbor.y > -neigh_size) {
+			if ((neighbor.y < cell_size) and neighbor.y > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.y == cell_size) {
 				neighbor_dir = 2;
@@ -229,7 +229,7 @@ template <
 				neighbor_dir = -2;
 			}
 
-			if (neighbor.z < cell_size and neighbor.z > -neigh_size) {
+			if ((neighbor.z < cell_size) and neighbor.z > -neigh_size) {
 				overlaps++;
 			} else if (neighbor.z == cell_size) {
 				neighbor_dir = 3;

@@ -138,7 +138,7 @@ template <
 			const int neighbor_length_i = grid.mapping.get_cell_length_in_indices(neighbor.id);
 			int overlaps = 0, direction = 0;
 
-			if (neighbor.x < cell_length_i and neighbor.x > -neighbor_length_i) {
+			if ((neighbor.x < cell_length_i) and neighbor.x > -neighbor_length_i) {
 				overlaps++;
 			} else if (neighbor.x == cell_length_i) {
 				direction = 1;
@@ -146,7 +146,7 @@ template <
 				direction = -1;
 			}
 
-			if (neighbor.y < cell_length_i and neighbor.y > -neighbor_length_i) {
+			if ((neighbor.y < cell_length_i) and neighbor.y > -neighbor_length_i) {
 				overlaps++;
 			} else if (neighbor.y == cell_length_i) {
 				direction = 2;
@@ -154,7 +154,7 @@ template <
 				direction = -2;
 			}
 
-			if (neighbor.z < cell_length_i and neighbor.z > -neighbor_length_i) {
+			if ((neighbor.z < cell_length_i) and neighbor.z > -neighbor_length_i) {
 				overlaps++;
 			} else if (neighbor.z == cell_length_i) {
 				direction = 3;
