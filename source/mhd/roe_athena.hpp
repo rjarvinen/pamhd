@@ -37,6 +37,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "mhd/common.hpp"
 #include "mhd/variables.hpp"
 
+#define SPLITB
 
 namespace pamhd {
 namespace mhd {
@@ -339,13 +340,40 @@ Cons1DS athena_roe_fluxes(
 	const Cons1DS& Ur,
 	const Prim1DS& Wl,
 	const Prim1DS& Wr,
-	const double Bxi,
+	const double Bxi_l,
+	const double Bxi_r,
+	const Eigen::Matrix<double, 3, 1>& bg_face_magnetic_field,
 	const double adiabatic_index
 ) {
   constexpr int NWAVE = 7;
 
   constexpr double etah = 0.0;
+  //std::cout << bg_face_magnetic_field[0] << " " << bg_face_magnetic_field[1] << " " << bg_face_magnetic_field[2] << std::endl;
+  const double Bxi = (Bxi_l + Bxi_r)/2.0;
+#ifdef SPLITB
+  const double Bx0 = bg_face_magnetic_field[0];
+  const double By0 = bg_face_magnetic_field[1];
+  const double Bz0 = bg_face_magnetic_field[2];
+  const double Bx1_l = Bxi_l;
+  const double By1_l = Ul.By;
+  const double Bz1_l = Ul.Bz;
+  const double Bx1_r = Bxi_r;
+  const double By1_r = Ur.By;
+  const double Bz1_r = Ur.Bz;
+  const double Bx_l = Bx1_l + Bx0;
+  const double By_l = By1_l + By0;
+  const double Bz_l = Bz1_l + Bz0;
+  const double Bx_r = Bx1_r + Bx0;
+  const double By_r = By1_r + By0;
+  const double Bz_r = Bz1_r + Bz0;
 
+  const double B02 = std::pow(Bx0,2) + std::pow(By0,2) + std::pow(Bz0,2);
+  const double B12_l = std::pow(Bx1_l,2) + std::pow(By1_l,2) + std::pow(Bz1_l,2);
+  const double B12_r = std::pow(Bx1_r,2) + std::pow(By1_r,2) + std::pow(Bz1_r,2);
+  const double B2_l = std::pow(Bx_l,2) + std::pow(By_l,2) + std::pow(Bz_l,2);
+  const double B2_r = std::pow(Bx_r,2) + std::pow(By_r,2) + std::pow(Bz_r,2);
+#endif
+	
   double sqrtdl,sqrtdr,isdlpdr,droe,v1roe,v2roe,v3roe,pbl=0.0,pbr=0.0;
   double hroe;
   double b2roe,b3roe,x,y;
@@ -434,23 +462,45 @@ Cons1DS athena_roe_fluxes(
   Fl.E  = (Ul.E + Wl.P)*Wl.Vx;
   Fr.E  = (Ur.E + Wr.P)*Wr.Vx;
 
+#ifndef SPLITB
   Fl.Mx -= 0.5*(Bxi*Bxi - std::pow(Wl.By, 2) - std::pow(Wl.Bz, 2));
   Fr.Mx -= 0.5*(Bxi*Bxi - std::pow(Wr.By, 2) - std::pow(Wr.Bz, 2));
-
   Fl.My -= Bxi*Wl.By;
   Fr.My -= Bxi*Wr.By;
-
   Fl.Mz -= Bxi*Wl.Bz;
   Fr.Mz -= Bxi*Wr.Bz;
-
   Fl.E += pbl*Wl.Vx - Bxi*(Bxi*Wl.Vx + Wl.By*Wl.Vy + Wl.Bz*Wl.Vz);
   Fr.E += pbr*Wr.Vx - Bxi*(Bxi*Wr.Vx + Wr.By*Wr.Vy + Wr.Bz*Wr.Vz);
-
   Fl.By = Wl.By*Wl.Vx - Bxi*Wl.Vy;
   Fr.By = Wr.By*Wr.Vx - Bxi*Wr.Vy;
-
   Fl.Bz = Wl.Bz*Wl.Vx - Bxi*Wl.Vz;
   Fr.Bz = Wr.Bz*Wr.Vx - Bxi*Wr.Vz;
+#else
+  /*Fl.Mx -= 0.5*(std::pow(Bxi,2) - std::pow(Bx0, 2) - std::pow(Wl.By, 2) - std::pow(Wl.Bz, 2) + std::pow(By0, 2) + std::pow(Bz0, 2));
+  Fr.Mx -= 0.5*(std::pow(Bxi,2) - std::pow(Bx0, 2) - std::pow(Wr.By, 2) - std::pow(Wr.Bz, 2) + std::pow(By0, 2) + std::pow(Bz0, 2));
+  Fl.My -= Bxi*Wl.By - Bx0*By0;
+  Fr.My -= Bxi*Wr.By - Bx0*By0;
+  Fl.Mz -= Bxi*Wl.Bz - Bx0*Bz0;
+  Fr.Mz -= Bxi*Wr.Bz - Bx0*Bz0;
+  Fl.E += pbl*Wl.Vx - Bxi*(Bxi*Wl.Vx + Wl.By*Wl.Vy + Wl.Bz*Wl.Vz) + Wl.By*(By0*Wl.Vx - Bx0*Wl.Vy) + Wl.Bz*(Bz0*Wl.Vx - Bx0*Wl.Vz);
+  Fr.E += pbr*Wr.Vx - Bxi*(Bxi*Wr.Vx + Wr.By*Wr.Vy + Wr.Bz*Wr.Vz) + Wr.By*(By0*Wr.Vx - Bx0*Wr.Vy) + Wr.Bz*(Bz0*Wr.Vx - Bx0*Wr.Vz);
+  Fl.By = Wl.By*Wl.Vx - Bxi*Wl.Vy;
+  Fr.By = Wr.By*Wr.Vx - Bxi*Wr.Vy;
+  Fl.Bz = Wl.Bz*Wl.Vx - Bxi*Wl.Vz;
+  Fr.Bz = Wr.Bz*Wr.Vx - Bxi*Wr.Vz;*/
+  Fl.Mx -= 0.5*(std::pow(Bx_l,2) - std::pow(Bx0, 2) - B2_l + B02);
+  Fr.Mx -= 0.5*(std::pow(Bx_r,2) - std::pow(Bx0, 2) - B2_r + B02);
+  Fl.My -= Bx_l*By_l - Bx0*By0;
+  Fr.My -= Bx_r*By_r - Bx0*By0;
+  Fl.Mz -= Bx_l*Bz_l - Bx0*Bz0;
+  Fr.Mz -= Bx_r*Bz_r - Bx0*Bz0;
+  Fl.E += pbl*Wl.Vx - Bx1_l*(Bx1_l*Wl.Vx + By1_l*Wl.Vy + Bz1_l*Wl.Vz) + By1_l*(By0*Wl.Vx - Bx0*Wl.Vy) + Bz1_l*(Bz0*Wl.Vx - Bx0*Wl.Vz);
+  Fr.E += pbr*Wr.Vx - Bx1_r*(Bx1_r*Wr.Vx + By1_r*Wr.Vy + Bz1_r*Wr.Vz) + By1_r*(By0*Wr.Vx - Bx0*Wr.Vy) + Bz1_r*(Bz0*Wr.Vx - Bx0*Wr.Vz);	
+  Fl.By = By_l*Wl.Vx - Bx_l*Wl.Vy;
+  Fr.By = By_r*Wr.Vx - Bx_r*Wr.Vy;
+  Fl.Bz = Bz_l*Wl.Vx - Bx_l*Wl.Vz;
+  Fr.Bz = Bz_r*Wr.Vx - Bx_r*Wr.Vz;
+#endif
 
 /*--- Step 5. ------------------------------------------------------------------
  * Return upwind flux if flow is supersonic
@@ -475,6 +525,12 @@ Cons1DS athena_roe_fluxes(
   dU[4] = Ur.E - Ul.E;
   dU[5] = Ur.By - Ul.By;
   dU[6] = Ur.Bz - Ul.Bz;
+
+  /*for(int ii = 0; ii <= 6; ++ii) {
+    std::cout << dU[ii] << " ";
+  }
+  std::cout << std::endl;*/
+ 
 
   for (int n=0; n<NWAVE; n++) {
     a[n] = 0.0;
@@ -571,7 +627,7 @@ template <
 > std::tuple<MHD, Scalar> get_flux_roe(
 	MHD& state_neg,
 	MHD& state_pos,
-	const Vector& /*bg_face_magnetic_field*/,
+	const Vector& bg_face_B,
 	const Scalar& area,
 	const Scalar& dt,
 	const Scalar& adiabatic_index,
@@ -579,7 +635,14 @@ template <
 ) {
 	using std::to_string;
 
+	//const Vector bg_face_magnetic_field{0, 0, 0};
+#ifndef SPLITB
 	const Vector bg_face_magnetic_field{0, 0, 0};
+#else
+	const Vector bg_face_magnetic_field = bg_face_B;
+#endif
+	
+	//std::cout << bg_face_magnetic_field[0] << " " << bg_face_magnetic_field[1] << " " << bg_face_magnetic_field[2] << std::endl;
 
 	// shorthand notation for simulation variables
 	const Mass_Density_T Mas{};
@@ -676,9 +739,11 @@ template <
 		);
 	}
 
-	const double Bxi
-		= (state_neg[Mag][0] + state_pos[Mag][0])
-		/ (2.0 * std::sqrt(vacuum_permeability));
+	//const double Bxi
+	//	= (state_neg[Mag][0] + state_pos[Mag][0])
+	//	/ (2.0 * std::sqrt(vacuum_permeability));
+	const double Bxi_l = state_neg[Mag][0]/std::sqrt(vacuum_permeability);
+	const double Bxi_r = state_pos[Mag][0]/std::sqrt(vacuum_permeability);
 
 	Cons1DS
 		Ul{
@@ -744,7 +809,9 @@ template <
 			Ur,
 			Wl,
 			Wr,
-			Bxi,
+			Bxi_l,
+			Bxi_r,
+			bg_face_magnetic_field,
 			adiabatic_index
 		);
 
