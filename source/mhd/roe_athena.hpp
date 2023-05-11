@@ -402,13 +402,21 @@ Cons1DS athena_roe_fluxes(
   v3roe = (sqrtdl*Wl.Vz + sqrtdr*Wr.Vz)*isdlpdr;
 
 /* The Roe average of the magnetic field is defined differently  */
-
+#ifndef SPLITB
   b2roe = (sqrtdr*Wl.By + sqrtdl*Wr.By)*isdlpdr;
   b3roe = (sqrtdr*Wl.Bz + sqrtdl*Wr.Bz)*isdlpdr;
   x = 0.5*(std::pow(Wl.By - Wr.By, 2) + std::pow(Wl.Bz - Wr.Bz, 2))/std::pow(sqrtdl + sqrtdr, 2);
   y = 0.5*(Wl.d + Wr.d)/droe;
   pbl = 0.5*(std::pow(Bxi, 2) + std::pow(Wl.By, 2) + std::pow(Wl.Bz, 2));
   pbr = 0.5*(std::pow(Bxi, 2) + std::pow(Wr.By, 2) + std::pow(Wr.Bz, 2));
+#else
+  b2roe = (sqrtdr*By_l + sqrtdl*By_r)*isdlpdr;
+  b3roe = (sqrtdr*Bz_l + sqrtdl*Bz_r)*isdlpdr;
+  x = 0.5*(std::pow(By_l - By_r, 2) + std::pow(Bz_l - Bz_r, 2))/std::pow(sqrtdl + sqrtdr, 2);
+  y = 0.5*(Wl.d + Wr.d)/droe;
+  pbl = 0.5*(std::pow(Bx_l, 2) + std::pow(By_l, 2) + std::pow(Bz_l, 2));
+  pbr = 0.5*(std::pow(Bx_r, 2) + std::pow(By_r, 2) + std::pow(Bz_r, 2));
+#endif
 
 /*
  * Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
